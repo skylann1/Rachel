@@ -1,5 +1,5 @@
 import { login } from "./actions";
-import { Checkbox } from "@/components/ui/checkbox"; // We don't have shadcn checkbox installed yet, let's use standard HTML for MVP to avoid build errors, or I can install it.
+
 import Image from "next/image";
 
 export default async function VendorLoginPage({
