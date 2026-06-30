@@ -1,7 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { logout } from "@/app/vendor/login/actions";
 import Link from "next/link";
-import { LayoutDashboard, FileText, LogOut, Briefcase, ShieldAlert, Stamp } from "lucide-react";
+import { LayoutDashboard, FileSignature, LogOut, Briefcase, ShieldAlert, Stamp, Users, Truck, AlertTriangle } from "lucide-react";
 
 export default async function VendorDashboardLayout({
   children,
@@ -33,9 +33,9 @@ export default async function VendorDashboardLayout({
               </Link>
             </li>
             <li>
-              <Link href="/vendor/dashboard/prosedur" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <FileText className="h-4 w-4" />
-                Prosedur Kerja
+              <Link href="/vendor/dashboard/pengajuan" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
+                <FileSignature className="h-4 w-4" />
+                Pengajuan Projek
               </Link>
             </li>
             <li>
@@ -48,6 +48,38 @@ export default async function VendorDashboardLayout({
               <Link href="/vendor/dashboard/ptw" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
                 <Stamp className="h-4 w-4" />
                 Pengajuan PTW
+              </Link>
+            </li>
+            <li>
+              <Link href="/vendor/dashboard/inspection" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
+                <AlertTriangle className="h-4 w-4" />
+                Inbox Temuan K3
+              </Link>
+            </li>
+            <li>
+              <Link href="/vendor/dashboard/incident" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
+                <AlertTriangle className="h-4 w-4 text-rose-500" />
+                Laporan Insiden
+              </Link>
+            </li>
+            
+            {/* Divider */}
+            <li className="pt-4 pb-2 px-3">
+              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Data Master
+              </div>
+            </li>
+
+            <li>
+              <Link href="/vendor/dashboard/pekerja" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
+                <Users className="h-4 w-4" />
+                Data Pekerja
+              </Link>
+            </li>
+            <li>
+              <Link href="/vendor/dashboard/peralatan" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
+                <Truck className="h-4 w-4" />
+                Data Peralatan
               </Link>
             </li>
           </ul>

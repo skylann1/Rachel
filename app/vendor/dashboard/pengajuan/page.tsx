@@ -1,26 +1,61 @@
 import React from 'react';
 import Link from 'next/link';
 import { Search, Briefcase, MapPin, Calendar, ArrowRight, Activity, Plus, FileSignature } from 'lucide-react';
-import { createClient } from '@/utils/supabase/server';
 
-export default async function VendorProjectsPage() {
-  const supabase = await createClient();
-  const { data: projects, error } = await supabase
-    .from('projects')
-    .select('*')
-    .order('created_at', { ascending: false });
+const mockProjects = [
+  { 
+    id: 'PRJ-001', 
+    name: 'Perbaikan Pos Security Stasiun Muara Bekasi', 
+    location: 'Stasiun Muara Bekasi', 
+    startDate: '2026-06-20',
+    endDate: '2026-07-20',
+    status: 'MENUNGGU SUBMISSION',
+    progress: 0,
+    description: 'Pekerjaan perbaikan struktur pos penjagaan termasuk penggantian atap kanopi dan pengecatan ulang dinding luar yang mulai mengelupas akibat cuaca.'
+  },
+  { 
+    id: 'PRJ-002', 
+    name: 'Maintenance Kompresor Stasiun B', 
+    location: 'Stasiun Kompresor B', 
+    startDate: '2026-07-01',
+    endDate: '2026-07-15',
+    status: 'Persiapan',
+    progress: 0,
+    description: 'Perawatan rutin tahunan kompresor gas utama, termasuk penggantian oli, filter, dan kalibrasi sensor tekanan agar sesuai standar.'
+  },
+  { 
+    id: 'PRJ-003', 
+    name: 'Pengecatan Fasilitas Pipa', 
+    location: 'Fasilitas Utama', 
+    startDate: '2026-06-10',
+    endDate: '2026-06-30',
+    status: 'Aktif',
+    progress: 80,
+    description: 'Pengecatan ulang struktur perpipaan atas tanah untuk mencegah korosi. Harus menggunakan cat spesifikasi anti-karat tingkat industri (epoxy coating).'
+  },
+  { 
+    id: 'PRJ-004', 
+    name: 'Inspeksi Tangki T-04', 
+    location: 'Area Tangki Timbun', 
+    startDate: '2026-06-28',
+    endDate: '2026-07-05',
+    status: 'Selesai',
+    progress: 100,
+    description: 'Inspeksi berkala pada integritas tangki timbun T-04 meliputi NDT test pada las-lasan dan pengukuran ketebalan pelat dasar tangki.'
+  },
+];
 
-  // Sementara fallback ke array kosong kalau belum ada data
-  const filteredProjects = projects || [];
+export default function VendorPengajuanPage() {
+  const filteredProjects = mockProjects.filter(p => p.status === 'MENUNGGU SUBMISSION');
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Proyek Aktif</h1>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Pengajuan Projek</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Daftar pekerjaan/proyek yang sedang dikerjakan atau dalam masa persiapan.
+            Daftar proyek baru dari internal PGN yang menunggu pengajuan dokumen K3 (Prosedur, JSA, PTW).
           </p>
         </div>
       </div>
@@ -39,10 +74,7 @@ export default async function VendorProjectsPage() {
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           <select className="block w-full sm:w-48 pl-3 pr-10 py-2 text-base border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm rounded-xl bg-slate-50">
-            <option>Semua Status</option>
-            <option>Aktif</option>
-            <option>Persiapan</option>
-            <option>Selesai</option>
+            <option>MENUNGGU SUBMISSION</option>
           </select>
         </div>
       </div>
@@ -74,8 +106,8 @@ export default async function VendorProjectsPage() {
                 </div>
              </div>
              
-             <div className="mb-5 text-sm text-slate-600 leading-relaxed line-clamp-2" title={project.description || 'Proyek K3'}>
-                {project.description || 'Pekerjaan sesuai dengan kontrak dan Prosedur K3 PGN.'}
+             <div className="mb-5 text-sm text-slate-600 leading-relaxed line-clamp-2" title={project.description}>
+                {project.description}
              </div>
              
              <div className="space-y-3 mb-6">
@@ -85,7 +117,7 @@ export default async function VendorProjectsPage() {
                </div>
                <div className="flex items-center gap-3 text-sm text-slate-600">
                   <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="font-medium">{project.start_date} s/d {project.end_date}</span>
+                  <span className="font-medium">{project.startDate} s/d {project.endDate}</span>
                </div>
             </div>
 
@@ -93,12 +125,12 @@ export default async function VendorProjectsPage() {
             <div className="mt-auto pt-4 border-t border-slate-100 space-y-2 mb-6">
                <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-slate-500 uppercase">Progres Pekerjaan</span>
-                  <span className="text-xs font-black text-primary">{project.progress || 0}%</span>
+                  <span className="text-xs font-black text-primary">{project.progress}%</span>
                </div>
                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                   <div 
-                    className={`h-full rounded-full transition-all duration-1000 ease-in-out ${(project.progress || 0) === 100 ? 'bg-emerald-500' : 'bg-primary'}`} 
-                    style={{ width: `${project.progress || 0}%` }}
+                    className={`h-full rounded-full transition-all duration-1000 ease-in-out ${project.progress === 100 ? 'bg-emerald-500' : 'bg-primary'}`} 
+                    style={{ width: `${project.progress}%` }}
                   />
                </div>
             </div>
@@ -107,16 +139,16 @@ export default async function VendorProjectsPage() {
             <div className={`grid gap-3 mt-auto ${project.status === 'MENUNGGU SUBMISSION' ? 'grid-cols-1' : 'grid-cols-2'}`}>
                {project.status === 'MENUNGGU SUBMISSION' ? (
                  <Link 
-                   href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`}
+                   href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
                    className="flex items-center justify-center gap-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 py-3 rounded-xl transition-all shadow-sm shadow-primary/30"
                  >
                    <FileSignature className="w-4 h-4" /> Mulai Pengajuan Dokumen K3
                  </Link>
                ) : (
                  <>
-                   <Link href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`} className="flex items-center justify-center gap-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 py-2.5 rounded-xl transition-colors">
+                   <button className="flex items-center justify-center gap-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 py-2.5 rounded-xl transition-colors">
                      Detail Proyek
-                   </Link>
+                   </button>
                    <button 
                      disabled
                      className="flex items-center justify-center gap-2 text-sm font-bold text-slate-400 bg-slate-100 py-2.5 rounded-xl cursor-not-allowed"

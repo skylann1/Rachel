@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { Search, Plus, MapPin, Calendar, Clock, Edit2, Trash2, Building2, Briefcase, Activity, X } from 'lucide-react';
 
 const mockProjects = [
-  { id: 'PRJ-2026-001', name: 'Penggalian Pipa Gas Area A - Tahap 2', vendor: 'PT. Konstruksi Sejahtera', location: 'Plant A, Zona Merah', startDate: '2026-06-01', endDate: '2026-08-30', status: 'On Progress', progress: 45 },
-  { id: 'PRJ-2026-002', name: 'Maintenance Kompresor Stasiun B', vendor: 'CV. Teknik Mesin Nusantara', location: 'Stasiun Kompresor B', startDate: '2026-06-20', endDate: '2026-07-05', status: 'Preparation', progress: 10 },
-  { id: 'PRJ-2026-003', name: 'Instalasi Panel Listrik Baru (Gedung Utama)', vendor: 'PT. Solusi Elektrik', location: 'Gedung Office Pusat', startDate: '2026-05-15', endDate: '2026-06-15', status: 'Completed', progress: 100 },
-  { id: 'PRJ-2026-004', name: 'Pengecatan Fasilitas Pipa Distribusi', vendor: 'PT. Bangun Graha', location: 'Jalur Distribusi C', startDate: '2026-07-01', endDate: '2026-09-30', status: 'On Hold', progress: 0 },
+  { id: 'PRJ-2026-001', name: 'Penggalian Pipa Gas Area A - Tahap 2', vendor: 'PT. Konstruksi Sejahtera', location: 'Plant A, Zona Merah', startDate: '2026-06-01', endDate: '2026-08-30', status: 'On Progress', progress: 45, description: 'Pekerjaan ini meliputi penggalian tanah untuk jalur pipa distribusi gas baru sepanjang 2km dengan kedalaman 1.5m di sepanjang zona merah Plant A.' },
+  { id: 'PRJ-2026-002', name: 'Maintenance Kompresor Stasiun B', vendor: 'CV. Teknik Mesin Nusantara', location: 'Stasiun Kompresor B', startDate: '2026-06-20', endDate: '2026-07-05', status: 'Preparation', progress: 10, description: 'Perawatan rutin tahunan kompresor gas utama, termasuk penggantian oli, filter, dan kalibrasi sensor tekanan.' },
+  { id: 'PRJ-2026-003', name: 'Instalasi Panel Listrik Baru (Gedung Utama)', vendor: 'PT. Solusi Elektrik', location: 'Gedung Office Pusat', startDate: '2026-05-15', endDate: '2026-06-15', status: 'Completed', progress: 100, description: 'Penggantian dan instalasi panel induk listrik (MDP) beserta jaringan kabel penunjang ke seluruh lantai gedung kantor pusat.' },
+  { id: 'PRJ-2026-004', name: 'Pengecatan Fasilitas Pipa Distribusi', vendor: 'PT. Bangun Graha', location: 'Jalur Distribusi C', startDate: '2026-07-01', endDate: '2026-09-30', status: 'On Hold', progress: 0, description: 'Pengecatan ulang struktur perpipaan atas tanah sepanjang jalur C untuk mencegah korosi. Harus menggunakan cat spesifikasi anti-karat tingkat industri.' },
 ];
 
 export default function ProjectManagementPage() {
@@ -152,6 +152,16 @@ export default function ProjectManagementPage() {
                     placeholder="Contoh: Pekerjaan Perbaikan Pos Security Stasiun Muara Bekasi"
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
                   />
+                </div>
+
+                {/* Deskripsi Proyek */}
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Deskripsi Proyek <span className="text-rose-500">*</span></label>
+                  <textarea 
+                    placeholder="Jelaskan secara ringkas scope pekerjaan proyek ini agar vendor lebih paham saat menyusun prosedur..."
+                    rows={3}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm resize-none"
+                  ></textarea>
                 </div>
 
                 {/* Nomor Kontrak */}

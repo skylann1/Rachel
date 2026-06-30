@@ -12,10 +12,23 @@ export async function login(formData: FormData) {
     password: formData.get("password") as string,
   };
 
-  const { error } = await supabase.auth.signInWithPassword(data);
+  const { data: authData, error } = await supabase.auth.signInWithPassword(data);
 
   if (error) {
     redirect("/vendor/login?error=" + error.message);
+  }
+
+  // Cek Role di tabel profiles
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', authData.user.id)
+    .single();
+
+  if (profile?.role !== 'vendor') {
+    // Kalau bukan vendor, sign out paksa dan tolak
+    await supabase.auth.signOut();
+    redirect("/vendor/login?error=Akses ditolak. Akun ini bukan akun Vendor.");
   }
 
   revalidatePath("/", "layout");

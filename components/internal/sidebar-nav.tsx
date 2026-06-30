@@ -9,8 +9,7 @@ const menuUtama = [
   { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Inspeksi & Temuan K3', href: '/dashboard/inspection', icon: Camera },
   { name: 'Laporan Insiden', href: '/dashboard/incident', icon: AlertTriangle },
-  { name: 'Review JSA (HSE)', href: '/dashboard/jsa-review', icon: CheckCircle },
-  { name: 'Validasi PTW (PM)', href: '/dashboard/approval', icon: FileSignature },
+  { name: 'Verifikasi Dokumen', href: '/dashboard/approval', icon: FileSignature },
 ];
 
 const masterData = [

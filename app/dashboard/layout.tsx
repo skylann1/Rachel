@@ -92,9 +92,9 @@ export default async function AuthDashboardLayout({
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto p-8 relative">
           {/* Subtle Background Pattern for Main Area */}
-          <div className="absolute inset-0 z-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:24px_24px] opacity-50 pointer-events-none"></div>
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:24px_24px] opacity-50 pointer-events-none"></div>
           
-          <div className="relative z-10 max-w-7xl mx-auto">
+          <div className="relative max-w-7xl mx-auto">
             {children}
           </div>
         </div>
