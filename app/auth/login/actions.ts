@@ -19,17 +19,17 @@ export async function login(formData: FormData) {
   }
 
   // Cek Role di tabel profiles
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('role')
+    .select('type')
     .eq('id', authData.user.id)
     .single();
 
-  const internalRoles = ['admin', 'pm', 'hse', 'pengawas'];
-  if (!internalRoles.includes(profile?.role)) {
+  if (profile?.type !== 'internal') {
     // Kalau bukan internal, sign out paksa dan tolak
     await supabase.auth.signOut();
-    redirect("/auth/login?error=Akses ditolak. Akun ini tidak memiliki akses Internal PGN.");
+    const debugMsg = `Data profil: ${JSON.stringify(profile) || 'Kosong'}. Error: ${profileError?.message || 'Tidak ada error DB'}`;
+    redirect(`/auth/login?error=Akses ditolak. ${debugMsg}`);
   }
 
   revalidatePath("/", "layout");

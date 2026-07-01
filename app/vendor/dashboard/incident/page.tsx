@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, Plus, Search, Calendar, FileText, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Plus, Search, Calendar, FileText, ArrowRight, MapPin } from 'lucide-react';
 import Link from 'next/link';
 
 const mockIncidents = [

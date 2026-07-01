@@ -1,49 +1,69 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X } from 'lucide-react';
-
-const mockInspections = [
-  {
-    id: 'INSP-001',
-    type: 'Unsafe Condition',
-    description: 'Kabel las terkelupas dan berserakan di area genangan air.',
-    location: 'Area Boiler 1',
-    vendor: 'CV. Karya Abadi',
-    date: '2026-06-25 10:30',
-    status: 'Open',
-    priority: 'High',
-    image: 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-  },
-  {
-    id: 'INSP-002',
-    type: 'Unsafe Act',
-    description: 'Pekerja tidak menggunakan full body harness saat bekerja di ketinggian lebih dari 2 meter.',
-    location: 'Tangki T-04',
-    vendor: 'PT. Surveyor Indonesia',
-    date: '2026-06-24 14:15',
-    status: 'In Progress',
-    priority: 'Critical',
-    image: 'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?w=500&q=80',
-  },
-  {
-    id: 'INSP-003',
-    type: 'Unsafe Condition',
-    description: 'Rambu peringatan galian tidak terlihat jelas di malam hari.',
-    location: 'Plant A, Zona Merah',
-    vendor: 'PT. Konstruksi Sejahtera',
-    date: '2026-06-20 09:00',
-    status: 'Closed',
-    priority: 'Medium',
-    image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80',
-  }
-];
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2 } from 'lucide-react';
+import { getInspections, getVendorsAndProjects, createInspection } from './actions';
+import { uploadImage } from '@/utils/supabase/storage';
 
 export default function InspectionPage() {
   const [filter, setFilter] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [inspections, setInspections] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
-  const filteredInspections = mockInspections.filter(item => filter === 'All' || item.status === filter);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    const data = await getInspections();
+    const vp = await getVendorsAndProjects();
+    setVendors(vp.vendors);
+    setProjects(vp.projects);
+    const formatted = data.map((d: any) => ({
+      id: d.id,
+      type: d.finding_type,
+      description: d.title,
+      location: d.location,
+      vendor: d.vendor_profiles?.company_name || 'Unknown Vendor',
+      date: new Date(d.created_at).toLocaleString('id-ID'),
+      status: d.status,
+      priority: d.priority,
+      image: d.image_url || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
+    }));
+    setInspections(formatted);
+  }
+
+  const filteredInspections = inspections.filter(item => filter === 'All' || item.status === filter);
+
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    
+    try {
+      if (imageFile) {
+        const imageUrl = await uploadImage(imageFile, 'inspections');
+        if (imageUrl) formData.append('image_url', imageUrl);
+      }
+
+      await createInspection(formData);
+      alert("Temuan K3 berhasil dilaporkan! Notifikasi telah dikirim ke Vendor terkait.");
+      setIsModalOpen(false);
+      setImageFile(null);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Gagal membuat laporan temuan K3.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -152,13 +172,13 @@ export default function InspectionPage() {
       {/* Modal Lapor Temuan */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl h-[90vh] md:h-auto md:max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleCreate} className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl h-[90vh] md:h-auto md:max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <div>
                 <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Camera className="w-5 h-5 text-primary" /> Lapor Temuan K3 Baru</h2>
                 <p className="text-sm text-slate-500 mt-1">Formulir inspeksi HSE Patrol.</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -167,17 +187,24 @@ export default function InspectionPage() {
                {/* Upload Foto */}
                <div>
                   <label className="text-sm font-semibold text-slate-700 block mb-2">Foto Temuan <span className="text-rose-500">*</span></label>
-                  <div className="w-full h-32 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:border-primary/50 transition-colors cursor-pointer">
-                     <UploadCloud className="w-6 h-6 mb-2" />
-                     <span className="text-sm font-medium">Klik untuk upload foto temuan</span>
-                     <span className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB</span>
+                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+                  <div onClick={() => fileInputRef.current?.click()} className="w-full h-32 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
+                     {imageFile ? (
+                       <img src={URL.createObjectURL(imageFile)} alt="Preview" className="w-full h-full object-cover" />
+                     ) : (
+                       <>
+                         <UploadCloud className="w-6 h-6 mb-2" />
+                         <span className="text-sm font-medium">Klik untuk upload foto temuan</span>
+                         <span className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB</span>
+                       </>
+                     )}
                   </div>
                </div>
                
                <div className="grid grid-cols-2 gap-4">
                  <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Jenis Temuan <span className="text-rose-500">*</span></label>
-                    <select className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
+                    <select name="finding_type" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
                       <option value="Unsafe Condition">Unsafe Condition (Kondisi Tidak Aman)</option>
                       <option value="Unsafe Act">Unsafe Act (Tindakan Tidak Aman)</option>
                       <option value="Near Miss">Near Miss (Hampir Celaka)</option>
@@ -185,7 +212,7 @@ export default function InspectionPage() {
                  </div>
                  <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Priority (Keparahan) <span className="text-rose-500">*</span></label>
-                    <select className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
+                    <select name="priority" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
                       <option value="Low">Low (Bisa ditoleransi sementara)</option>
                       <option value="Medium">Medium (Perlu segera diperbaiki)</option>
                       <option value="High">High (Berpotensi cedera)</option>
@@ -197,14 +224,15 @@ export default function InspectionPage() {
                <div className="grid grid-cols-2 gap-4">
                  <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Lokasi Temuan <span className="text-rose-500">*</span></label>
-                    <input type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Area Boiler 1" />
+                    <input name="location" required type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Area Boiler 1" />
                  </div>
                  <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Vendor Terkait <span className="text-rose-500">*</span></label>
-                    <select className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
+                    <select name="target_vendor" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
                       <option value="">Pilih Vendor</option>
-                      <option value="VND-001">PT. Konstruksi Sejahtera</option>
-                      <option value="VND-002">CV. Karya Abadi</option>
+                      {vendors.map(v => (
+                        <option key={v.id} value={v.id}>{v.company_name}</option>
+                      ))}
                     </select>
                  </div>
                </div>
@@ -212,6 +240,8 @@ export default function InspectionPage() {
                <div>
                   <label className="text-sm font-semibold text-slate-700 block mb-2">Deskripsi Temuan <span className="text-rose-500">*</span></label>
                   <textarea 
+                     name="title"
+                     required
                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm resize-none" 
                      rows={4} 
                      placeholder="Deskripsikan dengan detail apa yang terjadi dan mengapa hal tersebut tidak aman..."
@@ -220,18 +250,17 @@ export default function InspectionPage() {
             </div>
 
             <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
-              <button onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
               <button 
-                onClick={() => {
-                   alert("Temuan K3 berhasil dilaporkan! Notifikasi telah dikirim ke Vendor terkait.");
-                   setIsModalOpen(false);
-                }} 
-                className="px-5 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors shadow-sm shadow-primary/30 flex items-center gap-2"
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-xl transition-colors shadow-sm shadow-primary/30 flex items-center gap-2"
               >
-                 <Plus className="w-4 h-4" /> Create Report
+                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} 
+                 {isSubmitting ? 'Submitting...' : 'Create Report'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 

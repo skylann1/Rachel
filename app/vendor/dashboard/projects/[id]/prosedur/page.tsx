@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
+import { saveProsedur, getProsedur } from './actions';
 
 // Mock list APD
 const apdList = [
@@ -55,11 +56,32 @@ export default function ProsedurKerjaForm() {
   const [scopeOfWork, setScopeOfWork] = useState('- Mobilisasi dan demobilisasi peralatan serta material.\n- Pembongkaran keramik lantai existing.\n- Pembongkaran dinding existing.\n- Pengikisan lapisan cat existing.\n- Pekerjaan pasangan dinding bata.\n- Pekerjaan plesteran dan acian dinding.\n- Pemasangan keramik lantai.\n- Pengecatan dinding.\n- Pengecatan lisplang.\n- Pengecatan plafon.\n- Pemasangan built in railing tangga.\n- Pembersihan area kerja (housekeeping).\n- Demobilisasi peralatan dan penyelesaian pekerjaan.');
   
   // Section 3
-  const [tools, setTools] = useState<string[]>(['Meteran', 'Waterpass', 'Palu', 'Pahat', 'Sekop', 'Cetok', 'Ember adukan', 'Tangga kerja', 'Scaffolding', 'Gerinda tangan', 'Mesin potong keramik', 'Mesin bor listrik', 'Wire brush', 'Scraper', 'Kuas cat', 'Roller cat', 'Jack Hammer (jika diperlukan)', 'Mesin las (jika diperlukan)', 'Sapu dan alat kebersihan']);
+  const [tools, setTools] = useState<string[]>([]);
   const [toolInput, setToolInput] = useState('');
   
   // Section 4
-  const [selectedApd, setSelectedApd] = useState<string[]>(['Safety Helmet', 'Safety Shoes', 'Safety Glasses', 'Safety Gloves', 'Reflective Vest']);
+  const [selectedApd, setSelectedApd] = useState<string[]>([]);
+
+  // Fetch initial data
+  useEffect(() => {
+    async function loadData() {
+      if (params.id) {
+        const data = await getProsedur(params.id as string);
+        if (data && data.content) {
+          const content = data.content;
+          setDocNo(content.docNo || '');
+          setContractNo(content.contractNo || '');
+          if (content.submissionDate) setSubmissionDate(content.submissionDate);
+          setUmum(content.umum || '');
+          setScopeOfWork(content.scopeOfWork || '');
+          setTools(content.tools || []);
+          setSelectedApd(content.selectedApd || []);
+          setVendorSignature(content.vendorSignature || null);
+        }
+      }
+    }
+    loadData();
+  }, [params.id]);
 
   // Section 5
   const [perlengkapanLainnya, setPerlengkapanLainnya] = useState<string[]>(['Barricade tape', 'Safety line', 'Rambu-rambu K3', 'APAR', 'Kotak P3K', 'Lampu kerja (bila diperlukan)', 'Tempat sampah/karung limbah', 'Form Permit To Work (PTW)', 'Form JSA', 'Checklist Peralatan']);
@@ -168,12 +190,33 @@ export default function ProsedurKerjaForm() {
     setTahapanPekerjaan(newTahapan);
   };
 
-  const handleSimpanLanjut = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    setTimeout(() => {
-      router.push('/vendor/dashboard/jsa/create');
-    }, 1500);
+    
+    const payload = {
+      docNo,
+      contractNo,
+      submissionDate,
+      umum,
+      scopeOfWork,
+      tools,
+      selectedApd,
+      vendorSignature
+    };
+
+    try {
+      await saveProsedur(params.id as string, payload);
+      // Simulate delay for UI
+      setTimeout(() => {
+        setIsSaving(false);
+        router.push(`/vendor/dashboard/projects/${params.id}/jsa`);
+      }, 800);
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menyimpan prosedur kerja');
+      setIsSaving(false);
+    }
   };
 
   const pdfData = {
@@ -207,7 +250,7 @@ export default function ProsedurKerjaForm() {
         </div>
       </div>
 
-      <form onSubmit={handleSimpanLanjut} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-8">
         
         {/* SECTION A: Administrasi */}
         <section className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">

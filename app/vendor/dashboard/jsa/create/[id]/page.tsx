@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Trash2, ShieldAlert, FileSignature, CheckCircle2 } from 'lucide-react';
 import { PDFViewer } from '@react-pdf/renderer';
 import JsaPDF from './JsaPDF';
+import { saveJsa, getJsa } from './actions';
 
 export default function JSACreatePage() {
   const params = useParams();
@@ -15,6 +16,24 @@ export default function JSACreatePage() {
   const [jsaSteps, setJsaSteps] = useState([
     { id: 1, langkah: '', bahaya: '', mitigasi: '' }
   ]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  React.useEffect(() => {
+    async function loadData() {
+      if (projectId) {
+        const data = await getJsa(projectId);
+        if (data && data.steps && data.steps.length > 0) {
+          setJsaSteps(data.steps.map((step: any) => ({
+            id: step.id || Date.now() + Math.random(),
+            langkah: step.description || '',
+            bahaya: (typeof step.hazards === 'string' ? JSON.parse(step.hazards)[0] : step.hazards?.[0]) || '',
+            mitigasi: (typeof step.controls === 'string' ? JSON.parse(step.controls)[0] : step.controls?.[0]) || '',
+          })));
+        }
+      }
+    }
+    loadData();
+  }, [projectId]);
 
   const addStep = () => {
     setJsaSteps([...jsaSteps, { id: Date.now(), langkah: '', bahaya: '', mitigasi: '' }]);
@@ -32,9 +51,18 @@ export default function JSACreatePage() {
     ));
   };
 
-  const handleSimpan = () => {
-    alert("JSA berhasil disimpan dan diajukan ke tim HSE!");
-    router.push(`/vendor/dashboard/projects/${encodeURIComponent(projectId)}`);
+  const handleSimpan = async () => {
+    setIsSaving(true);
+    try {
+      await saveJsa(projectId, { steps: jsaSteps });
+      alert("JSA berhasil disimpan dan diajukan ke tim HSE!");
+      router.push(`/vendor/dashboard/projects/${encodeURIComponent(projectId)}`);
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat menyimpan JSA.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -54,8 +82,8 @@ export default function JSACreatePage() {
               <div className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-wider">Project ID: {projectId}</div>
             </div>
           </div>
-          <button onClick={handleSimpan} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5" /> Submit JSA
+          <button onClick={handleSimpan} disabled={isSaving} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5" /> {isSaving ? 'Menyimpan...' : 'Submit JSA'}
           </button>
         </div>
       </div>

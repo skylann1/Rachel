@@ -1,38 +1,66 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Camera, AlertTriangle, CheckCircle, Clock, MapPin, UploadCloud, X, ArrowRight } from 'lucide-react';
-
-const mockVendorInspections = [
-  {
-    id: 'INSP-001',
-    type: 'Unsafe Condition',
-    description: 'Kabel las terkelupas dan berserakan di area genangan air.',
-    location: 'Area Boiler 1',
-    date: '2026-06-25 10:30',
-    status: 'Open',
-    priority: 'High',
-    image: 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-    feedbackHSE: 'Segera gulung kabel dan ganti kabel yang terkelupas. Area harus kering sebelum mulai pengelasan.'
-  },
-  {
-    id: 'INSP-003',
-    type: 'Unsafe Condition',
-    description: 'Rambu peringatan galian tidak terlihat jelas di malam hari.',
-    location: 'Plant A, Zona Merah',
-    date: '2026-06-20 09:00',
-    status: 'Closed',
-    priority: 'Medium',
-    image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80',
-    feedbackHSE: 'Sudah ditutup. Lampu rotari sudah dipasang.'
-  }
-];
+import React, { useState, useEffect, useRef } from 'react';
+import { Camera, AlertTriangle, CheckCircle, Clock, MapPin, UploadCloud, X, ArrowRight, Loader2 } from 'lucide-react';
+import { getVendorInspections, submitVendorResponse } from './actions';
+import { uploadImage } from '@/utils/supabase/storage';
 
 export default function VendorInspectionPage() {
   const [filter, setFilter] = useState('All');
   const [selectedInspection, setSelectedInspection] = useState<any>(null);
+  const [inspections, setInspections] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
-  const filteredInspections = mockVendorInspections.filter(item => filter === 'All' || item.status === filter);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    const data = await getVendorInspections();
+    const formatted = data.map((d: any) => ({
+      id: d.id,
+      type: d.finding_type,
+      description: d.title,
+      location: d.location,
+      date: new Date(d.created_at).toLocaleString('id-ID'),
+      status: d.status,
+      priority: d.priority,
+      image: d.image_url || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
+      feedbackHSE: d.vendor_response || 'Segera tindak lanjuti temuan ini.', // Wait, HSE feedback should be from another column, but for now fallback
+    }));
+    setInspections(formatted);
+  }
+
+  const filteredInspections = inspections.filter(item => filter === 'All' || item.status === filter);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedInspection) return;
+    
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    
+    try {
+      if (imageFile) {
+        const imageUrl = await uploadImage(imageFile, 'inspections-evidence');
+        if (imageUrl) formData.append('vendor_evidence_url', imageUrl);
+      }
+
+      await submitVendorResponse(selectedInspection.id, formData);
+      alert("Bukti perbaikan berhasil dikirim! Menunggu validasi penutupan dari HSE PGN.");
+      setSelectedInspection(null);
+      setImageFile(null);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mengirim tindak lanjut.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -123,7 +151,7 @@ export default function VendorInspectionPage() {
       {/* Modal Tindak Lanjut */}
       {selectedInspection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl h-[90vh] md:h-auto md:max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleSubmit} className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl h-[90vh] md:h-auto md:max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-rose-50 rounded-t-2xl">
               <div>
                 <h2 className="text-xl font-bold text-rose-700 flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Tindak Lanjut Temuan K3</h2>
@@ -144,10 +172,17 @@ export default function VendorInspectionPage() {
                {/* Upload Foto Bukti */}
                <div>
                   <label className="text-sm font-bold text-slate-700 block mb-2">Upload Foto Bukti Perbaikan (Closing) <span className="text-rose-500">*</span></label>
-                  <div className="w-full h-40 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:border-emerald-500/50 hover:text-emerald-600 transition-colors cursor-pointer group">
-                     <UploadCloud className="w-8 h-8 mb-2 group-hover:scale-110 transition-transform" />
-                     <span className="text-sm font-bold">Pilih foto atau tarik ke sini</span>
-                     <span className="text-xs font-medium text-slate-400 mt-1">Pastikan foto menunjukkan kondisi yang sudah aman</span>
+                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+                  <div onClick={() => fileInputRef.current?.click()} className="w-full h-40 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:border-emerald-500/50 hover:text-emerald-600 transition-colors cursor-pointer group overflow-hidden">
+                     {imageFile ? (
+                       <img src={URL.createObjectURL(imageFile)} alt="Preview" className="w-full h-full object-cover" />
+                     ) : (
+                       <>
+                         <UploadCloud className="w-8 h-8 mb-2 group-hover:scale-110 transition-transform" />
+                         <span className="text-sm font-bold">Pilih foto atau tarik ke sini</span>
+                         <span className="text-xs font-medium text-slate-400 mt-1">Pastikan foto menunjukkan kondisi yang sudah aman</span>
+                       </>
+                     )}
                   </div>
                </div>
                
@@ -155,6 +190,8 @@ export default function VendorInspectionPage() {
                <div>
                   <label className="text-sm font-bold text-slate-700 block mb-2">Tindakan Perbaikan yang Dilakukan <span className="text-rose-500">*</span></label>
                   <textarea 
+                     name="vendor_response"
+                     required
                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm resize-none" 
                      rows={4} 
                      placeholder="Jelaskan secara singkat apa yang sudah diperbaiki oleh tim vendor di lapangan..."
@@ -163,18 +200,17 @@ export default function VendorInspectionPage() {
             </div>
 
             <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
-              <button onClick={() => setSelectedInspection(null)} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
+              <button type="button" onClick={() => setSelectedInspection(null)} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
               <button 
-                onClick={() => {
-                   alert("Bukti perbaikan berhasil dikirim! Menunggu validasi penutupan dari HSE PGN.");
-                   setSelectedInspection(null);
-                }} 
-                className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-600/30 flex items-center gap-2"
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition-colors shadow-sm shadow-emerald-600/30 flex items-center gap-2"
               >
-                 <CheckCircle className="w-4 h-4" /> Kirim Bukti Perbaikan
+                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
+                 {isSubmitting ? 'Mengirim...' : 'Kirim Bukti Perbaikan'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 

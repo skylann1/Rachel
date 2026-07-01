@@ -21,12 +21,12 @@ export async function login(formData: FormData) {
   // Cek Role di tabel profiles
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('type')
     .eq('id', authData.user.id)
     .single();
 
-  if (profile?.role !== 'vendor') {
-    // Kalau bukan vendor, sign out paksa dan tolak
+  if (profile?.type !== 'external') {
+    // Kalau bukan external, sign out paksa dan tolak
     await supabase.auth.signOut();
     redirect("/vendor/login?error=Akses ditolak. Akun ini bukan akun Vendor.");
   }

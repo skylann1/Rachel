@@ -11,38 +11,7 @@ import {
   CheckCircle2,
   Clock,
   Activity
-} from 'lucide-react';
-
-const mockProjects = [
-  { 
-    id: 'PRJ-001', 
-    name: 'Penggalian Pipa Gas Area A', 
-    jsaStatus: 'Approved', 
-    ptwStatus: 'Aktif',
-    date: '2026-06-25' 
-  },
-  { 
-    id: 'PRJ-002', 
-    name: 'Maintenance Kompresor B', 
-    jsaStatus: 'Pending', 
-    ptwStatus: 'Belum Terbit',
-    date: '2026-06-26' 
-  },
-  { 
-    id: 'PRJ-003', 
-    name: 'Pengecatan Fasilitas', 
-    jsaStatus: 'Rejected', 
-    ptwStatus: 'Belum Terbit',
-    date: '2026-06-28' 
-  },
-  { 
-    id: 'PRJ-004', 
-    name: 'Inspeksi Tangki T-04', 
-    jsaStatus: 'Approved', 
-    ptwStatus: 'Menunggu PM',
-    date: '2026-06-29' 
-  },
-];
+} from 'lucide-react';import { getVendorDashboardData } from './actions';
 
 const mockTimeline = [
   { id: 1, title: 'PTW Diterbitkan', desc: 'PM memvalidasi PTW untuk Penggalian Pipa Gas Area A.', time: '2 jam yang lalu', type: 'success' },
@@ -53,6 +22,8 @@ const mockTimeline = [
 export default async function VendorDashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
+  const { projects, stats } = await getVendorDashboardData();
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -76,38 +47,33 @@ export default async function VendorDashboardPage() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex items-start gap-4">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
-            <Briefcase className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Proyek Aktif</h3>
-            <div className="text-3xl font-black text-slate-800">4</div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
+              <Briefcase className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Total Proyek</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
+            </div>
         </div>
-        
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex items-start gap-4 relative overflow-hidden">
-          <div className="p-3 bg-rose-50 text-rose-600 rounded-xl group-hover:scale-110 transition-transform">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">JSA Perlu Revisi</h3>
-            <div className="text-3xl font-black text-rose-600">1</div>
-            <p className="text-xs font-semibold text-rose-500 mt-1">Butuh perhatian segera</p>
-          </div>
-          <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-rose-100 to-transparent opacity-50 rounded-bl-full" />
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
+              <FileSignature className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">JSA Menunggu Review</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.pendingJsa}</p>
+            </div>
         </div>
-
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex items-start gap-4">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
-            <FileSignature className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">PTW Terbit (Aktif)</h3>
-            <div className="text-3xl font-black text-emerald-600">1</div>
-            <p className="text-xs font-semibold text-emerald-600 mt-1">Siap untuk eksekusi</p>
-          </div>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">PTW Aktif</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.activePtw}</p>
+            </div>
         </div>
       </div>
 
@@ -131,33 +97,48 @@ export default async function VendorDashboardPage() {
                      <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Info Proyek</th>
                      <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status JSA (HSE)</th>
                      <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status PTW (PM)</th>
+                     <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Update</th>
                      <th className="px-5 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Aksi</th>
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-50">
-                    {mockProjects.map((project) => (
+                    {projects.map((project) => (
                       <tr key={project.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-5 py-4">
                            <div className="font-bold text-slate-800 mb-0.5">{project.name}</div>
-                           <div className="text-xs text-slate-500 font-medium">Update: {project.date}</div>
+                           <div className="text-xs text-slate-500 font-medium">ID: {project.id}</div>
                         </td>
                         <td className="px-5 py-4">
-                           {project.jsaStatus === 'Approved' && <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg"><CheckCircle2 className="w-3.5 h-3.5" /> Disetujui</span>}
-                           {project.jsaStatus === 'Pending' && <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg"><Clock className="w-3.5 h-3.5" /> Menunggu</span>}
-                           {project.jsaStatus === 'Rejected' && <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg"><AlertTriangle className="w-3.5 h-3.5" /> Ditolak (Revisi)</span>}
+                           {project.jsaStatus === 'Approved' && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg"><CheckCircle2 className="w-3.5 h-3.5" /> Approved</span>}
+                           {project.jsaStatus === 'Pending' && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg"><Clock className="w-3.5 h-3.5" /> Menunggu Review</span>}
+                           {project.jsaStatus === 'Rejected' && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg"><AlertTriangle className="w-3.5 h-3.5" /> Ditolak</span>}
+                           {project.jsaStatus === 'Belum Ada' && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg">Belum Ada</span>}
                         </td>
                         <td className="px-5 py-4">
-                           {project.ptwStatus === 'Aktif' && <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg"><Activity className="w-3.5 h-3.5" /> PTW Aktif</span>}
-                           {project.ptwStatus === 'Menunggu PM' && <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg"><Clock className="w-3.5 h-3.5" /> Validasi PM</span>}
-                           {project.ptwStatus === 'Belum Terbit' && <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">Belum Terbit</span>}
+                          <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-bold border ${
+                            project.ptwStatus === 'Aktif' ? 'bg-emerald-50 text-emerald-600 border-emerald-200/50' : 
+                            project.ptwStatus === 'Belum Terbit' ? 'bg-slate-50 text-slate-500 border-slate-200/50' :
+                            project.ptwStatus === 'Ditolak' ? 'bg-rose-50 text-rose-600 border-rose-200/50' :
+                            'bg-blue-50 text-blue-600 border-blue-200/50'
+                          }`}>
+                            {project.ptwStatus}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-xs font-medium text-slate-600">
+                          {project.date}
                         </td>
                         <td className="px-5 py-4 text-right">
-                           <button className="text-sm font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-primary/20">
-                             Detail
-                           </button>
+                           <Link href={`/vendor/dashboard/projects/${project.id}/prosedur`} className="text-sm font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-primary/20 inline-flex items-center gap-1.5">
+                             Kelola K3 <ArrowRight className="w-3.5 h-3.5" />
+                           </Link>
                         </td>
                       </tr>
                     ))}
+                    {projects.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-slate-500">Belum ada proyek yang dikerjakan.</td>
+                      </tr>
+                    )}
                  </tbody>
                </table>
             </div>

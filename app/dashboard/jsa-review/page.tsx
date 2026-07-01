@@ -2,46 +2,75 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, ClipboardList, CheckCircle, AlertTriangle, Eye, Check, X, ShieldAlert, Sparkles, Loader2, MessageSquareWarning } from 'lucide-react';
-
-const mockReviews = [
-  { id: 'JSA-2026-004', vendor: 'PT. Bangun Graha', project: 'Pengecatan Fasilitas Pipa', submittedAt: '2026-06-26 09:30', riskLevel: 'High', status: 'Pending Review' },
-  { id: 'JSA-2026-005', vendor: 'CV. Karya Abadi', project: 'Perbaikan Pagar Pembatas', submittedAt: '2026-06-25 14:15', riskLevel: 'Low', status: 'Pending Review' },
-  { id: 'JSA-2026-001', vendor: 'PT. Konstruksi Sejahtera', project: 'Penggalian Pipa Gas Area A', submittedAt: '2026-06-24 10:00', riskLevel: 'High', status: 'Approved' },
-  { id: 'JSA-2026-003', vendor: 'PT. Solusi Elektrik', project: 'Instalasi Panel Listrik', submittedAt: '2026-06-22 16:45', riskLevel: 'Medium', status: 'Rejected' },
-];
-
-const mockJsaRows = [
-  { id: 1, step: 'Menyiapkan area kerja dan peralatan las', hazard: 'Area berantakan, tersandung', mitigation: 'Membersihkan area kerja' },
-  { id: 2, step: 'Melakukan pengelasan pipa gas', hazard: 'Percikan api, ledakan gas', mitigation: 'Berhati-hati dan waspada saat mengelas' }, // Intentional anomaly for AI to catch
-  { id: 3, step: 'Pembersihan sisa material', hazard: 'Tergores material tajam', mitigation: 'Menggunakan sarung tangan kulit standar' }
-];
+import { getJsaList, getJsaDetails, updateJsaStatus } from './actions';
 
 export default function JSAReviewPage() {
-  const [filter, setFilter] = useState('Pending Review');
+  const [filter, setFilter] = useState('Waiting Review');
   const [selectedJsa, setSelectedJsa] = useState<any>(null);
+  const [jsaList, setJsaList] = useState<any[]>([]);
+  const [currentJsaRows, setCurrentJsaRows] = useState<any[]>([]);
   
   const [anomalies, setAnomalies] = useState<any[]>([]);
   const [isAiScanning, setIsAiScanning] = useState(false);
   const [activeCommentRow, setActiveCommentRow] = useState<number | null>(null);
 
-  const filteredReviews = mockReviews.filter(review => filter === 'All' || review.status === filter);
+  useEffect(() => {
+    async function load() {
+      const data = await getJsaList();
+      const formatted = data.map((d: any) => ({
+        id: d.id,
+        vendor: d.projects?.vendor_profiles?.company_name || 'Unknown Vendor',
+        project: d.projects?.name || 'Unknown Project',
+        submittedAt: new Date(d.created_at).toLocaleString('id-ID'),
+        status: d.status
+      }));
+      setJsaList(formatted);
+    }
+    load();
+  }, []);
+
+  const filteredReviews = jsaList.filter(review => filter === 'All' || review.status === filter);
 
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const handleOpenDetail = (review: any) => {
+  const handleOpenDetail = async (review: any) => {
     setSelectedJsa(review);
     setAnomalies([]);
     setActiveCommentRow(null);
     setShowSuccess(false);
-    scanAnomalies(mockJsaRows);
+    
+    // Fetch detailed rows
+    const details = await getJsaDetails(review.id);
+    const rows = details.map((d: any) => ({
+      id: d.id,
+      step: d.description,
+      hazard: (typeof d.hazards === 'string' ? JSON.parse(d.hazards)[0] : d.hazards?.[0]) || '',
+      mitigation: (typeof d.controls === 'string' ? JSON.parse(d.controls)[0] : d.controls?.[0]) || '',
+    }));
+    setCurrentJsaRows(rows);
+    scanAnomalies(rows);
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (selectedJsa) {
+      await updateJsaStatus(selectedJsa.id, 'Approved');
+      const updatedList = jsaList.map(j => j.id === selectedJsa.id ? { ...j, status: 'Approved' } : j);
+      setJsaList(updatedList);
+    }
     setShowSuccess(true);
     setTimeout(() => {
       setSelectedJsa(null);
       setShowSuccess(false);
     }, 3000);
+  };
+  
+  const handleReject = async () => {
+    if (selectedJsa) {
+      await updateJsaStatus(selectedJsa.id, 'Rejected');
+      const updatedList = jsaList.map(j => j.id === selectedJsa.id ? { ...j, status: 'Rejected' } : j);
+      setJsaList(updatedList);
+    }
+    setSelectedJsa(null);
   };
 
   const scanAnomalies = async (rows: any[]) => {
@@ -118,11 +147,11 @@ export default function JSAReviewPage() {
             />
           </div>
           
-          <div className="flex gap-2 w-full sm:w-auto bg-slate-100 p-1 rounded-xl">
-             <button onClick={() => setFilter('Pending Review')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors ${filter === 'Pending Review' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Pending</button>
-             <button onClick={() => setFilter('Approved')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors ${filter === 'Approved' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Riwayat</button>
-             <button onClick={() => setFilter('All')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors ${filter === 'All' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
-          </div>
+          <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200 mt-4 md:mt-0">
+          <button onClick={() => setFilter('All')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filter === 'All' ? 'bg-white shadow-sm text-primary' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
+          <button onClick={() => setFilter('Waiting Review')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filter === 'Waiting Review' ? 'bg-white shadow-sm text-primary' : 'text-slate-500 hover:text-slate-700'}`}>Menunggu</button>
+          <button onClick={() => setFilter('Approved')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filter === 'Approved' ? 'bg-white shadow-sm text-primary' : 'text-slate-500 hover:text-slate-700'}`}>Disetujui</button>
+        </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -158,7 +187,7 @@ export default function JSAReviewPage() {
                         </span>
                      </td>
                      <td className="px-6 py-4 align-top">
-                        {review.status === 'Pending Review' && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full"><AlertTriangle className="w-3.5 h-3.5" /> Pending</span>}
+                        {review.status === 'Waiting Review' && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full"><AlertTriangle className="w-3.5 h-3.5" /> Pending</span>}
                         {review.status === 'Approved' && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full"><CheckCircle className="w-3.5 h-3.5" /> Approved</span>}
                         {review.status === 'Rejected' && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full"><AlertTriangle className="w-3.5 h-3.5" /> Rejected</span>}
                      </td>
@@ -167,16 +196,6 @@ export default function JSAReviewPage() {
                            <button onClick={() => handleOpenDetail(review)} className="p-2 text-slate-500 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border border-transparent hover:border-primary/20" title="Lihat Detail JSA">
                               <Eye className="w-4 h-4" />
                            </button>
-                           {review.status === 'Pending Review' && (
-                              <>
-                                 <button className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200" title="Approve JSA">
-                                    <Check className="w-4 h-4" />
-                                 </button>
-                                 <button className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200" title="Reject JSA">
-                                    <X className="w-4 h-4" />
-                                 </button>
-                              </>
-                           )}
                         </div>
                      </td>
                    </tr>
@@ -227,7 +246,7 @@ export default function JSAReviewPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                       {mockJsaRows.map((row, index) => {
+                       {currentJsaRows.map((row, index) => {
                          const anomaly = anomalies.find(a => a.id === row.id);
                          const isAnomaly = !!anomaly;
                          
@@ -287,9 +306,12 @@ export default function JSAReviewPage() {
                    <button className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-xl transition-colors">
                      <X className="w-4 h-4" /> Tolak & Kembalikan
                    </button>
-                   <button onClick={handleApprove} className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-600/30">
-                     <Check className="w-4 h-4" /> Setujui Dokumen
-                   </button>
+                   <button onClick={handleApprove} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5" /> Setujui JSA
+                  </button>
+                  <button onClick={handleReject} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-2">
+                    <X className="w-5 h-5" /> Tolak JSA
+                  </button>
                  </div>
               </div>
 

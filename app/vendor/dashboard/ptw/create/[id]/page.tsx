@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Users, Truck, ShieldAlert, Stamp } from 'lucide-react';
 import { PDFViewer } from '@react-pdf/renderer';
 import PtwPDF from './PtwPDF';
+import { savePtw } from './actions';
 
 // Mock Master Data
 const mockPekerja = [
@@ -26,6 +27,7 @@ export default function PTWCreatePage() {
 
   const [selectedPekerja, setSelectedPekerja] = useState<string[]>([]);
   const [selectedPeralatan, setSelectedPeralatan] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const togglePekerja = (id: string) => {
     setSelectedPekerja(prev => 
@@ -39,13 +41,22 @@ export default function PTWCreatePage() {
     );
   };
 
-  const handleAjukan = () => {
-    alert("PTW berhasil diajukan dan sedang menunggu validasi Project Manager!");
-    router.push(`/vendor/dashboard/projects/${encodeURIComponent(projectId)}`);
-  };
-
   const selectedPekerjaData = mockPekerja.filter(p => selectedPekerja.includes(p.id));
   const selectedPeralatanData = mockPeralatan.filter(p => selectedPeralatan.includes(p.id));
+
+  const handleAjukan = async () => {
+    setIsSubmitting(true);
+    try {
+      await savePtw(projectId, selectedPekerjaData, selectedPeralatanData);
+      alert("PTW berhasil diajukan dan sedang menunggu validasi Project Manager!");
+      router.push(`/vendor/dashboard/projects/${encodeURIComponent(projectId)}`);
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mengajukan PTW.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -64,8 +75,8 @@ export default function PTWCreatePage() {
               <div className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-wider">Project ID: {projectId}</div>
             </div>
           </div>
-          <button onClick={handleAjukan} className="px-6 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-600/30 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5" /> Ajukan PTW
+          <button onClick={handleAjukan} disabled={isSubmitting || (selectedPekerja.length === 0 && selectedPeralatan.length === 0)} className="px-6 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm shadow-emerald-600/30 flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5" /> {isSubmitting ? 'Mengajukan...' : 'Ajukan PTW'}
           </button>
         </div>
       </div>

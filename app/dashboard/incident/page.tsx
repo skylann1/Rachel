@@ -1,31 +1,29 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Search, Calendar, FileText, ArrowRight, MapPin, Building2 } from 'lucide-react';
 import Link from 'next/link';
-
-const mockAllIncidents = [
-  {
-    id: 'INC-2026-001',
-    vendor: 'PT. Vendor Konstruksi',
-    type: 'Near Miss',
-    date: '2026-06-28',
-    location: 'Area Boiler 1',
-    status: 'Menunggu Investigasi',
-    severity: 'Medium'
-  },
-  {
-    id: 'INC-2026-002',
-    vendor: 'CV. Karya Abadi',
-    type: 'First Aid',
-    date: '2026-06-25',
-    location: 'Jalur Pipa Gas B',
-    status: 'Investigasi Selesai',
-    severity: 'Low'
-  }
-];
+import { getInternalIncidents } from './actions';
 
 export default function InternalIncidentInboxPage() {
+  const [incidents, setIncidents] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function load() {
+      const data = await getInternalIncidents();
+      const formatted = data.map((d: any) => ({
+        id: d.id,
+        vendor: d.projects?.vendor_profiles?.company_name || 'Unknown Vendor',
+        type: d.type,
+        date: d.incident_date,
+        location: d.location,
+        status: d.status,
+        severity: ['Fatality', 'Lost Time Injury'].includes(d.type) ? 'High' : (d.type === 'First Aid' || d.type === 'Near Miss' ? 'Low' : 'Medium')
+      }));
+      setIncidents(formatted);
+    }
+    load();
+  }, []);
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
@@ -69,14 +67,14 @@ export default function InternalIncidentInboxPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {mockAllIncidents.length === 0 ? (
+              {incidents.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-500">
                     Belum ada insiden yang dilaporkan.
                   </td>
                 </tr>
               ) : (
-                mockAllIncidents.map((inc) => (
+                incidents.map((inc) => (
                   <tr key={inc.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4">
                       <div className="font-bold text-slate-800">{inc.id}</div>

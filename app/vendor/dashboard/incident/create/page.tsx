@@ -1,16 +1,38 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, MapPin, Calendar, Clock, Upload, Send, FileText, Camera } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { submitIncident, getVendorProjects } from './actions';
 
 export default function VendorIncidentReportPage() {
   const router = useRouter();
+  const [projects, setProjects] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleKirim = () => {
-    alert("Laporan Awal Insiden berhasil dikirim ke tim HSE PGN untuk diinvestigasi!");
-    router.push('/vendor/dashboard/incident');
+  useEffect(() => {
+    async function load() {
+      const projs = await getVendorProjects();
+      setProjects(projs);
+    }
+    load();
+  }, []);
+
+  const handleKirim = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    try {
+      await submitIncident(formData);
+      alert("Laporan Awal Insiden berhasil dikirim ke tim HSE PGN untuk diinvestigasi!");
+      router.push('/vendor/dashboard/incident');
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mengirim laporan insiden.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -32,17 +54,18 @@ export default function VendorIncidentReportPage() {
              Batal
            </Link>
            <button 
-             onClick={handleKirim}
-             type="button" 
-             className="flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-all shadow-sm shadow-rose-600/30"
+             type="submit" 
+             form="incident-form"
+             disabled={isSubmitting}
+             className="flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl transition-all shadow-sm shadow-rose-600/30"
            >
              <Send className="w-4 h-4" />
-             Kirim Laporan Awal
+             {isSubmitting ? 'Mengirim...' : 'Kirim Laporan Awal'}
            </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <form id="incident-form" onSubmit={handleKirim} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         
         {/* Section 1: Info Dasar */}
         <div className="p-6 border-b border-slate-100 bg-slate-50/50">
@@ -54,7 +77,7 @@ export default function VendorIncidentReportPage() {
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Jenis Insiden <span className="text-rose-500">*</span></label>
-            <select className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm">
+            <select name="type" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm">
               <option value="">-- Pilih Jenis --</option>
               <option value="near_miss">Near Miss (Hampir Celaka)</option>
               <option value="first_aid">First Aid (Cedera Ringan/P3K)</option>
@@ -67,10 +90,11 @@ export default function VendorIncidentReportPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Proyek Terkait</label>
-            <select className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm">
+            <select name="project_id" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm">
               <option value="">-- Pilih Proyek Anda --</option>
-              <option value="PRJ-001">Penggalian Pipa Gas Area A</option>
-              <option value="PRJ-002">Maintenance Kompresor B</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
             </select>
           </div>
           <div className="space-y-2">
@@ -79,7 +103,7 @@ export default function VendorIncidentReportPage() {
                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                  <Calendar className="w-4 h-4 text-slate-400" />
                </div>
-               <input type="date" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm" />
+               <input name="incident_date" required type="date" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm" />
             </div>
           </div>
           <div className="space-y-2">
@@ -88,7 +112,7 @@ export default function VendorIncidentReportPage() {
                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                  <Clock className="w-4 h-4 text-slate-400" />
                </div>
-               <input type="time" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm" />
+               <input name="incident_time" required type="time" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm" />
             </div>
           </div>
           <div className="md:col-span-2 space-y-2">
@@ -97,7 +121,7 @@ export default function VendorIncidentReportPage() {
                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                  <MapPin className="w-4 h-4 text-slate-400" />
                </div>
-               <input type="text" placeholder="Misal: Tangki T-04, Sisi Utara" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm" />
+               <input name="location" required type="text" placeholder="Misal: Tangki T-04, Sisi Utara" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm" />
             </div>
           </div>
         </div>
@@ -113,6 +137,8 @@ export default function VendorIncidentReportPage() {
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Deskripsikan Apa yang Terjadi <span className="text-rose-500">*</span></label>
             <textarea 
+               name="chronology"
+               required
                rows={4} 
                placeholder="Jelaskan secara singkat dan jelas runtutan kejadian..."
                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
@@ -121,6 +147,7 @@ export default function VendorIncidentReportPage() {
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Tindakan Langsung yang Diambil (Immediate Action)</label>
             <textarea 
+               name="immediate_action"
                rows={3} 
                placeholder="Contoh: Menghentikan pekerjaan, membawa korban ke klinik..."
                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
@@ -142,11 +169,12 @@ export default function VendorIncidentReportPage() {
               </div>
               <h3 className="text-sm font-bold text-slate-700 mb-1">Unggah Foto Insiden</h3>
               <p className="text-xs text-slate-500 mb-4">Format JPG, PNG, atau PDF (Maks. 5MB per file)</p>
-              <button type="button" className="text-sm font-bold text-rose-600 bg-rose-50 px-4 py-2 rounded-lg">Pilih File</button>
-           </div>
-        </div>
+               <input type="file" className="hidden" id="incident-photo" name="image" accept="image/*,.pdf" />
+               <label htmlFor="incident-photo" className="text-sm font-bold text-rose-600 bg-rose-50 px-4 py-2 rounded-lg cursor-pointer">Pilih File</label>
+            </div>
+         </div>
 
-      </div>
+      </form>
     </div>
   );
 }

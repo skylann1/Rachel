@@ -1,10 +1,66 @@
-"use client";
-
 import React from 'react';
 import { Briefcase, Building2, ClipboardList, ShieldCheck, TrendingUp, Clock, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@/utils/supabase/server';
 
-export default function DashboardOverviewPage() {
+export default async function DashboardOverviewPage() {
+  const supabase = await createClient();
+
+  // 1. Fetch Proyek Aktif
+  const { count: activeProjectsCount } = await supabase
+    .from('projects')
+    .select('*', { count: 'exact', head: true })
+    .neq('status', 'Selesai')
+    .neq('status', 'Ditolak');
+
+  // 2. Fetch Total Vendors
+  const { count: vendorsCount } = await supabase
+    .from('vendor_profiles')
+    .select('*', { count: 'exact', head: true });
+
+  // 3. Fetch JSA Pending Review
+  const { count: pendingJsaCount } = await supabase
+    .from('jsa')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'Menunggu Review'); // Asumsi status Menunggu Review
+
+  // 4. Fetch JSA data for the chart (Current Year)
+  const currentYear = new Date().getFullYear();
+  const { data: jsaData } = await supabase
+    .from('jsa')
+    .select('status, created_at')
+    .gte('created_at', `${currentYear}-01-01T00:00:00Z`)
+    .lt('created_at', `${currentYear + 1}-01-01T00:00:00Z`);
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const chartData = monthNames.map(month => ({ month, approved: 0, rejected: 0, max: 0 }));
+
+  if (jsaData) {
+    jsaData.forEach(jsa => {
+      const monthIndex = new Date(jsa.created_at).getMonth();
+      if (jsa.status === 'Approved') chartData[monthIndex].approved++;
+      if (jsa.status === 'Rejected') chartData[monthIndex].rejected++;
+    });
+  }
+
+  // Calculate percentages for the chart height
+  let maxCount = 0;
+  chartData.forEach(d => {
+    if (d.approved > maxCount) maxCount = d.approved;
+    if (d.rejected > maxCount) maxCount = d.rejected;
+  });
+  
+  if (maxCount === 0) maxCount = 1; // avoid division by zero
+
+  // Normalize data for chart (height percentage)
+  const normalizedChartData = chartData.slice(0, new Date().getMonth() + 1).map(d => ({
+    month: d.month,
+    approvedRaw: d.approved,
+    rejectedRaw: d.rejected,
+    approved: (d.approved / maxCount) * 100,
+    rejected: (d.rejected / maxCount) * 100
+  }));
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -26,7 +82,7 @@ export default function DashboardOverviewPage() {
                </span>
             </div>
             <h3 className="text-sm font-bold text-slate-500">Proyek Aktif</h3>
-            <p className="text-2xl font-black text-slate-800 mt-1">24</p>
+            <p className="text-2xl font-black text-slate-800 mt-1">{activeProjectsCount || 0}</p>
          </div>
 
          {/* Stat 2 */}
@@ -36,11 +92,11 @@ export default function DashboardOverviewPage() {
                   <Building2 className="w-5 h-5" />
                </div>
                <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                  <TrendingUp className="w-3 h-3" /> 5%
+                  <TrendingUp className="w-3 h-3" /> Aktif
                </span>
             </div>
             <h3 className="text-sm font-bold text-slate-500">Vendor Terverifikasi</h3>
-            <p className="text-2xl font-black text-slate-800 mt-1">118</p>
+            <p className="text-2xl font-black text-slate-800 mt-1">{vendorsCount || 0}</p>
          </div>
 
          {/* Stat 3 */}
@@ -54,7 +110,7 @@ export default function DashboardOverviewPage() {
                </Link>
             </div>
             <h3 className="text-sm font-bold text-slate-500">JSA Pending Review</h3>
-            <p className="text-2xl font-black text-amber-600 mt-1">12</p>
+            <p className="text-2xl font-black text-amber-600 mt-1">{pendingJsaCount || 0}</p>
          </div>
 
          {/* Stat 4 */}
@@ -85,27 +141,26 @@ export default function DashboardOverviewPage() {
             </div>
             
             {/* Mockup Bar Chart using standard HTML/Tailwind */}
-            <div className="flex-1 flex items-end justify-between gap-2 h-48 mt-4">
-               {[
-                  { month: 'Jan', approved: 60, rejected: 20 },
-                  { month: 'Feb', approved: 45, rejected: 10 },
-                  { month: 'Mar', approved: 80, rejected: 15 },
-                  { month: 'Apr', approved: 55, rejected: 5 },
-                  { month: 'Mei', approved: 95, rejected: 25 },
-                  { month: 'Jun', approved: 75, rejected: 10 },
-               ].map((data, idx) => (
-                  <div key={idx} className="flex flex-col items-center flex-1 group">
+            <div className="flex-1 flex items-end justify-between gap-2 h-48 mt-4 overflow-x-auto">
+               {normalizedChartData.map((data, idx) => (
+                  <div key={idx} className="flex flex-col items-center flex-1 group min-w-[3rem]">
                      <div className="relative w-full flex justify-center h-40 items-end gap-1">
                         {/* Rejected Bar */}
                         <div 
-                           className="w-1/3 bg-rose-200 rounded-t-md transition-all group-hover:bg-rose-300"
-                           style={{ height: `${data.rejected}%` }}
-                        ></div>
+                           className="w-1/3 bg-rose-200 rounded-t-md transition-all group-hover:bg-rose-300 relative"
+                           style={{ height: `${data.rejected}%`, minHeight: data.rejected > 0 ? '4px' : '0' }}
+                           title={`Ditolak: ${data.rejectedRaw}`}
+                        >
+                           <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">{data.rejectedRaw}</span>
+                        </div>
                         {/* Approved Bar */}
                         <div 
-                           className="w-1/3 bg-primary/80 rounded-t-md transition-all group-hover:bg-primary"
-                           style={{ height: `${data.approved}%` }}
-                        ></div>
+                           className="w-1/3 bg-primary/80 rounded-t-md transition-all group-hover:bg-primary relative"
+                           style={{ height: `${data.approved}%`, minHeight: data.approved > 0 ? '4px' : '0' }}
+                           title={`Disetujui: ${data.approvedRaw}`}
+                        >
+                           <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">{data.approvedRaw}</span>
+                        </div>
                      </div>
                      <span className="text-xs font-bold text-slate-400 mt-3">{data.month}</span>
                   </div>
