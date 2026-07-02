@@ -9,7 +9,7 @@ export default async function ProjectManagementPage() {
     .from('projects')
     .select(`
       *,
-      vendor:vendor_id(
+      vendor:vendor_profiles(
         id,
         company_name
       )

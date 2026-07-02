@@ -142,6 +142,24 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
             </div>
           </div>
         ))}
+        {filteredProjects.length === 0 && (
+          <div className="py-16 flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-200 border-dashed shadow-sm">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
+              <Briefcase className="w-10 h-10 text-slate-300" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Data Proyek Kosong</h3>
+            <p className="text-slate-500 text-sm max-w-md text-center mb-6">
+              Belum ada proyek yang terdaftar atau cocok dengan pencarian Anda. Silakan mulai inisiasi proyek baru dengan menekan tombol di bawah.
+            </p>
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-primary/30"
+            >
+              <Plus className="w-4 h-4" />
+              Inisiasi Proyek Baru
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal Inisiasi Proyek Baru */}

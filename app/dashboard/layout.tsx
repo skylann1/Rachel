@@ -3,6 +3,7 @@ import { logout } from "@/app/auth/login/actions";
 import Link from "next/link";
 import Image from "next/image";
 import { SidebarNav } from "@/components/internal/sidebar-nav";
+import { getUserPermissions } from "@/utils/permissions";
 import { LayoutDashboard, CheckCircle, LogOut, FileSignature, ShieldCheck, Bell, Database, Users, Shield, Building2, Briefcase } from "lucide-react";
 
 export default async function AuthDashboardLayout({
@@ -12,6 +13,7 @@ export default async function AuthDashboardLayout({
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  const permissions = await getUserPermissions();
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans text-slate-900">
@@ -56,7 +58,7 @@ export default async function AuthDashboardLayout({
         </div>
 
         {/* Navigation */}
-        <SidebarNav />
+        <SidebarNav userPermissions={permissions || {}} />
 
         {/* Logout */}
         <div className="p-4 border-t border-slate-100">

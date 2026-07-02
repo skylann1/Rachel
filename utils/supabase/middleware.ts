@@ -33,14 +33,13 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthPath = request.nextUrl.pathname.startsWith("/auth");
   const isVendorPath = request.nextUrl.pathname.startsWith("/vendor");
+  const isDashboardPath = request.nextUrl.pathname.startsWith("/dashboard");
 
   const isAuthLogin = request.nextUrl.pathname === "/auth/login";
   const isVendorLogin = request.nextUrl.pathname === "/vendor/login";
 
-  // Note: For a real app, we should check user.app_metadata.role to ensure strict segregation.
-  // For MVP, we will rely on basic path protection.
-
   if (!user) {
+    // Blocks unauthenticated users from accessing protected routes
     if (isAuthPath && !isAuthLogin) {
       const url = request.nextUrl.clone();
       url.pathname = "/auth/login";
@@ -51,17 +50,45 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/vendor/login";
       return NextResponse.redirect(url);
     }
-  } else {
-    // User is logged in
-    if (isAuthLogin) {
+    if (isDashboardPath) {
       const url = request.nextUrl.clone();
-      url.pathname = "/auth/dashboard";
+      url.pathname = "/auth/login";
       return NextResponse.redirect(url);
     }
-    if (isVendorLogin) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/vendor/dashboard";
-      return NextResponse.redirect(url);
+  } else {
+    // User is logged in, extract metadata
+    const type = user.user_metadata?.type; // 'internal' or 'external'
+    const role = user.user_metadata?.role; // 'admin', 'vendor', 'hse', etc.
+
+    // 1. Cross-Portal Blocking
+    if (type === 'external') {
+      // Vendors cannot access internal dashboard or auth login
+      if (isDashboardPath || isAuthPath) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/vendor/dashboard";
+        return NextResponse.redirect(url);
+      }
+      // If they go to vendor login, redirect to vendor dashboard
+      if (isVendorLogin) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/vendor/dashboard";
+        return NextResponse.redirect(url);
+      }
+    } else if (type === 'internal') {
+      // Internal cannot access vendor paths
+      if (isVendorPath) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/dashboard";
+        return NextResponse.redirect(url);
+      }
+      // If they go to auth login, redirect to dashboard
+      if (isAuthLogin) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/dashboard";
+        return NextResponse.redirect(url);
+      }
+      
+      // 2. Dynamic permission checks are now handled in the page/layout components
     }
   }
 
