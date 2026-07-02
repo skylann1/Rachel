@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ShieldCheck, Mail, Lock, ArrowRight } from 'lucide-react';
 import { login } from "./actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function InternalLoginPage({
   searchParams,
@@ -80,13 +81,14 @@ export default async function InternalLoginPage({
                 </div>
               )}
 
-              <button 
+              <SubmitButton 
                 formAction={login}
-                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white py-3.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/30 group"
+                pendingText="Memproses..."
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white py-3.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/30 group disabled:opacity-70"
               >
                  Masuk ke Sistem
                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-               </button>
+               </SubmitButton>
            </form>
 
            <div className="mt-8 pt-8 border-t border-slate-100 text-center">

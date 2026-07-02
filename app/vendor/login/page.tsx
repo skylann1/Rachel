@@ -1,6 +1,7 @@
 import { login } from "./actions";
 
 import Image from "next/image";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function VendorLoginPage({
   searchParams,
@@ -116,12 +117,13 @@ export default async function VendorLoginPage({
             )}
 
             {/* Submit Button */}
-            <button
+            <SubmitButton
               formAction={login}
+              pendingText="Memproses..."
               className="w-full h-12 mt-4 bg-primary text-white font-bold rounded-full shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
               Login
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>
