@@ -1,6 +1,7 @@
 import React from 'react';
 import { createClient } from "@/utils/supabase/server";
 import Link from 'next/link';
+import Image from 'next/image';
 import { 
   ClipboardList, 
   FileSignature, 
@@ -11,7 +12,8 @@ import {
   CheckCircle2,
   Clock,
   Activity
-} from 'lucide-react';import { getVendorDashboardData } from './actions';
+} from 'lucide-react';
+import { getVendorDashboardData } from './actions';
 
 const mockTimeline = [
   { id: 1, title: 'PTW Diterbitkan', desc: 'PM memvalidasi PTW untuk Penggalian Pipa Gas Area A.', time: '2 jam yang lalu', type: 'success' },
@@ -24,25 +26,49 @@ export default async function VendorDashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   const { projects, stats } = await getVendorDashboardData();
+  const userName = user?.email?.split('@')[0].toUpperCase() || 'MITRA';
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Header & Quick Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-800">Dashboard Vendor</h1>
-          <p className="text-slate-500 mt-1">
-            Kelola pengajuan prosedur, pantau JSA, dan akses PTW proyek Anda.
+      {/* Hero Banner Vendor */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-900 to-blue-600 p-6 sm:p-8 lg:p-10 text-white shadow-lg">
+        {/* Decorative background elements */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-white opacity-10 blur-3xl"></div>
+        <div className="absolute bottom-0 right-10 w-40 h-40 rounded-full bg-blue-400 opacity-20 blur-2xl"></div>
+        <div className="absolute top-1/2 right-1/3 w-32 h-32 rounded-full bg-cyan-400 opacity-20 blur-2xl"></div>
+
+        {/* Content */}
+        <div className="relative z-10 w-full lg:w-3/5 xl:w-2/3 max-w-2xl">
+          <h1 className="text-2xl sm:text-3xl xl:text-4xl font-extrabold tracking-tight mb-2 drop-shadow-sm">
+            PORTAL MITRA VENDOR
+          </h1>
+          <p className="text-blue-100 font-bold tracking-widest text-xs sm:text-sm mb-4 sm:mb-6 uppercase">
+            RACHEL SMART SYSTEM
           </p>
-        </div>
-        <div className="flex gap-3 w-full sm:w-auto">
+          <p className="text-blue-50/90 text-sm sm:text-base leading-relaxed mb-8">
+            Selamat datang, {userName}. Kelola pengajuan Prosedur Kerja, pantau status JSA (Job Safety Analysis), dan akses PTW (Permit to Work) untuk seluruh proyek Anda secara *real-time* di satu tempat.
+          </p>
+          
           <Link 
-            href="/vendor/dashboard/jsa/create"
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-sm shadow-primary/30"
+            href="/vendor/dashboard/projects"
+            className="inline-flex items-center justify-center gap-2 bg-white text-blue-900 hover:bg-blue-50 px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Buat JSA Baru
+            Mulai Pengajuan K3
           </Link>
+        </div>
+
+        {/* Decorative Illustration Area (Right Side) */}
+        <div className="hidden lg:flex absolute right-4 xl:right-8 bottom-0 h-full items-end justify-center pointer-events-none">
+           <div className="relative w-56 h-56 xl:w-80 xl:h-80 pb-2 xl:pb-4">
+              <Image
+                 src="/assets/undraws/undraw_construction-workers_z99i.svg"
+                 alt="Vendor Illustration"
+                 fill
+                 className="object-contain object-bottom drop-shadow-2xl"
+                 priority
+              />
+           </div>
         </div>
       </div>
 

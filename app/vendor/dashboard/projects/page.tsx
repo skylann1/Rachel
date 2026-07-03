@@ -1,17 +1,80 @@
 import React from 'react';
 import Link from 'next/link';
-import { Search, Briefcase, MapPin, Calendar, ArrowRight, Activity, Plus, FileSignature } from 'lucide-react';
+import { Search, Briefcase, MapPin, Calendar, ArrowRight, FileSignature } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    'Menunggu Review':    'bg-amber-100 text-amber-700',
+    'Prosedur Disetujui': 'bg-sky-100 text-sky-700',
+    'JSA Disetujui':      'bg-violet-100 text-violet-700',
+    'PTW Aktif':          'bg-emerald-100 text-emerald-700',
+    'Selesai':            'bg-slate-100 text-slate-600',
+    'Ditolak':            'bg-rose-100 text-rose-700',
+  };
+  return (
+    <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${map[status] ?? 'bg-slate-100 text-slate-600'}`}>
+      {status}
+    </span>
+  );
+}
 
 export default async function VendorProjectsPage() {
   const supabase = await createClient();
-  const { data: projects, error } = await supabase
+  const { data: projects } = await supabase
     .from('projects')
-    .select('*')
+    .select('id, name, description, location, start_date, end_date, status, progress, contract_number')
     .order('created_at', { ascending: false });
 
-  // Sementara fallback ke array kosong kalau belum ada data
   const filteredProjects = projects || [];
+
+  // Determine next action based on project status
+  const getActionButton = (project: any) => {
+    switch (project.status) {
+      case 'Menunggu Review':
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 py-3 rounded-xl transition-all shadow-sm shadow-primary/30"
+          >
+            <FileSignature className="w-4 h-4" /> Lengkapi Prosedur
+          </Link>
+        );
+      case 'Prosedur Disetujui':
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-sky-700 bg-sky-50 border border-sky-200 hover:bg-sky-100 py-2.5 rounded-xl transition-colors"
+          >
+            Buat JSA <ArrowRight className="w-4 h-4" />
+          </Link>
+        );
+      case 'JSA Disetujui':
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 py-2.5 rounded-xl transition-colors"
+          >
+            Ajukan PTW <ArrowRight className="w-4 h-4" />
+          </Link>
+        );
+      case 'PTW Aktif':
+        return (
+          <div className="flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 py-2.5 rounded-xl">
+            ✅ PTW Aktif — Pekerjaan Berjalan
+          </div>
+        );
+      default:
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 py-2.5 rounded-xl transition-colors"
+          >
+            Lihat Detail <ArrowRight className="w-4 h-4" />
+          </Link>
+        );
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -37,44 +100,40 @@ export default async function VendorProjectsPage() {
             placeholder="Cari nama proyek atau lokasi..."
           />
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <select className="block w-full sm:w-48 pl-3 pr-10 py-2 text-base border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm rounded-xl bg-slate-50">
-            <option>Semua Status</option>
-            <option>Aktif</option>
-            <option>Persiapan</option>
-            <option>Selesai</option>
-          </select>
-        </div>
       </div>
 
       {/* Projects Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filteredProjects.map((project) => (
-          <div key={project.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex flex-col relative overflow-hidden">
-            
-            {/* Status Ribbon/Badge */}
-            <div className="absolute top-6 right-6">
-               <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                  project.status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' :
-                  project.status === 'Persiapan' ? 'bg-amber-100 text-amber-700' :
-                  project.status === 'MENUNGGU SUBMISSION' ? 'bg-rose-100 text-rose-700' :
-                  'bg-slate-100 text-slate-700'
-               }`}>
-                 {project.status}
-               </span>
-            </div>
+      {filteredProjects.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
+          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Briefcase className="w-8 h-8 text-slate-400" />
+          </div>
+          <h3 className="font-bold text-slate-700 mb-1">Belum Ada Proyek</h3>
+          <p className="text-sm text-slate-500">Proyek Anda akan muncul di sini setelah Admin/PM menetapkan pekerjaan untuk perusahaan Anda.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredProjects.map((project) => (
+            <div key={project.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex flex-col relative overflow-hidden">
+              
+              {/* Status Badge */}
+              <div className="absolute top-6 right-6">
+                <StatusBadge status={project.status} />
+              </div>
 
-            <div className="flex items-center gap-4 mb-4">
-               <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
                   <Briefcase className="w-6 h-6" />
-               </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800 leading-tight pr-20">{project.name}</h3>
-                  <div className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider">ID: {project.id}</div>
                 </div>
-             </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 leading-tight pr-28">{project.name}</h3>
+                  {project.contract_number && (
+                    <div className="text-xs font-mono font-bold text-slate-400 mt-0.5">No. {project.contract_number}</div>
+                  )}
+                </div>
+              </div>
              
-             <div className="mb-5 text-sm text-slate-600 leading-relaxed line-clamp-2" title={project.description || 'Proyek K3'}>
+             <div className="mb-5 text-sm text-slate-600 leading-relaxed line-clamp-2">
                 {project.description || 'Pekerjaan sesuai dengan kontrak dan Prosedur K3 PGN.'}
              </div>
              
@@ -90,7 +149,7 @@ export default async function VendorProjectsPage() {
             </div>
 
             {/* Progress Bar */}
-            <div className="mt-auto pt-4 border-t border-slate-100 space-y-2 mb-6">
+            <div className="mt-auto pt-4 border-t border-slate-100 space-y-2 mb-4">
                <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-slate-500 uppercase">Progres Pekerjaan</span>
                   <span className="text-xs font-black text-primary">{project.progress || 0}%</span>
@@ -103,33 +162,15 @@ export default async function VendorProjectsPage() {
                </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className={`grid gap-3 mt-auto ${project.status === 'MENUNGGU SUBMISSION' ? 'grid-cols-1' : 'grid-cols-2'}`}>
-               {project.status === 'MENUNGGU SUBMISSION' ? (
-                 <Link 
-                   href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`}
-                   className="flex items-center justify-center gap-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 py-3 rounded-xl transition-all shadow-sm shadow-primary/30"
-                 >
-                   <FileSignature className="w-4 h-4" /> Mulai Pengajuan Dokumen K3
-                 </Link>
-               ) : (
-                 <>
-                   <Link href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`} className="flex items-center justify-center gap-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 py-2.5 rounded-xl transition-colors">
-                     Detail Proyek
-                   </Link>
-                   <button 
-                     disabled
-                     className="flex items-center justify-center gap-2 text-sm font-bold text-slate-400 bg-slate-100 py-2.5 rounded-xl cursor-not-allowed"
-                   >
-                     Pengajuan Selesai
-                   </button>
-                 </>
-               )}
+            {/* Action Button */}
+            <div className="mt-auto">
+              {getActionButton(project)}
             </div>
 
           </div>
         ))}
       </div>
+    )}
     </div>
   );
 }

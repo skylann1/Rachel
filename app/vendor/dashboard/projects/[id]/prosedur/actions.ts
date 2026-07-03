@@ -15,7 +15,7 @@ export async function saveProsedur(projectId: string, payload: any) {
   if (existing) {
     const { error } = await supabase
       .from('procedures')
-      .update({ content: payload })
+      .update({ content: payload, status: 'Menunggu Review PM' })
       .eq('id', existing.id);
       
     if (error) throw new Error(error.message);
@@ -25,7 +25,7 @@ export async function saveProsedur(projectId: string, payload: any) {
       .insert({
         project_id: projectId,
         content: payload,
-        status: 'Draft'
+        status: 'Menunggu Review PM'
       });
       
     if (error) throw new Error(error.message);

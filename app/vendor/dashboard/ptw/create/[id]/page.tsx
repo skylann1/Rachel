@@ -76,7 +76,11 @@ export default function PTWCreatePage() {
             </div>
           </div>
           <button onClick={handleAjukan} disabled={isSubmitting || (selectedPekerja.length === 0 && selectedPeralatan.length === 0)} className="px-6 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm shadow-emerald-600/30 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5" /> {isSubmitting ? 'Mengajukan...' : 'Ajukan PTW'}
+            {isSubmitting ? (
+              <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Mengajukan...</span>
+            ) : (
+              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Ajukan PTW</span>
+            )}
           </button>
         </div>
       </div>

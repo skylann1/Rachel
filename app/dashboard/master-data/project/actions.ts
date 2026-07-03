@@ -22,7 +22,7 @@ export async function createProject(formData: FormData) {
     start_date,
     end_date,
     vendor_id,
-    status: 'Preparation',
+    status: 'Menunggu Review',
     progress: 0,
   });
 

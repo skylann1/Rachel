@@ -19,7 +19,7 @@ export async function saveJsa(projectId: string, jsaData: any) {
       .from('jsa')
       .insert({
         project_id: projectId,
-        status: 'Waiting Review'
+        status: 'Pembahasan JSA'
       })
       .select('id')
       .single();
@@ -27,7 +27,7 @@ export async function saveJsa(projectId: string, jsaData: any) {
     if (error) throw new Error(error.message);
     jsaId = newJsa.id;
   } else {
-    await supabase.from('jsa').update({ status: 'Waiting Review' }).eq('id', jsaId);
+    await supabase.from('jsa').update({ status: 'Pembahasan JSA' }).eq('id', jsaId);
   }
 
   // Delete existing steps

@@ -2,6 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { logout } from "@/app/vendor/login/actions";
 import Link from "next/link";
 import { LayoutDashboard, FileSignature, LogOut, Briefcase, ShieldAlert, Stamp, Users, Truck, AlertTriangle } from "lucide-react";
+import { VendorMobileSidebar } from "@/components/vendor-mobile-sidebar";
 
 export default async function VendorDashboardLayout({
   children,
@@ -96,16 +97,20 @@ export default async function VendorDashboardLayout({
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 flex items-center justify-between px-6 border-b bg-card">
-          <div className="font-medium text-sm text-muted-foreground">Mitra Kerja</div>
+          <div className="flex items-center">
+            <VendorMobileSidebar />
+            <div className="font-medium text-sm text-muted-foreground hidden md:block">Mitra Kerja</div>
+            <div className="font-bold text-sm text-primary md:hidden">Portal Vendor</div>
+          </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium">{user?.email}</span>
+            <span className="text-sm font-medium hidden sm:block">{user?.email}</span>
             <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
               {user?.email?.charAt(0).toUpperCase()}
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {children}
         </div>
       </main>

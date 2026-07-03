@@ -83,7 +83,11 @@ export default function JSACreatePage() {
             </div>
           </div>
           <button onClick={handleSimpan} disabled={isSaving} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5" /> {isSaving ? 'Menyimpan...' : 'Submit JSA'}
+            {isSaving ? (
+              <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</span>
+            ) : (
+              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Submit JSA</span>
+            )}
           </button>
         </div>
       </div>

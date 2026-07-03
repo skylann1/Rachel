@@ -210,7 +210,8 @@ export default function ProsedurKerjaForm() {
       // Simulate delay for UI
       setTimeout(() => {
         setIsSaving(false);
-        router.push(`/vendor/dashboard/projects/${params.id}/jsa`);
+        // Go back to project detail — prosedur needs PM approval before JSA can start
+        router.push(`/vendor/dashboard/projects/${params.id}`);
       }, 800);
     } catch (err) {
       console.error(err);
@@ -533,7 +534,10 @@ export default function ProsedurKerjaForm() {
             className="flex w-full md:w-auto items-center justify-center gap-2 bg-primary hover:bg-primary/90 disabled:bg-primary/60 disabled:cursor-wait text-white px-8 py-4 rounded-2xl font-bold text-base transition-all shadow-lg shadow-primary/30 active:scale-[0.98]"
           >
             {isSaving ? (
-              <span className="animate-pulse">Menyimpan...</span>
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Menyimpan...</span>
+              </>
             ) : (
               <>
                 Simpan & Lanjut ke Pengisian JSA

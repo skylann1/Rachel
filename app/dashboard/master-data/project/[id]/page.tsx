@@ -1,26 +1,41 @@
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Save, Briefcase, MapPin, Calendar, Building2, Activity, Users, CheckCircle } from 'lucide-react';
-
-const getMockProject = (id: string) => {
-  return {
-    id: decodeURIComponent(id),
-    name: 'Penggalian Pipa Gas Area A - Tahap 2',
-    vendorId: 'VND-001',
-    vendorName: 'PT. Konstruksi Sejahtera',
-    location: 'Plant A, Zona Merah',
-    startDate: '2026-06-01',
-    endDate: '2026-08-30',
-    status: 'On Progress',
-    progress: 45,
-    description: 'Proyek penggalian dan pemasangan pipa gas bawah tanah sepanjang 2km di area plant A, mencakup pengelasan dan coating pipa.',
-    picProject: 'Ahmad Maulana (PM Internal)'
-  };
-};
+import { notFound } from 'next/navigation';
+import { ArrowLeft, Save, Briefcase, MapPin, Calendar, Building2, Activity, Users } from 'lucide-react';
+import { createClient } from '@/utils/supabase/server';
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params;
-  const project = getMockProject(resolvedParams.id);
+  const { id } = await params;
+  const projectId = decodeURIComponent(id);
+  const supabase = await createClient();
+
+  const { data: project, error } = await supabase
+    .from('projects')
+    .select(`
+      id, name, description, contract_number, location, start_date, end_date, status, progress, vendor_id,
+      vendor_profiles ( id, company_name )
+    `)
+    .eq('id', projectId)
+    .single();
+
+  if (error || !project) return notFound();
+
+  // Fetch all vendors for the dropdown
+  const { data: vendors } = await supabase
+    .from('vendor_profiles')
+    .select('id, company_name')
+    .order('company_name');
+
+  const vendorList = vendors || [];
+
+  const statusOptions = [
+    { value: 'Menunggu Review', label: 'Menunggu Review' },
+    { value: 'Prosedur Disetujui', label: 'Prosedur Disetujui' },
+    { value: 'JSA Disetujui', label: 'JSA Disetujui' },
+    { value: 'PTW Aktif', label: 'PTW Aktif' },
+    { value: 'Selesai', label: 'Selesai' },
+    { value: 'Ditolak', label: 'Ditolak' },
+  ];
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -38,21 +53,6 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
             <p className="text-sm text-slate-500 mt-1">Kelola informasi pekerjaan, timeline, dan vendor yang bertugas.</p>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-           <button 
-             type="button" 
-             className="px-6 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors"
-           >
-             Batal
-           </button>
-           <button 
-             type="button" 
-             className="flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-sm shadow-primary/30"
-           >
-             <Save className="w-4 h-4" />
-             Simpan Perubahan
-           </button>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -65,54 +65,33 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
             </div>
             
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">ID Proyek</h3>
-            <p className="text-lg font-black text-slate-800 bg-slate-50 px-3 py-1.5 rounded-lg inline-block border border-slate-100 mb-6">{project.id}</p>
+            <p className="text-sm font-black text-slate-800 bg-slate-50 px-3 py-1.5 rounded-lg inline-block border border-slate-100 mb-6 font-mono">{project.id.slice(0, 8).toUpperCase()}</p>
 
             <div className="space-y-4">
                <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Status Pekerjaan</h3>
-                  <select 
-                     defaultValue={project.status}
-                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm font-bold"
-                  >
-                     <option value="Preparation">Persiapan (Preparation)</option>
-                     <option value="On Progress">Sedang Berjalan (On Progress)</option>
-                     <option value="On Hold">Ditunda (On Hold)</option>
-                     <option value="Completed">Selesai (Completed)</option>
-                  </select>
+                  <div className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">
+                    {project.status}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">Status diperbarui otomatis oleh sistem sesuai alur approval.</p>
                </div>
                
                <div>
                   <div className="flex justify-between items-end mb-2">
                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Progress Aktual</h3>
-                     <span className="text-lg font-black text-primary">{project.progress}%</span>
+                     <span className="text-lg font-black text-primary">{project.progress || 0}%</span>
                   </div>
-                  <input 
-                     type="range" 
-                     min="0" max="100" 
-                     defaultValue={project.progress}
-                     className="w-full accent-primary"
-                  />
+                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${project.progress || 0}%` }} />
+                  </div>
                </div>
             </div>
           </div>
-
-          {/* Quick Metrics */}
-          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5">
-             <div className="flex items-start gap-4">
-                <div className="p-3 bg-white rounded-xl shadow-sm">
-                   <CheckCircle className="w-6 h-6 text-emerald-500" />
-                </div>
-                <div>
-                   <p className="text-sm font-bold text-slate-800">Status K3 Proyek</p>
-                   <p className="text-xs text-slate-500 mt-1">Zero accident tercatat sejauh ini. JSA aktif ditaati dengan baik.</p>
-                </div>
-             </div>
-          </div>
         </div>
 
-        {/* Right Column: Main Form */}
+        {/* Right Column: Main Info (Read-only for now) */}
         <div className="lg:col-span-2">
-          <form className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
             <div className="p-6 sm:p-8">
               
               {/* Seksi 1: Informasi Dasar */}
@@ -124,67 +103,48 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
               <div className="space-y-5 mb-8">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700">Nama Pekerjaan / Proyek</label>
-                  <input 
-                    type="text" 
-                    defaultValue={project.name}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm font-medium"
-                  />
+                  <div className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800">
+                    {project.name}
+                  </div>
                 </div>
+
+                {project.contract_number && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">Nomor Kontrak</label>
+                    <div className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 font-mono">
+                      {project.contract_number}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700">Deskripsi Pekerjaan</label>
-                  <textarea 
-                    defaultValue={project.description}
-                    rows={3}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
-                  />
+                  <div className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 min-h-[80px]">
+                    {project.description || '-'}
+                  </div>
                 </div>
               </div>
 
               {/* Seksi 2: Pelaksana & Lokasi */}
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-6 pt-6 border-t border-slate-100">
                 <Building2 className="w-5 h-5 text-primary" />
-                Pelaksana & Lokasi
+                Pelaksana &amp; Lokasi
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
                  <div className="space-y-2">
                    <label className="text-sm font-semibold text-slate-700">Vendor / Kontraktor</label>
-                   <select 
-                     defaultValue={project.vendorId}
-                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
-                   >
-                     <option value="VND-001">PT. Konstruksi Sejahtera</option>
-                     <option value="VND-002">CV. Teknik Mesin Nusantara</option>
-                     <option value="VND-003">PT. Solusi Elektrik</option>
-                   </select>
-                 </div>
-
-                 <div className="space-y-2">
-                   <label className="text-sm font-semibold text-slate-700">PIC Internal (Project Manager)</label>
-                   <div className="relative">
-                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                       <Users className="w-4 h-4 text-slate-400" />
-                     </div>
-                     <input 
-                       type="text" 
-                       defaultValue={project.picProject}
-                       className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
-                     />
+                   <div className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 flex items-center gap-2">
+                     <Building2 className="w-4 h-4 text-slate-400" />
+                     {(project.vendor_profiles as any)?.company_name || 'Belum ditentukan'}
                    </div>
                  </div>
 
                  <div className="sm:col-span-2 space-y-2">
                    <label className="text-sm font-semibold text-slate-700">Lokasi / Area Kerja</label>
-                   <div className="relative">
-                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                       <MapPin className="w-4 h-4 text-slate-400" />
-                     </div>
-                     <input 
-                       type="text" 
-                       defaultValue={project.location}
-                       className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
-                     />
+                   <div className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 flex items-center gap-2">
+                     <MapPin className="w-4 h-4 text-slate-400" />
+                     {project.location}
                    </div>
                  </div>
               </div>
@@ -198,24 +158,20 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                  <div className="space-y-2">
                    <label className="text-sm font-semibold text-slate-700">Tanggal Mulai Pekerjaan</label>
-                   <input 
-                     type="date" 
-                     defaultValue={project.startDate}
-                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
-                   />
+                   <div className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800">
+                     {project.start_date}
+                   </div>
                  </div>
                  <div className="space-y-2">
                    <label className="text-sm font-semibold text-slate-700">Target Tanggal Selesai</label>
-                   <input 
-                     type="date" 
-                     defaultValue={project.endDate}
-                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
-                   />
+                   <div className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800">
+                     {project.end_date}
+                   </div>
                  </div>
               </div>
 
             </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>

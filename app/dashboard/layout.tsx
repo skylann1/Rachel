@@ -3,6 +3,7 @@ import { logout } from "@/app/auth/login/actions";
 import Link from "next/link";
 import Image from "next/image";
 import { SidebarNav } from "@/components/internal/sidebar-nav";
+import { InternalMobileSidebar } from "@/components/internal/InternalMobileSidebar";
 import { getUserPermissions } from "@/utils/permissions";
 import { LayoutDashboard, CheckCircle, LogOut, FileSignature, ShieldCheck, Bell, Database, Users, Shield, Building2, Briefcase } from "lucide-react";
 
@@ -75,12 +76,20 @@ export default async function AuthDashboardLayout({
       <main className="flex-1 flex flex-col overflow-hidden relative">
         
         {/* Top Header */}
-        <header className="h-20 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-10">
-          <div>
-            <p className="text-sm font-semibold text-slate-500">
-              Developed by <span className="text-primary font-bold tracking-tight">SIPERMIT</span>
-              team
-            </p>
+        <header className="h-20 flex items-center justify-between px-6 lg:px-8 bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-10">
+          <div className="flex items-center">
+            <InternalMobileSidebar 
+              userPermissions={permissions || {}} 
+              userEmail={user?.email || 'admin@pgn.co.id'} 
+            />
+            <div className="hidden lg:flex items-center gap-2">
+              <span className="text-sm font-bold text-slate-800 tracking-tight">RACHEL</span>
+              <span className="text-sm font-medium text-slate-400">Smart System</span>
+              <div className="flex h-5 items-center justify-center rounded-md border border-primary/20 bg-primary/5 px-1.5 font-mono text-[10px] font-bold text-primary ml-1">
+                 v1.0
+              </div>
+            </div>
+            <p className="text-sm font-bold text-primary lg:hidden">RACHEL</p>
           </div>
           
           <div className="flex items-center gap-6">
@@ -92,7 +101,7 @@ export default async function AuthDashboardLayout({
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-8 relative">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 relative">
           {/* Subtle Background Pattern for Main Area */}
           <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:24px_24px] opacity-50 pointer-events-none"></div>
           
