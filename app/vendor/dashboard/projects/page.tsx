@@ -6,6 +6,8 @@ import { createClient } from '@/utils/supabase/server';
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     'Menunggu Review':    'bg-amber-100 text-amber-700',
+    'Menunggu Review PM': 'bg-amber-100 text-amber-700',
+    'Revisi Prosedur':    'bg-rose-100 text-rose-700',
     'Prosedur Disetujui': 'bg-sky-100 text-sky-700',
     'JSA Disetujui':      'bg-violet-100 text-violet-700',
     'PTW Aktif':          'bg-emerald-100 text-emerald-700',
@@ -23,18 +25,53 @@ export default async function VendorProjectsPage() {
   const supabase = await createClient();
   const { data: projects } = await supabase
     .from('projects')
-    .select('id, name, description, location, start_date, end_date, status, progress, contract_number')
+    .select(`
+      id, name, description, location, start_date, end_date, status, progress, contract_number,
+      procedures(status), jsa(status), ptw(status)
+    `)
     .order('created_at', { ascending: false });
 
   const filteredProjects = projects || [];
 
   // Determine next action based on project status
+  const getComputedStatus = (project: any) => {
+    const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
+    const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
+    const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
+
+    if (ptw?.status === 'PTW Aktif') return 'PTW Aktif';
+    if (jsa?.status === 'JSA Disetujui') return 'JSA Disetujui';
+    if (prosedur?.status === 'Prosedur Disetujui') return 'Prosedur Disetujui';
+    if (prosedur?.status === 'Menunggu Review PM') return 'Menunggu Review PM';
+    if (prosedur?.status === 'Draft') return 'Revisi Prosedur';
+    return project.status;
+  };
+
   const getActionButton = (project: any) => {
-    switch (project.status) {
+    const computedStatus = getComputedStatus(project);
+    switch (computedStatus) {
+      case 'Menunggu Review PM':
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 py-2.5 rounded-xl transition-colors"
+          >
+            ⏳ Menunggu Review PM
+          </Link>
+        );
+      case 'Revisi Prosedur':
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-white bg-rose-500 hover:bg-rose-600 py-3 rounded-xl transition-all shadow-sm shadow-rose-500/30"
+          >
+            ⚠️ Revisi Prosedur Kerja
+          </Link>
+        );
       case 'Menunggu Review':
         return (
           <Link
-            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`}
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
             className="flex items-center justify-center gap-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 py-3 rounded-xl transition-all shadow-sm shadow-primary/30"
           >
             <FileSignature className="w-4 h-4" /> Lengkapi Prosedur
@@ -116,21 +153,17 @@ export default async function VendorProjectsPage() {
           {filteredProjects.map((project) => (
             <div key={project.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex flex-col relative overflow-hidden">
               
-              {/* Status Badge */}
-              <div className="absolute top-6 right-6">
-                <StatusBadge status={project.status} />
-              </div>
-
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Briefcase className="w-6 h-6" />
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Briefcase className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 line-clamp-1">{project.name}</h3>
+                    <p className="text-xs text-slate-400 mt-0.5 uppercase">No. {project.contract_number}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800 leading-tight pr-28">{project.name}</h3>
-                  {project.contract_number && (
-                    <div className="text-xs font-mono font-bold text-slate-400 mt-0.5">No. {project.contract_number}</div>
-                  )}
-                </div>
+                <StatusBadge status={getComputedStatus(project)} />
               </div>
              
              <div className="mb-5 text-sm text-slate-600 leading-relaxed line-clamp-2">

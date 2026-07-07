@@ -39,9 +39,19 @@ export async function saveJsa(projectId: string, jsaData: any) {
       jsa_id: jsaId,
       step_number: index + 1,
       description: step.langkah,
-      hazards: JSON.stringify([step.bahaya]),
-      risks: JSON.stringify([step.bahaya]), // In a real app we'd split these
-      controls: JSON.stringify([step.mitigasi]),
+      hazards: JSON.stringify({
+        jenisBahaya: step.jenisBahaya,
+        sebab: step.sebab,
+        potensiBahaya: step.potensiBahaya
+      }),
+      risks: JSON.stringify({
+        faktorPositif: step.faktorPositif,
+        inherentRisk: step.inherentRisk
+      }),
+      controls: JSON.stringify({
+        mitigasi: step.mitigasi,
+        residualRisk: step.residualRisk
+      }),
     }));
 
     const { error: stepError } = await supabase.from('jsa_steps').insert(stepsToInsert);
@@ -57,6 +67,20 @@ export async function getJsa(projectId: string) {
     .eq('project_id', projectId)
     .single();
     
+  // Fetch procedure to extract default steps
+  const { data: proc } = await supabase
+    .from('procedures')
+    .select('content')
+    .eq('project_id', projectId)
+    .single();
+    
+  let procedureSteps: string[] = [];
+  if (proc?.content?.tahapanPekerjaan) {
+    proc.content.tahapanPekerjaan.forEach((section: any) => {
+      procedureSteps.push(...(section.points || []));
+    });
+  }
+    
   if (error && error.code !== 'PGRST116') {
     console.error(error);
     return null;
@@ -71,9 +95,10 @@ export async function getJsa(projectId: string) {
       
     return {
       jsa,
-      steps: steps || []
+      steps: steps || [],
+      procedureSteps
     };
   }
   
-  return null;
+  return { jsa: null, steps: [], procedureSteps };
 }

@@ -24,13 +24,27 @@ export async function getPendingProcedures() {
   const { data, error } = await supabase
     .from('procedures')
     .select(`
-      id, status, created_at,
+      id, status, created_at, content,
       projects ( name, vendor_profiles ( company_name ) )
     `)
     .in('status', ['Draft', 'Menunggu Review PM'])
     .order('created_at', { ascending: false });
   if (error) { console.error(error); return []; }
   return data || [];
+}
+
+export async function getProcedureById(id: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('procedures')
+    .select(`
+      id, status, created_at, content,
+      projects ( name, vendor_profiles ( company_name ) )
+    `)
+    .eq('id', id)
+    .single();
+  if (error) { console.error(error); return null; }
+  return data;
 }
 
 export async function getPendingJsa() {
@@ -95,10 +109,29 @@ export async function approveProcedure(procedureId: string) {
 
 export async function rejectProcedure(procedureId: string, note: string) {
   const supabase = await createClient();
+
+  // Fetch current procedure to update its content JSON
+  const { data: proc } = await supabase.from('procedures').select('content').eq('id', procedureId).single();
+  
+  let updatedContent = proc?.content || {};
+  let revisions = updatedContent.revisions || [];
+  
+  revisions.push({
+    revNo: revisions.length + 1,
+    date: new Date().toLocaleDateString('id-ID'),
+    note: note
+  });
+  
+  updatedContent.revisions = revisions;
+
   const { error } = await supabase
     .from('procedures')
-    .update({ status: 'Draft' }) // Return to draft with a note (procedures table doesn't have rejection_note yet; we just reset)
+    .update({ 
+      status: 'Draft',
+      content: updatedContent 
+    })
     .eq('id', procedureId);
+
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/approval');
 }

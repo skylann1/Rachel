@@ -37,6 +37,7 @@ export default function ProsedurKerjaForm() {
   const [contractNo, setContractNo] = useState('006600.PMB-BP/LG.01/OP-CKR/PGAS/V/2026'); 
   const [submissionDate, setSubmissionDate] = useState('2026-06-29');
   const [vendorSignature, setVendorSignature] = useState<string | null>(null);
+  const [revisions, setRevisions] = useState<any[]>([]);
   
   const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,6 +78,7 @@ export default function ProsedurKerjaForm() {
           setTools(content.tools || []);
           setSelectedApd(content.selectedApd || []);
           setVendorSignature(content.vendorSignature || null);
+          setRevisions(content.revisions || []);
         }
       }
     }
@@ -202,7 +204,11 @@ export default function ProsedurKerjaForm() {
       scopeOfWork,
       tools,
       selectedApd,
-      vendorSignature
+      perlengkapanLainnya,
+      tahapanPekerjaan,
+      penyelesaianAkhir,
+      vendorSignature,
+      revisions
     };
 
     try {
@@ -232,7 +238,8 @@ export default function ProsedurKerjaForm() {
     perlengkapanLainnya,
     tahapanPekerjaan,
     penyelesaianAkhir,
-    vendorSignature
+    vendorSignature,
+    revisions
   };
 
   return (

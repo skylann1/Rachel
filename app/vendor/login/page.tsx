@@ -44,19 +44,10 @@ export default async function VendorLoginPage({
         <div className="relative z-20 mt-auto flex flex-col items-center gap-2 self-center pb-8">
           <span className="text-[10px] uppercase tracking-widest text-slate-300 font-semibold">Powered by</span>
           <div className="flex items-center gap-3">
-            <div className="relative h-8 w-24">
+            <div className="relative h-10 w-32">
               <Image 
-                src="/assets/logo/pertamina-logo-white .png" 
-                alt="Pertamina Logo" 
-                fill
-                className="object-contain object-center"
-              />
-            </div>
-            <div className="w-px h-6 bg-white/30"></div>
-            <div className="relative h-8 w-24">
-              <Image 
-                src="/assets/logo/pgn-logo-white .png" 
-                alt="PGN Logo" 
+                src="/assets/logo/main-logo.png" 
+                alt="Main Logo" 
                 fill
                 className="object-contain object-center"
               />

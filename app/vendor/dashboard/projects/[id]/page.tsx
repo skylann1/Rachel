@@ -19,7 +19,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       id, name, location, start_date, end_date, description, status,
       jsa ( id, status, rejection_note ),
       ptw ( id, status, rejection_note, ptw_number ),
-      procedures ( id, status )
+      procedures ( id, status, content )
     `)
     .eq('id', projectId)
     .single();
@@ -30,9 +30,12 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
   const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
 
+  const prosedurRevisions = prosedur?.content?.revisions || [];
+  const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
+
   // Normalize statuses for UI logic
-  const prosedurStatus = prosedur?.status === 'Prosedur Disetujui' ? 'Approved' : prosedur ? 'Pending' : 'Draft';
-  const jsaStatus = jsa?.status === 'JSA Disetujui' ? 'Approved' : jsa?.status === 'Pembahasan JSA' || jsa?.status === 'Review PM' || jsa?.status === 'Review Asset Manager' ? 'Pending' : jsa ? 'Rejected' : 'Draft';
+  const prosedurStatus = prosedur?.status === 'Prosedur Disetujui' ? 'Approved' : prosedur?.status === 'Menunggu Review PM' ? 'Pending' : (prosedur?.status === 'Draft' && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
+  const jsaStatus = jsa?.status === 'JSA Disetujui' ? 'Approved' : jsa?.status === 'Pembahasan JSA' || jsa?.status === 'Review PM' || jsa?.status === 'Review Asset Manager' ? 'Pending' : jsa?.rejection_note ? 'Rejected' : jsa ? 'Draft' : 'Draft';
   const ptwStatus = ptw?.status === 'PTW Aktif' ? 'Approved' : ptw?.status === 'Draft' ? 'Rejected' : ptw ? 'Pending' : 'Draft';
 
   const getStepStyle = (status: string) => {
@@ -129,6 +132,12 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
             <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600"><FileSignature className="w-5 h-5" /></div>
             <h3 className="font-bold text-slate-800">Prosedur Kerja</h3>
           </div>
+          {prosedurStatus === 'Rejected' && prosedurLastNote && (
+            <div className="mb-4 p-3 bg-white/60 rounded-xl text-sm text-rose-700 font-medium border border-rose-100/50">
+              <AlertTriangle className="w-4 h-4 inline mr-1 -mt-0.5" />
+              Catatan Revisi: {prosedurLastNote}
+            </div>
+          )}
           <div className="mt-auto pt-4">
             {prosedurStatus === 'Approved' ? (
               <button disabled className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-sm cursor-not-allowed">✅ Sudah Disetujui</button>

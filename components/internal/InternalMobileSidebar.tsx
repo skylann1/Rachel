@@ -41,19 +41,10 @@ export function InternalMobileSidebar({
         {/* Sidebar Header - Logos */}
         <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="relative h-6 w-20">
+            <div className="relative h-8 w-32">
               <Image 
-                src="/assets/logo/pertaminia-removebg-preview.png" 
-                alt="Pertamina" 
-                fill
-                className="object-contain object-left"
-              />
-            </div>
-            <div className="w-px h-6 bg-slate-300"></div>
-            <div className="relative h-7 w-14">
-              <Image 
-                src="/assets/logo/pgn-logo.png" 
-                alt="PGN" 
+                src="/assets/logo/main-logo.png" 
+                alt="Main Logo" 
                 fill
                 className="object-contain object-left"
               />

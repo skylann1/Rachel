@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Search, FileSignature, CheckCircle2, ShieldCheck, Clock,
   ShieldAlert, AlertTriangle, X, CheckCircle, FileText,
@@ -12,6 +13,8 @@ import {
   approvePtw, rejectPtw,
   getJsaSteps
 } from './actions';
+import { PDFViewer } from '@react-pdf/renderer';
+import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 
 // =====================================================================
 // HELPER COMPONENTS
@@ -98,14 +101,17 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
 // JSA DETAIL MODAL
 // =====================================================================
 function JsaDetailModal({
-  jsa, userRole, onClose, onApprove, onReject, isLoading
+  jsa, userRole, permissions, onClose, onApprove, onReject, isLoading
 }: {
-  jsa: any; userRole: string; onClose: () => void;
+  jsa: any; userRole: string; permissions: Record<string, string[]> | null; onClose: () => void;
   onApprove: () => void; onReject: () => void; isLoading: boolean;
 }) {
+  const hasReviewJsaPerm = permissions?.jsa?.includes('review') || false;
+  const hasApprovePerm = permissions?.approval?.includes('approve') || false;
+  
   const canApprove = (
-    (userRole === 'pm' && jsa.status === 'Pembahasan JSA') ||
-    (userRole === 'asset_manager' && jsa.status === 'Review Asset Manager')
+    ((userRole === 'pm' || userRole === 'admin' || hasApprovePerm) && jsa.status === 'Pembahasan JSA') ||
+    ((userRole === 'asset_manager' || userRole === 'admin' || hasReviewJsaPerm) && jsa.status === 'Review Asset Manager')
   );
 
   return (
@@ -204,15 +210,18 @@ function JsaDetailModal({
 // PTW DETAIL MODAL
 // =====================================================================
 function PtwDetailModal({
-  ptw, userRole, onClose, onApprove, onReject, isLoading
+  ptw, userRole, permissions, onClose, onApprove, onReject, isLoading
 }: {
-  ptw: any; userRole: string; onClose: () => void;
+  ptw: any; userRole: string; permissions: Record<string, string[]> | null; onClose: () => void;
   onApprove: () => void; onReject: () => void; isLoading: boolean;
 }) {
+  const hasApprovePtwPerm = permissions?.jsa?.includes('approve') || false;
+  const hasApprovePerm = permissions?.approval?.includes('approve') || false;
+
   const canApprove = (
-    (userRole === 'ptw_authority' && ptw.status === 'Menunggu Approval PM') ||
-    (userRole === 'ptw_issuer' && ptw.status === 'Review PTW Issuer') ||
-    (userRole === 'hse' && ptw.status === 'Menunggu Penomoran HSSE')
+    ((userRole === 'ptw_authority' || userRole === 'admin' || hasApprovePtwPerm) && ptw.status === 'Menunggu Approval PM') ||
+    ((userRole === 'ptw_issuer' || userRole === 'admin' || hasApprovePerm) && ptw.status === 'Review PTW Issuer') ||
+    ((userRole === 'hse' || userRole === 'admin' || hasApprovePerm) && ptw.status === 'Menunggu Penomoran HSSE')
   );
 
   const workers = Array.isArray(ptw.workers) ? ptw.workers : (typeof ptw.workers === 'string' ? JSON.parse(ptw.workers || '[]') : []);
@@ -335,14 +344,16 @@ interface ApprovalPageClientProps {
   procedures: any[];
   jsaList: any[];
   ptwList: any[];
+  permissions: Record<string, string[]> | null;
 }
 
-export default function ApprovalPageClient({ userRole, procedures, jsaList, ptwList }: ApprovalPageClientProps) {
+export default function ApprovalPageClient({ userRole, procedures, jsaList, ptwList, permissions }: ApprovalPageClientProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'Prosedur' | 'JSA' | 'PTW'>('JSA');
   const [selectedJsa, setSelectedJsa] = useState<any>(null);
   const [selectedPtw, setSelectedPtw] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [rejectTarget, setRejectTarget] = useState<{ type: 'jsa' | 'ptw'; id: string } | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<{ type: 'prosedur' | 'jsa' | 'ptw'; id: string } | null>(null);
 
   const handleOpenJsa = async (jsa: any) => {
     setIsLoading(true);
@@ -351,11 +362,12 @@ export default function ApprovalPageClient({ userRole, procedures, jsaList, ptwL
     setIsLoading(false);
   };
 
-  const handleApproveJsa = async () => {
-    if (!selectedJsa) return;
+  // handleApproveProsedur moved to its dedicated page
+
+  const handleApproveJsa = async (id: string) => {
     setIsLoading(true);
     try {
-      await approveJsa(selectedJsa.id, userRole);
+      await approveJsa(id, userRole);
       setSelectedJsa(null);
     } catch (e) {
       alert('Error: ' + (e as Error).message);
@@ -364,11 +376,10 @@ export default function ApprovalPageClient({ userRole, procedures, jsaList, ptwL
     }
   };
 
-  const handleAprovePtw = async () => {
-    if (!selectedPtw) return;
+  const handleApprovePtw = async (id: string) => {
     setIsLoading(true);
     try {
-      await approvePtw(selectedPtw.id, userRole);
+      await approvePtw(id, userRole);
       setSelectedPtw(null);
     } catch (e) {
       alert('Error: ' + (e as Error).message);
@@ -384,9 +395,11 @@ export default function ApprovalPageClient({ userRole, procedures, jsaList, ptwL
       if (rejectTarget.type === 'jsa') {
         await rejectJsa(rejectTarget.id, note);
         setSelectedJsa(null);
-      } else {
+      } else if (rejectTarget.type === 'ptw') {
         await rejectPtw(rejectTarget.id, note);
         setSelectedPtw(null);
+      } else if (rejectTarget.type === 'prosedur') {
+        await rejectProcedure(rejectTarget.id, note);
       }
       setRejectTarget(null);
     } catch (e) {
@@ -563,11 +576,11 @@ export default function ApprovalPageClient({ userRole, procedures, jsaList, ptwL
                   </td>
                   <td className="px-6 py-4"><StatusBadge status={p.status} /></td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => alert('Fitur review prosedur coming soon!')}
-                      className="flex items-center gap-1.5 ml-auto px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors"
+                    <button 
+                      onClick={() => router.push(`/dashboard/approval/prosedur/${p.id}`)}
+                      className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors"
                     >
-                      <FileText className="w-3.5 h-3.5" /> Detail
+                      Detail
                     </button>
                   </td>
                 </tr>
@@ -578,12 +591,15 @@ export default function ApprovalPageClient({ userRole, procedures, jsaList, ptwL
       )}
 
       {/* Modals */}
+
+
       {selectedJsa && (
         <JsaDetailModal
           jsa={selectedJsa}
           userRole={userRole}
+          permissions={permissions}
           onClose={() => setSelectedJsa(null)}
-          onApprove={handleApproveJsa}
+          onApprove={() => handleApproveJsa(selectedJsa.id)}
           onReject={() => setRejectTarget({ type: 'jsa', id: selectedJsa.id })}
           isLoading={isLoading}
         />
@@ -593,8 +609,9 @@ export default function ApprovalPageClient({ userRole, procedures, jsaList, ptwL
         <PtwDetailModal
           ptw={selectedPtw}
           userRole={userRole}
+          permissions={permissions}
           onClose={() => setSelectedPtw(null)}
-          onApprove={handleAprovePtw}
+          onApprove={() => handleApprovePtw(selectedPtw.id)}
           onReject={() => setRejectTarget({ type: 'ptw', id: selectedPtw.id })}
           isLoading={isLoading}
         />

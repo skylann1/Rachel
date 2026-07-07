@@ -138,6 +138,7 @@ interface ProsedurPDFProps {
     perlengkapanLainnya: string[];
     tahapanPekerjaan: { title: string; points: string[] }[];
     penyelesaianAkhir: string[];
+    revisions?: { revNo: number; date: string; note: string }[];
     vendorSignature?: string | null;
   };
 }
@@ -145,9 +146,22 @@ interface ProsedurPDFProps {
 export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
   const sowBullets = data.scopeOfWork.split('\n').filter(line => line.trim() !== '');
 
-  // Render 20 empty rows for Tahapan Revisi
-  const emptyRevisiRows = Array.from({ length: 20 }).map((_, i) => (
-    <View key={i} style={styles.revisiRow}>
+  const revisions = data.revisions || [];
+  
+  // Render up to 20 empty rows (or less if we have data)
+  const maxRows = 20;
+  
+  const filledRevisiRows = revisions.map((rev, i) => (
+    <View key={`filled-${i}`} style={styles.revisiRow}>
+      <View style={[styles.revisiCell, { width: '15%', justifyContent: 'center', alignItems: 'center' }]}><Text>{rev.revNo}</Text></View>
+      <View style={[styles.revisiCell, { width: '20%', justifyContent: 'center', alignItems: 'center' }]}><Text>{rev.date}</Text></View>
+      <View style={[styles.revisiCell, { width: '65%', justifyContent: 'center', alignItems: 'flex-start' }]}><Text>{rev.note}</Text></View>
+    </View>
+  ));
+
+  const emptyRowCount = Math.max(0, maxRows - revisions.length);
+  const emptyRevisiRows = Array.from({ length: emptyRowCount }).map((_, i) => (
+    <View key={`empty-${i}`} style={styles.revisiRow}>
       <View style={[styles.revisiCell, { width: '15%' }]}><View style={styles.dottedLine}></View></View>
       <View style={[styles.revisiCell, { width: '20%' }]}><View style={styles.dottedLine}></View></View>
       <View style={[styles.revisiCell, { width: '65%' }]}><View style={styles.dottedLine}></View></View>
@@ -248,6 +262,7 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
             <View style={[styles.revisiHeader, { width: '20%' }]}><Text>TANGGAL</Text></View>
             <View style={[styles.revisiHeader, { width: '65%' }]}><Text>URAIAN</Text></View>
           </View>
+          {filledRevisiRows}
           {emptyRevisiRows}
         </View>
       </Page>
