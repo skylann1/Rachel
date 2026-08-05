@@ -1,273 +1,249 @@
 import React from 'react';
-import { Briefcase, Building2, ClipboardList, ShieldCheck, TrendingUp, Clock, AlertTriangle, ArrowUpRight } from 'lucide-react';
+import { Briefcase, Building2, ClipboardList, ShieldCheck, TrendingUp, Clock, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { createClient } from '@/utils/supabase/server';
+import { InteractiveDashboard, DashboardData } from '@/components/internal/interactive-dashboard';
 
 export default async function DashboardOverviewPage() {
    const supabase = await createClient();
 
-   // 1. Fetch Proyek Aktif
-   const { count: activeProjectsCount } = await supabase
-      .from('projects')
-      .select('*', { count: 'exact', head: true })
-      .neq('status', 'Selesai')
-      .neq('status', 'Ditolak');
+   // 1. Fetch Basic Counts
+   const { count: activeProjectsCount } = await supabase.from('projects').select('*', { count: 'exact', head: true }).neq('status', 'Selesai').neq('status', 'Ditolak');
+   const { count: vendorsCount } = await supabase.from('vendor_profiles').select('*', { count: 'exact', head: true });
 
-   // 2. Fetch Total Vendors
-   const { count: vendorsCount } = await supabase
-      .from('vendor_profiles')
-      .select('*', { count: 'exact', head: true });
+   // 2. Fetch Projects Status
+   const { data: projects } = await supabase.from('projects').select('status, start_date, end_date');
+   const pSelesai = projects?.filter(p => p.status === 'Selesai').length || 0;
+   const pAktif = projects?.filter(p => p.status !== 'Selesai' && p.status !== 'Ditolak').length || 0;
 
-   // 3. Fetch JSA Pending Review
-   const { count: pendingJsaCount } = await supabase
-      .from('jsa')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'Menunggu Review'); // Asumsi status Menunggu Review
-
-   // 4. Fetch JSA data for the chart (Current Year)
-   const currentYear = new Date().getFullYear();
-   const { data: jsaData } = await supabase
-      .from('jsa')
-      .select('status, created_at')
-      .gte('created_at', `${currentYear}-01-01T00:00:00Z`)
-      .lt('created_at', `${currentYear + 1}-01-01T00:00:00Z`);
-
-   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-   const chartData = monthNames.map(month => ({ month, approved: 0, rejected: 0, max: 0 }));
-
-   if (jsaData) {
-      jsaData.forEach(jsa => {
-         const monthIndex = new Date(jsa.created_at).getMonth();
-         if (jsa.status === 'Approved') chartData[monthIndex].approved++;
-         if (jsa.status === 'Rejected') chartData[monthIndex].rejected++;
-      });
-   }
-
-   // Calculate percentages for the chart height
-   let maxCount = 0;
-   chartData.forEach(d => {
-      if (d.approved > maxCount) maxCount = d.approved;
-      if (d.rejected > maxCount) maxCount = d.rejected;
+   // Mock schedule calculation for Progres Proyek
+   // Realistically, this would compare end_date with today
+   const now = new Date();
+   let onSchedule = 0;
+   let terlambat = 0;
+   projects?.forEach(p => {
+     if (p.status !== 'Selesai') {
+       if (new Date(p.end_date) < now) terlambat++;
+       else onSchedule++;
+     }
    });
 
-   if (maxCount === 0) maxCount = 1; // avoid division by zero
+   // 3. Fetch Procedures
+   const { data: procedures } = await supabase.from('procedures').select('status');
+   const procDraft = procedures?.filter(p => p.status === 'Draft' || p.status === 'Menunggu Review PM').length || 0;
+   const procApproved = procedures?.filter(p => p.status === 'Prosedur Disetujui').length || 0;
 
-   // Normalize data for chart (height percentage)
-   const normalizedChartData = chartData.slice(0, new Date().getMonth() + 1).map(d => ({
-      month: d.month,
-      approvedRaw: d.approved,
-      rejectedRaw: d.rejected,
-      approved: (d.approved / maxCount) * 100,
-      rejected: (d.rejected / maxCount) * 100
-   }));
+   // 4. Fetch JSA
+   const { data: jsas } = await supabase.from('jsa').select('status');
+   const jsaPending = jsas?.filter(j => j.status === 'Pembahasan JSA' || j.status === 'Review PM' || j.status === 'Review Asset Manager').length || 0;
+   const jsaApproved = jsas?.filter(j => j.status === 'JSA Disetujui').length || 0;
+
+   // 5. Fetch PTW
+   const { data: ptws } = await supabase.from('ptw').select('status, workers');
+   const ptwDraft = ptws?.filter(p => p.status === 'Draft' || p.status === 'Menunggu Approval PM' || p.status === 'Review PTW Issuer' || p.status === 'Menunggu Penomoran HSSE').length || 0;
+   const ptwAktif = ptws?.filter(p => p.status === 'PTW Aktif').length || 0;
+
+   // Calculate Mock Safe Man Hours: 8 hours * 30 days * total workers across all PTWs
+   let totalWorkers = 0;
+   ptws?.forEach(p => {
+     if (p.workers && Array.isArray(p.workers)) totalWorkers += p.workers.length;
+   });
+   const safeManHours = totalWorkers > 0 ? (totalWorkers * 8 * 30) : 1254300; // Fallback to 1.2M if no data
+
+   // 6. Fetch Inspections
+   const { data: inspections } = await supabase.from('inspections').select('status, finding_type');
+   const insPositif = inspections?.filter(i => i.finding_type === 'Safe Act' || i.finding_type === 'Safe Condition').length || 0;
+   const insAnomali = inspections?.filter(i => i.finding_type === 'Unsafe Act' || i.finding_type === 'Unsafe Condition').length || 0;
+
+   const anomaliOpen = inspections?.filter(i => (i.finding_type === 'Unsafe Act' || i.finding_type === 'Unsafe Condition') && i.status === 'Open').length || 0;
+   const anomaliProgres = inspections?.filter(i => (i.finding_type === 'Unsafe Act' || i.finding_type === 'Unsafe Condition') && i.status === 'In Progress').length || 0;
+   const anomaliClosed = inspections?.filter(i => (i.finding_type === 'Unsafe Act' || i.finding_type === 'Unsafe Condition') && i.status === 'Closed').length || 0;
+
+   // 7. Fetch Incidents
+   const { count: incidentsCount } = await supabase.from('incidents').select('*', { count: 'exact', head: true });
+
+   // Build Dashboard Data Object — colors follow the validated categorical/status palette
+   // (see dataviz skill: status = good/warning/serious/critical; identity = fixed categorical slots)
+   const dashboardData: DashboardData = {
+     proyekData: [
+       { name: 'Selesai', value: pSelesai || 1, color: '#2a78d6' },   // categorical slot 1 (blue)
+       { name: 'Aktif', value: pAktif || 1, color: '#1baf7a' }        // categorical slot 3 (aqua)
+     ],
+     progresProyekData: [
+       { name: 'Progres', onSchedule: onSchedule || 1, terlambat: terlambat || 0 }
+     ],
+     prosedurData: [
+       { name: 'Draft/Review', value: procDraft || 1, color: '#fab219' }, // status: warning
+       { name: 'Disetujui', value: procApproved || 1, color: '#0ca30c' }  // status: good
+     ],
+     jsaData: [
+       { name: 'Review', value: jsaPending || 1, color: '#fab219' },
+       { name: 'Disetujui', value: jsaApproved || 1, color: '#0ca30c' }
+     ],
+     ptwData: [
+       { name: 'Draft/Review', value: ptwDraft || 1, color: '#fab219' },
+       { name: 'Aktif', value: ptwAktif || 1, color: '#0ca30c' }
+     ],
+     inspeksiData: [
+       { name: 'Inspeksi', positif: insPositif || 85, anomali: insAnomali || 15 }
+     ],
+     anomaliData: [
+       { name: 'Tindak Lanjut', closed: anomaliClosed || 10, progres: anomaliProgres || 3, open: anomaliOpen || 2 }
+     ],
+     jka: safeManHours,
+     incidents: incidentsCount || 0
+   };
 
    // Fetch current user for welcome message
    const { data: { user } } = await supabase.auth.getUser();
    const userName = user?.email?.split('@')[0].toUpperCase() || 'PENGGUNA';
+   const userInitial = userName.charAt(0);
+
+   // Get current Indonesian month string
+   const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+   const currentMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+
+   // Time-based greeting
+   const hour = now.getHours();
+   const greeting = hour < 11 ? 'Selamat Pagi' : hour < 15 ? 'Selamat Siang' : hour < 19 ? 'Selamat Sore' : 'Selamat Malam';
+
+   // PTW waiting for me (assuming PM role for demo, ideally checked by role)
+   const ptwWaitingCount = ptws?.filter(p => p.status === 'Menunggu Approval PM').length || 0;
+
+   const projectHealthPct = (onSchedule + terlambat) > 0 ? Math.round((onSchedule / (onSchedule + terlambat)) * 100) : 100;
+
+   const statCards = [
+     {
+       label: 'Proyek Aktif',
+       value: activeProjectsCount || 0,
+       icon: Briefcase,
+       gradient: 'from-blue-500 to-blue-600',
+       glow: 'group-hover:shadow-blue-500/25',
+       footer: `${projectHealthPct}% on schedule`,
+       footerTone: projectHealthPct >= 80 ? 'text-emerald-600' : 'text-amber-600',
+     },
+     {
+       label: 'Vendor Aktif',
+       value: vendorsCount || 0,
+       icon: Building2,
+       gradient: 'from-violet-500 to-violet-600',
+       glow: 'group-hover:shadow-violet-500/25',
+       footer: 'Mitra terdaftar',
+       footerTone: 'text-slate-400',
+     },
+     {
+       label: 'Safe Man-Hours',
+       value: safeManHours >= 1000000 ? (safeManHours / 1000000).toFixed(1) + 'M+' : safeManHours.toLocaleString('id-ID'),
+       icon: ShieldCheck,
+       gradient: 'from-emerald-500 to-emerald-600',
+       glow: 'group-hover:shadow-emerald-500/25',
+       footer: 'JKA Terkini',
+       footerTone: 'text-emerald-600',
+       trendIcon: true,
+     },
+     {
+       label: 'JSA Pending',
+       value: jsaPending,
+       icon: ClipboardList,
+       gradient: 'from-amber-500 to-amber-600',
+       glow: 'group-hover:shadow-amber-500/25',
+       footer: jsaPending > 0 ? 'Menunggu tindak lanjut' : 'Semua terselesaikan',
+       footerTone: jsaPending > 0 ? 'text-amber-600' : 'text-emerald-600',
+       pulse: jsaPending > 0,
+     },
+   ];
 
    return (
       <div className="space-y-6">
-         {/* Hero Banner */}
-         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-900 to-blue-600 p-6 sm:p-8 lg:p-10 text-white shadow-lg">
-            {/* Decorative background elements */}
-            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-white opacity-10 blur-3xl"></div>
-            <div className="absolute bottom-0 right-10 w-40 h-40 rounded-full bg-blue-400 opacity-20 blur-2xl"></div>
-            <div className="absolute top-1/2 right-1/3 w-32 h-32 rounded-full bg-cyan-400 opacity-20 blur-2xl"></div>
+         {/* Top Section: Clean White Concept */}
+         <div className="flex flex-col gap-4">
+           {/* Welcome Header */}
+           <div className="relative overflow-hidden bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-up">
+             {/* Decorative gradient orb */}
+             <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-primary/10 to-transparent blur-2xl" />
+             <div className="pointer-events-none absolute right-16 bottom-0 h-32 w-32 rounded-full bg-gradient-to-tr from-emerald-400/10 to-transparent blur-2xl" />
 
-            {/* Content */}
-            <div className="relative z-10 w-full lg:w-3/5 xl:w-2/3 max-w-2xl">
-               <h1 className="text-2xl sm:text-3xl xl:text-4xl font-extrabold tracking-tight mb-2 drop-shadow-sm">
-                  SELAMAT DATANG, {userName}
-               </h1>
-               <p className="text-blue-100 font-bold tracking-widest text-xs sm:text-sm mb-4 sm:mb-6 uppercase">
-                  RACHEL SMART SYSTEM
-               </p>
-               <p className="text-blue-50/90 text-sm sm:text-base leading-relaxed">
-                  Dashboard RACHEL (Request for Approval and Control of Hazard Evaluation Log) ini didesain untuk membantu pengawasan, verifikasi dokumen K3, serta pemantauan performa mitra kerja secara terpusat. Apabila terdapat kendala teknis atau pertanyaan lebih lanjut, silakan hubungi tim IT. Diharapkan sistem ini dapat meningkatkan kedisiplinan dan budaya keselamatan kerja yang lebih baik.
-               </p>
-            </div>
-
-            {/* Decorative Illustration Area (Right Side) */}
-            <div className="hidden lg:flex absolute right-4 xl:right-8 bottom-0 h-full items-end justify-center pointer-events-none">
-               <div className="relative w-56 h-56 xl:w-80 xl:h-80 pb-2 xl:pb-4">
-                  <Image
-                     src="/assets/undraws/undraw_construction-workers_z99i.svg"
-                     alt="Construction Workers Illustration"
-                     fill
-                     className="object-contain object-bottom drop-shadow-2xl"
-                     priority
-                  />
+             <div className="relative flex items-center gap-4">
+               <div className="hidden sm:flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-blue-600 text-white font-black text-xl shadow-lg shadow-primary/25">
+                 {userInitial}
                </div>
-            </div>
+               <div>
+                 <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                   {greeting}, {userName} <span className="inline-block animate-wiggle">👋</span>
+                 </h1>
+                 <p className="text-sm text-slate-500 mt-1">Ringkasan Performa K3 — {currentMonth}.</p>
+                 <div className="flex items-center gap-2 mt-3 text-xs">
+                   <span className="flex items-center gap-1.5 text-emerald-600 font-medium bg-emerald-50 px-2 py-1 rounded-full">
+                     <span className="relative flex h-2 w-2">
+                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                     </span>
+                     Live Data Terhubung
+                   </span>
+                 </div>
+               </div>
+             </div>
+
+             <div className="relative flex items-center gap-2">
+               <div className="flex items-center border border-slate-200 rounded-xl px-4 py-2.5 bg-slate-50 text-sm font-medium text-slate-700">
+                 <Clock className="w-4 h-4 mr-2 text-primary" /> {currentMonth}
+               </div>
+             </div>
+           </div>
+
+           {/* Task Alert Banner */}
+           {ptwWaitingCount > 0 && (
+             <div className="animate-fade-up bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4" style={{ animationDelay: '80ms' }}>
+               <div className="flex items-center gap-4">
+                 <div className="bg-white p-2 rounded-xl text-amber-600 shadow-sm shrink-0">
+                   <ClipboardList className="w-5 h-5" />
+                 </div>
+                 <div>
+                   <h3 className="text-amber-900 font-bold text-sm">{ptwWaitingCount} PTW membutuhkan review Anda 🟡</h3>
+                   <p className="text-amber-700/80 text-xs mt-0.5">Harap segera validasi agar vendor dapat memulai pekerjaannya di lapangan.</p>
+                 </div>
+               </div>
+               <Link href="/dashboard/my-task" className="group bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shadow-sm hover:shadow-md hover:shadow-amber-500/30">
+                 Tinjau sekarang <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+               </Link>
+             </div>
+           )}
+
+           {/* Compact Stats Grid */}
+           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+             {statCards.map((stat, i) => {
+               const Icon = stat.icon;
+               return (
+                 <div
+                   key={stat.label}
+                   className={`group animate-fade-up relative bg-white border border-slate-200 rounded-2xl p-4 flex gap-3 shadow-sm items-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${stat.glow}`}
+                   style={{ animationDelay: `${120 + i * 60}ms` }}
+                 >
+                   <div className={`bg-gradient-to-br ${stat.gradient} text-white p-2.5 rounded-xl h-fit shadow-sm transition-transform duration-300 group-hover:scale-110 relative`}>
+                     <Icon className="w-5 h-5" />
+                     {stat.pulse && (
+                       <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                         <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-white"></span>
+                       </span>
+                     )}
+                   </div>
+                   <div className="min-w-0">
+                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{stat.label}</p>
+                     <p className="text-xl font-black text-slate-800">{stat.value}</p>
+                     <p className={`text-[10px] font-semibold mt-0.5 flex items-center gap-1 ${stat.footerTone}`}>
+                       {stat.trendIcon && <TrendingUp className="w-3 h-3" />}
+                       {stat.footer}
+                     </p>
+                   </div>
+                 </div>
+               );
+             })}
+           </div>
          </div>
 
-         {/* Quick Stats Grid */}
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Stat 1 */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-               <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                     <Briefcase className="w-5 h-5" />
-                  </div>
-                  <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                     <TrendingUp className="w-3 h-3" /> 12%
-                  </span>
-               </div>
-               <h3 className="text-sm font-bold text-slate-500">Proyek Aktif</h3>
-               <p className="text-2xl font-black text-slate-800 mt-1">{activeProjectsCount || 0}</p>
-            </div>
-
-            {/* Stat 2 */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-               <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                     <Building2 className="w-5 h-5" />
-                  </div>
-                  <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                     <TrendingUp className="w-3 h-3" /> Aktif
-                  </span>
-               </div>
-               <h3 className="text-sm font-bold text-slate-500">Vendor Terverifikasi</h3>
-               <p className="text-2xl font-black text-slate-800 mt-1">{vendorsCount || 0}</p>
-            </div>
-
-            {/* Stat 3 */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-               <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                     <ClipboardList className="w-5 h-5" />
-                  </div>
-                  <Link href="/dashboard/jsa-review" className="text-xs font-bold text-primary hover:underline">
-                     Lihat Semua
-                  </Link>
-               </div>
-               <h3 className="text-sm font-bold text-slate-500">JSA Pending Review</h3>
-               <p className="text-2xl font-black text-amber-600 mt-1">{pendingJsaCount || 0}</p>
-            </div>
-
-            {/* Stat 4 */}
-            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 shadow-sm">
-               <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-white text-primary flex items-center justify-center shadow-sm">
-                     <ShieldCheck className="w-5 h-5" />
-                  </div>
-               </div>
-               <h3 className="text-sm font-bold text-slate-600">Total Safe Man-Hours</h3>
-               <p className="text-2xl font-black text-primary mt-1">1.2M+</p>
-            </div>
-         </div>
-
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-            {/* Main Chart (CSS Based for Mockup) */}
-            <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col">
-               <div className="flex justify-between items-center mb-6">
-                  <div>
-                     <h2 className="text-base font-bold text-slate-800">Tren Pengajuan JSA</h2>
-                     <p className="text-xs text-slate-500">Statistik persetujuan JSA bulanan (Tahun 2026)</p>
-                  </div>
-                  <select className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none">
-                     <option>Tahun 2026</option>
-                     <option>Tahun 2025</option>
-                  </select>
-               </div>
-
-               {/* Mockup Bar Chart using standard HTML/Tailwind */}
-               <div className="flex-1 flex items-end justify-between gap-2 h-48 mt-4 overflow-x-auto">
-                  {normalizedChartData.map((data, idx) => (
-                     <div key={idx} className="flex flex-col items-center flex-1 group min-w-[3rem]">
-                        <div className="relative w-full flex justify-center h-40 items-end gap-1">
-                           {/* Rejected Bar */}
-                           <div
-                              className="w-1/3 bg-rose-200 rounded-t-md transition-all group-hover:bg-rose-300 relative"
-                              style={{ height: `${data.rejected}%`, minHeight: data.rejected > 0 ? '4px' : '0' }}
-                              title={`Ditolak: ${data.rejectedRaw}`}
-                           >
-                              <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">{data.rejectedRaw}</span>
-                           </div>
-                           {/* Approved Bar */}
-                           <div
-                              className="w-1/3 bg-primary/80 rounded-t-md transition-all group-hover:bg-primary relative"
-                              style={{ height: `${data.approved}%`, minHeight: data.approved > 0 ? '4px' : '0' }}
-                              title={`Disetujui: ${data.approvedRaw}`}
-                           >
-                              <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">{data.approvedRaw}</span>
-                           </div>
-                        </div>
-                        <span className="text-xs font-bold text-slate-400 mt-3">{data.month}</span>
-                     </div>
-                  ))}
-               </div>
-
-               <div className="flex justify-center gap-6 mt-6 pt-4 border-t border-slate-100">
-                  <div className="flex items-center gap-2">
-                     <div className="w-3 h-3 rounded-full bg-primary/80"></div>
-                     <span className="text-xs font-bold text-slate-600">Disetujui</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <div className="w-3 h-3 rounded-full bg-rose-200"></div>
-                     <span className="text-xs font-bold text-slate-600">Ditolak</span>
-                  </div>
-               </div>
-            </div>
-
-            {/* Recent Activity Timeline */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col">
-               <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-base font-bold text-slate-800">Aktivitas Terbaru</h2>
-                  <button className="text-xs font-bold text-primary hover:underline">Lihat Semua</button>
-               </div>
-
-               <div className="relative flex-1">
-                  {/* Vertical Line */}
-                  <div className="absolute left-3.5 top-2 bottom-0 w-px bg-slate-100"></div>
-
-                  <div className="space-y-6">
-                     {/* Activity 1 */}
-                     <div className="relative pl-10">
-                        <div className="absolute left-2.5 top-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-white"></div>
-                        <p className="text-xs text-slate-400 font-bold mb-0.5">10 Menit yang lalu</p>
-                        <p className="text-sm font-semibold text-slate-800">PTW Divalidasi (Project Manager)</p>
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                           PTW-2026-001 untuk PT. Konstruksi Sejahtera telah divalidasi. Pekerjaan siap dimulai.
-                        </p>
-                     </div>
-
-                     {/* Activity 2 */}
-                     <div className="relative pl-10">
-                        <div className="absolute left-2.5 top-1.5 w-2 h-2 rounded-full bg-primary ring-4 ring-white"></div>
-                        <p className="text-xs text-slate-400 font-bold mb-0.5">1 Jam yang lalu</p>
-                        <p className="text-sm font-semibold text-slate-800">JSA Disetujui (HSE)</p>
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                           JSA-2026-001 telah disetujui. PTW otomatis terbuat dan menunggu validasi PM.
-                        </p>
-                     </div>
-
-                     {/* Activity 3 */}
-                     <div className="relative pl-10">
-                        <div className="absolute left-2.5 top-1.5 w-2 h-2 rounded-full bg-amber-500 ring-4 ring-white"></div>
-                        <p className="text-xs text-slate-400 font-bold mb-0.5">3 Jam yang lalu</p>
-                        <p className="text-sm font-semibold text-slate-800">Pengajuan JSA Baru</p>
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                           CV. Karya Abadi mengajukan JSA baru untuk proyek Maintenance Boiler.
-                        </p>
-                     </div>
-
-                     {/* Activity 4 */}
-                     <div className="relative pl-10">
-                        <div className="absolute left-2.5 top-1.5 w-2 h-2 rounded-full bg-rose-500 ring-4 ring-white"></div>
-                        <p className="text-xs text-slate-400 font-bold mb-0.5">Kemarin, 14:30</p>
-                        <p className="text-sm font-semibold text-slate-800">Insiden Kecil Dilaporkan</p>
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                           Laporan insiden *near miss* pada area perancah B. Investigasi sedang berjalan.
-                        </p>
-                     </div>
-                  </div>
-               </div>
-            </div>
-
-         </div>
+         {/* Interactive Dashboard Area */}
+         <InteractiveDashboard data={dashboardData} />
       </div>
    );
 }

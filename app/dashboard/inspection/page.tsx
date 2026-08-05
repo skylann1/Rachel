@@ -1,18 +1,38 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2 } from 'lucide-react';
-import { getInspections, getVendorsAndProjects, createInspection } from './actions';
+import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2, Download, History, UserPlus } from 'lucide-react';
+import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
 
 export default function InspectionPage() {
   const [filter, setFilter] = useState('All');
+  
+  // Advanced filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [vendorFilter, setVendorFilter] = useState('');
+
+  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDisposisiModalOpen, setIsDisposisiModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  
+  // Data
   const [inspections, setInspections] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
+  const [internalUsers, setInternalUsers] = useState<any[]>([]);
+  const [historyLogs, setHistoryLogs] = useState<any[]>([]);
+  
+  // States
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [selectedInspection, setSelectedInspection] = useState<any>(null);
+  
+  // Form toggles
+  const [isProjectActivity, setIsProjectActivity] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -25,26 +45,40 @@ export default function InspectionPage() {
     const vp = await getVendorsAndProjects();
     setVendors(vp.vendors);
     setProjects(vp.projects);
+    setInternalUsers(vp.internalUsers);
+    
     const formatted = data.map((d: any) => ({
       id: d.id,
       type: d.finding_type,
       description: d.title,
       location: d.location,
-      vendor: d.vendor_profiles?.company_name || 'Unknown Vendor',
+      vendor: d.vendor_profiles?.company_name || 'Non-Vendor / Internal',
       date: new Date(d.created_at).toLocaleString('id-ID'),
       status: d.status,
       priority: d.priority,
       image: d.image_url || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
+      assigned_to: d.internal_profiles?.profiles?.full_name || 'Belum di-assign',
+      is_project_activity: d.is_project_activity
     }));
     setInspections(formatted);
   }
 
-  const filteredInspections = inspections.filter(item => filter === 'All' || item.status === filter);
+  // Combine filters
+  const filteredInspections = inspections.filter(item => {
+    const matchesStatus = filter === 'All' || item.status === filter;
+    const matchesSearch = item.description.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          item.location.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesLocation = locationFilter === '' || item.location.toLowerCase().includes(locationFilter.toLowerCase());
+    const matchesVendor = vendorFilter === '' || item.vendor === vendorFilter;
+    
+    return matchesStatus && matchesSearch && matchesLocation && matchesVendor;
+  });
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
+    formData.append('is_project_activity', isProjectActivity.toString());
     
     try {
       if (imageFile) {
@@ -53,7 +87,7 @@ export default function InspectionPage() {
       }
 
       await createInspection(formData);
-      alert("Temuan K3 berhasil dilaporkan! Notifikasi telah dikirim ke Vendor terkait.");
+      alert("Laporan hasil inspeksi berhasil dikirim!");
       setIsModalOpen(false);
       setImageFile(null);
       await loadData();
@@ -65,40 +99,132 @@ export default function InspectionPage() {
     }
   };
 
+  const handleDisposisi = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedInspection) return;
+    setIsSubmitting(true);
+    
+    const formData = new FormData(e.currentTarget);
+    const assigneeId = formData.get('assignee') as string;
+    const notes = formData.get('notes') as string;
+
+    try {
+      await delegateInspection(selectedInspection.id, assigneeId, notes);
+      alert('Berhasil mendisposisikan inspeksi!');
+      setIsDisposisiModalOpen(false);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mendisposisikan tugas.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openHistory = async (inspection: any) => {
+    setSelectedInspection(inspection);
+    setIsHistoryModalOpen(true);
+    setIsLoadingLogs(true);
+    try {
+      const logs = await getInspectionLogs(inspection.id);
+      setHistoryLogs(logs);
+    } catch(err) {
+      console.error(err);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  const exportToCSV = () => {
+    const headers = ['ID', 'Type', 'Description', 'Location', 'Vendor', 'Date', 'Status', 'Priority', 'Assigned To'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredInspections.map(item => 
+        `"${item.id}","${item.type}","${item.description.replace(/"/g, '""')}","${item.location}","${item.vendor}","${item.date}","${item.status}","${item.priority}","${item.assigned_to}"`
+      )
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Data_Inspeksi_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Inspeksi & Temuan K3</h1>
-          <p className="text-sm text-slate-500 mt-1">Catat dan pantau temuan kondisi tidak aman di lapangan (HSE Patrol).</p>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Inspeksi Proyek</h1>
+          <p className="text-sm text-slate-500 mt-1">Kelola hasil inspeksi proyek & area non-proyek.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-primary/30"
-        >
-          <Plus className="w-5 h-5" />
-          Lapor Temuan Baru
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button 
+            onClick={exportToCSV}
+            className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm"
+          >
+            <Download className="w-4 h-4" />
+            Export PDF/Excel
+          </button>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-primary/30"
+          >
+            <Plus className="w-5 h-5" />
+            Lapor Hasil Inspeksi
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="relative w-full sm:w-96">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-slate-400" />
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="relative w-full md:w-1/3">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm transition-all"
+              placeholder="Cari deskripsi, lokasi..."
+            />
           </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm transition-all"
-            placeholder="Cari deskripsi, lokasi, atau vendor..."
-          />
-        </div>
-        <div className="flex gap-2 w-full sm:w-auto bg-slate-100 p-1 rounded-xl overflow-x-auto">
-           <button onClick={() => setFilter('All')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'All' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
-           <button onClick={() => setFilter('Open')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'Open' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Open</button>
-           <button onClick={() => setFilter('In Progress')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'In Progress' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>In Progress (Tunggu Validasi)</button>
-           <button onClick={() => setFilter('Closed')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'Closed' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Closed</button>
+          
+          {/* Advanced Filters */}
+          <div className="flex flex-1 items-center gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+             <input 
+               type="text" 
+               placeholder="Filter Lokasi"
+               value={locationFilter}
+               onChange={(e) => setLocationFilter(e.target.value)}
+               className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-50 w-32 md:w-40" 
+             />
+             <select 
+               value={vendorFilter} 
+               onChange={(e) => setVendorFilter(e.target.value)}
+               className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-50 min-w-[150px]"
+             >
+               <option value="">Semua Vendor</option>
+               <option value="Non-Vendor / Internal">Non-Vendor / Internal</option>
+               {vendors.map(v => (
+                 <option key={v.id} value={v.company_name}>{v.company_name}</option>
+               ))}
+             </select>
+          </div>
+
+          <div className="flex gap-2 w-full md:w-auto bg-slate-100 p-1 rounded-xl overflow-x-auto shrink-0">
+             <button onClick={() => setFilter('All')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'All' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
+             <button onClick={() => setFilter('Open')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'Open' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Open</button>
+             <button onClick={() => setFilter('In Progress')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'In Progress' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>In Progress</button>
+             <button onClick={() => setFilter('Closed')} className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'Closed' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Closed</button>
+          </div>
         </div>
       </div>
 
@@ -135,7 +261,9 @@ export default function InspectionPage() {
             {/* Content */}
             <div className="p-5 flex-1 flex flex-col">
                <div className="flex items-center gap-2 mb-3">
-                 <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{item.id}</span>
+                 <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md uppercase">
+                   {item.is_project_activity ? 'Proyek' : 'Non-Proyek'}
+                 </span>
                  <span className="text-xs font-bold text-slate-500">{item.type}</span>
                </div>
                
@@ -147,13 +275,20 @@ export default function InspectionPage() {
                  <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {item.location}</div>
                  <div className="flex items-center gap-2"><Building2 className="w-3.5 h-3.5 text-slate-400" /> {item.vendor}</div>
                  <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-slate-400" /> {item.date}</div>
+                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100 text-slate-500 font-bold">
+                   <UserPlus className="w-3.5 h-3.5 text-primary" /> Disposisi: <span className="text-primary">{item.assigned_to}</span>
+                 </div>
                </div>
             </div>
             
             <div className="border-t border-slate-100 p-4 bg-slate-50 flex gap-2">
+               <button onClick={() => openHistory(item)} className="px-3 py-2 text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors" title="Log History">
+                  <History className="w-4 h-4" />
+               </button>
+               
                {item.status === 'Open' ? (
-                  <button disabled className="w-full text-center py-2 text-xs font-bold text-slate-400 bg-white border border-slate-200 rounded-lg cursor-not-allowed">
-                     Menunggu Respons Vendor
+                  <button onClick={() => { setSelectedInspection(item); setIsDisposisiModalOpen(true); }} className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg shadow-sm transition-colors">
+                     <UserPlus className="w-4 h-4" /> Disposisi Tugas
                   </button>
                ) : item.status === 'In Progress' ? (
                   <button className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-lg shadow-sm transition-colors">
@@ -175,8 +310,8 @@ export default function InspectionPage() {
           <form onSubmit={handleCreate} className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl h-[90vh] md:h-auto md:max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <div>
-                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Camera className="w-5 h-5 text-primary" /> Lapor Temuan K3 Baru</h2>
-                <p className="text-sm text-slate-500 mt-1">Formulir inspeksi HSE Patrol.</p>
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Camera className="w-5 h-5 text-primary" /> Lapor Hasil Inspeksi Baru</h2>
+                <p className="text-sm text-slate-500 mt-1">Catat temuan inspeksi untuk kegiatan proyek atau non-proyek.</p>
               </div>
               <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
                 <X className="w-5 h-5" />
@@ -184,6 +319,19 @@ export default function InspectionPage() {
             </div>
             
             <div className="p-6 overflow-y-auto space-y-5">
+               {/* Tipe Kegiatan Toggle */}
+               <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <span className="text-sm font-bold text-slate-700">Tipe Kegiatan:</span>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" checked={isProjectActivity} onChange={() => setIsProjectActivity(true)} className="accent-primary" />
+                    <span className="text-sm font-medium">Kegiatan Keproyekan</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" checked={!isProjectActivity} onChange={() => setIsProjectActivity(false)} className="accent-primary" />
+                    <span className="text-sm font-medium">Non-Proyek (Kantor/Mess)</span>
+                  </label>
+               </div>
+
                {/* Upload Foto */}
                <div>
                   <label className="text-sm font-semibold text-slate-700 block mb-2">Foto Temuan <span className="text-rose-500">*</span></label>
@@ -224,17 +372,35 @@ export default function InspectionPage() {
                <div className="grid grid-cols-2 gap-4">
                  <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Lokasi Temuan <span className="text-rose-500">*</span></label>
-                    <input name="location" required type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Area Boiler 1" />
+                    <input name="location" required type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Area Boiler 1 / Pantri Kantor" />
                  </div>
-                 <div>
-                    <label className="text-sm font-semibold text-slate-700 block mb-2">Vendor Terkait <span className="text-rose-500">*</span></label>
-                    <select name="target_vendor" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
-                      <option value="">Pilih Vendor</option>
-                      {vendors.map(v => (
-                        <option key={v.id} value={v.id}>{v.company_name}</option>
-                      ))}
-                    </select>
-                 </div>
+                 
+                 {isProjectActivity ? (
+                   <div>
+                      <label className="text-sm font-semibold text-slate-700 block mb-2">Vendor Terkait (Opsional)</label>
+                      <select name="target_vendor" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
+                        <option value="">Tidak ada / Pilih Vendor</option>
+                        {vendors.map(v => (
+                          <option key={v.id} value={v.id}>{v.company_name}</option>
+                        ))}
+                      </select>
+                   </div>
+                 ) : (
+                   <div>
+                      <label className="text-sm font-semibold text-slate-700 block mb-2">Catatan Keterlibatan</label>
+                      <input type="text" readOnly value="Tanggung Jawab Internal" className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500" />
+                   </div>
+                 )}
+               </div>
+
+               <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Tugaskan Kepada (Opsional)</label>
+                  <select name="assigned_to" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
+                    <option value="">Tugaskan ke Diri Sendiri (Default)</option>
+                    {internalUsers.map(user => (
+                      <option key={user.id} value={user.id}>{user.profiles.full_name}</option>
+                    ))}
+                  </select>
                </div>
 
                <div>
@@ -257,10 +423,103 @@ export default function InspectionPage() {
                 className="px-5 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-xl transition-colors shadow-sm shadow-primary/30 flex items-center gap-2"
               >
                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} 
-                 {isSubmitting ? 'Submitting...' : 'Create Report'}
+                 {isSubmitting ? 'Submitting...' : 'Lapor Hasil'}
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal Disposisi */}
+      {isDisposisiModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <form onSubmit={handleDisposisi} className="bg-white rounded-2xl w-full max-w-md flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><UserPlus className="w-5 h-5 text-primary" /> Disposisi Inspeksi</h2>
+              <button type="button" onClick={() => setIsDisposisiModalOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                <span className="text-xs font-bold text-primary block mb-1">ID: {selectedInspection?.id}</span>
+                <p className="text-sm font-medium text-slate-700 line-clamp-2">"{selectedInspection?.description}"</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Tugaskan Kepada (Inspektur) <span className="text-rose-500">*</span></label>
+                <select name="assignee" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
+                  <option value="">Pilih Petugas Internal</option>
+                  {internalUsers.map(user => (
+                    <option key={user.id} value={user.id}>{user.profiles.full_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Catatan Disposisi</label>
+                <textarea 
+                   name="notes"
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm resize-none" 
+                   rows={3} 
+                   placeholder="Misal: Tolong lanjutkan pengecekan di area belakang karena shift saya sudah habis."
+                ></textarea>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
+              <button type="button" onClick={() => setIsDisposisiModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
+              <button 
+                type="submit"
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-bold text-white bg-slate-800 hover:bg-slate-900 disabled:opacity-50 rounded-xl transition-colors flex items-center gap-2"
+              >
+                 {isSubmitting ? 'Memproses...' : 'Simpan Disposisi'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Modal Log History */}
+      {isHistoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh]">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><History className="w-5 h-5 text-primary" /> Log History Inspeksi</h2>
+              <button onClick={() => setIsHistoryModalOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-5 overflow-y-auto space-y-6">
+              {isLoadingLogs ? (
+                <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>
+              ) : historyLogs.length === 0 ? (
+                <div className="text-center p-8 text-slate-500 text-sm">Belum ada riwayat aktivitas.</div>
+              ) : (
+                <div className="relative border-l-2 border-slate-200 ml-3 space-y-8 pb-4">
+                  {historyLogs.map((log, index) => (
+                    <div key={log.id} className="relative pl-6">
+                      <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white border-2 border-primary shadow-sm"></div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                          {new Date(log.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short'})}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                          {log.profiles?.role}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-800">{log.action}</h4>
+                      <p className="text-sm text-slate-600 mt-1">{log.notes}</p>
+                      <p className="text-xs font-medium text-slate-400 mt-2">Oleh: {log.profiles?.full_name}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

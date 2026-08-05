@@ -61,5 +61,14 @@ export const allPermissionModules = [
       { key: 'view_project', label: 'Melihat Master Proyek' },
       { key: 'manage_project', label: 'Mengelola Master Proyek' },
     ]
+  },
+  {
+    id: 'vendorDocs',
+    title: 'Dokumen Vendor',
+    description: 'Akses untuk melihat dan memverifikasi (Approve/Reject) dokumen persyaratan vendor.',
+    items: [
+      { key: 'view', label: 'Melihat Dokumen Vendor' },
+      { key: 'approve', label: 'Menyetujui / Menolak Dokumen' },
+    ]
   }
 ];

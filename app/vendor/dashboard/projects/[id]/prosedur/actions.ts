@@ -1,10 +1,11 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 
 export async function saveProsedur(projectId: string, payload: any) {
   const supabase = await createClient();
-  
+
   // check if procedure already exists
   const { data: existing } = await supabase
     .from('procedures')
@@ -17,7 +18,7 @@ export async function saveProsedur(projectId: string, payload: any) {
       .from('procedures')
       .update({ content: payload, status: 'Menunggu Review PM' })
       .eq('id', existing.id);
-      
+
     if (error) throw new Error(error.message);
   } else {
     const { error } = await supabase
@@ -27,9 +28,18 @@ export async function saveProsedur(projectId: string, payload: any) {
         content: payload,
         status: 'Menunggu Review PM'
       });
-      
+
     if (error) throw new Error(error.message);
   }
+
+  const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
+  await notifyUsersByRole({
+    role: 'pm',
+    type: 'action_required',
+    title: 'Prosedur Kerja Menunggu Review',
+    message: `Prosedur kerja untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,
+    link: `/dashboard/projects/${projectId}`,
+  });
 }
 
 export async function getProsedur(projectId: string) {

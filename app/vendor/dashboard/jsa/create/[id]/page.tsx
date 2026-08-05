@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
@@ -13,15 +13,23 @@ const PDFViewer = dynamic(
   { ssr: false }
 );
 
+export interface ControlDetail {
+  eliminasi: string;
+  substitusi: string;
+  rekayasa: string;
+  administrasi: string;
+  apd: string;
+}
+
 export interface JsaStepData {
   id: number;
   langkah: string;
   jenisBahaya: string;
   sebab: string;
   potensiBahaya: string;
-  faktorPositif: string;
+  faktorPositif: ControlDetail;
   inherentRisk: { severity: number, intensitas: number, kapabilitas: number, history: number, total: number, probability: number, rpn: number };
-  mitigasi: string;
+  mitigasi: ControlDetail;
   residualRisk: { severity: number, intensitas: number, kapabilitas: number, history: number, total: number, probability: number, rpn: number };
 }
 
@@ -34,16 +42,71 @@ export default function JSACreatePage() {
   const projectId = typeof params.id === 'string' ? decodeURIComponent(params.id) : 'PRJ-000';
 
   const [jsaSteps, setJsaSteps] = useState<JsaStepData[]>([
-    { id: 1, langkah: '', jenisBahaya: 'Fisika', sebab: '', potensiBahaya: '', faktorPositif: '', inherentRisk: {...defaultRisk}, mitigasi: '', residualRisk: {...defaultRisk} }
+    { id: 1, langkah: '', jenisBahaya: 'Fisika', sebab: '', potensiBahaya: '', faktorPositif: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, inherentRisk: {...defaultRisk}, mitigasi: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, residualRisk: {...defaultRisk} }
   ]);
+  const [procSteps, setProcSteps] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   React.useEffect(() => {
     async function loadData() {
       if (projectId) {
         const data = await getJsa(projectId);
-        if (data && data.steps && data.steps.length > 0) {
-          setJsaSteps(data.steps.map((step: any) => {
+        let finalSteps: any[] = [];
+
+        if (data && data.procedureSteps && data.procedureSteps.length > 0) {
+          // Smart Sync: Always use SOP steps, but preserve existing JSA hazards if they exist at the same index
+          finalSteps = data.procedureSteps.map((stepDesc: string, idx: number) => {
+            const existing = (data.steps && data.steps[idx]) ? data.steps[idx] : null;
+
+            if (existing) {
+              const hazards = typeof existing.hazards === 'string' ? JSON.parse(existing.hazards) : (existing.hazards || {});
+              const risks = typeof existing.risks === 'string' ? JSON.parse(existing.risks) : (existing.risks || {});
+              const controls = typeof existing.controls === 'string' ? JSON.parse(existing.controls) : (existing.controls || {});
+              
+              const legacyBahaya = Array.isArray(hazards) ? hazards[0] : '';
+              const legacyMitigasi = Array.isArray(controls) ? controls[0] : '';
+              
+              const parseControl = (val: any) => {
+                if (typeof val === 'string') return { eliminasi: '', substitusi: '', rekayasa: '', administrasi: val, apd: '' };
+                if (!val) return { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' };
+                return {
+                  eliminasi: val.eliminasi || '',
+                  substitusi: val.substitusi || '',
+                  rekayasa: val.rekayasa || '',
+                  administrasi: val.administrasi || '',
+                  apd: val.apd || ''
+                };
+              };
+
+              return {
+                id: existing.id || Date.now() + Math.random(),
+                langkah: stepDesc, // <--- Always override with SOP step
+                jenisBahaya: hazards.jenisBahaya || (legacyBahaya ? 'Fisika' : 'Fisika'),
+                sebab: hazards.sebab || '',
+                potensiBahaya: hazards.potensiBahaya || legacyBahaya || '',
+                faktorPositif: parseControl(risks.faktorPositif || ''),
+                inherentRisk: risks.inherentRisk || {...defaultRisk},
+                mitigasi: parseControl(controls.mitigasi || legacyMitigasi || ''),
+                residualRisk: controls.residualRisk || {...defaultRisk}
+              };
+            }
+
+            // No existing step at this index, create an empty one
+            return {
+              id: Date.now() + idx,
+              langkah: stepDesc,
+              jenisBahaya: 'Fisika',
+              sebab: '',
+              potensiBahaya: '',
+              faktorPositif: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' },
+              inherentRisk: {...defaultRisk},
+              mitigasi: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' },
+              residualRisk: {...defaultRisk}
+            };
+          });
+        } else if (data && data.steps && data.steps.length > 0) {
+          // Fallback if no procedureSteps
+          finalSteps = data.steps.map((step: any) => {
             const hazards = typeof step.hazards === 'string' ? JSON.parse(step.hazards) : (step.hazards || {});
             const risks = typeof step.risks === 'string' ? JSON.parse(step.risks) : (step.risks || {});
             const controls = typeof step.controls === 'string' ? JSON.parse(step.controls) : (step.controls || {});
@@ -51,30 +114,36 @@ export default function JSACreatePage() {
             const legacyBahaya = Array.isArray(hazards) ? hazards[0] : '';
             const legacyMitigasi = Array.isArray(controls) ? controls[0] : '';
             
+            const parseControl = (val: any) => {
+              if (typeof val === 'string') return { eliminasi: '', substitusi: '', rekayasa: '', administrasi: val, apd: '' };
+              if (!val) return { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' };
+              return {
+                eliminasi: val.eliminasi || '',
+                substitusi: val.substitusi || '',
+                rekayasa: val.rekayasa || '',
+                administrasi: val.administrasi || '',
+                apd: val.apd || ''
+              };
+            };
+            
             return {
               id: step.id || Date.now() + Math.random(),
               langkah: step.description || '',
               jenisBahaya: hazards.jenisBahaya || (legacyBahaya ? 'Fisika' : 'Fisika'),
               sebab: hazards.sebab || '',
               potensiBahaya: hazards.potensiBahaya || legacyBahaya || '',
-              faktorPositif: risks.faktorPositif || '',
+              faktorPositif: parseControl(risks.faktorPositif || ''),
               inherentRisk: risks.inherentRisk || {...defaultRisk},
-              mitigasi: controls.mitigasi || legacyMitigasi || '',
+              mitigasi: parseControl(controls.mitigasi || legacyMitigasi || ''),
               residualRisk: controls.residualRisk || {...defaultRisk}
             };
-          }));
-        } else if (data && data.procedureSteps && data.procedureSteps.length > 0) {
-          setJsaSteps(data.procedureSteps.map((stepDesc: string, idx: number) => ({
-            id: Date.now() + idx,
-            langkah: stepDesc,
-            jenisBahaya: 'Fisika',
-            sebab: '',
-            potensiBahaya: '',
-            faktorPositif: '',
-            inherentRisk: {...defaultRisk},
-            mitigasi: '',
-            residualRisk: {...defaultRisk}
-          })));
+          });
+        }
+
+        setJsaSteps(finalSteps.length > 0 ? finalSteps : [{ id: 1, langkah: '', jenisBahaya: 'Fisika', sebab: '', potensiBahaya: '', faktorPositif: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, inherentRisk: {...defaultRisk}, mitigasi: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, residualRisk: {...defaultRisk} }]);
+        
+        if (data && data.procedureSteps) {
+          setProcSteps(data.procedureSteps);
         }
       }
     }
@@ -82,7 +151,7 @@ export default function JSACreatePage() {
   }, [projectId]);
 
   const addStep = () => {
-    setJsaSteps([...jsaSteps, { id: Date.now(), langkah: '', jenisBahaya: 'Fisika', sebab: '', potensiBahaya: '', faktorPositif: '', inherentRisk: {...defaultRisk}, mitigasi: '', residualRisk: {...defaultRisk} }]);
+    setJsaSteps([...jsaSteps, { id: Date.now(), langkah: '', jenisBahaya: 'Fisika', sebab: '', potensiBahaya: '', faktorPositif: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, inherentRisk: {...defaultRisk}, mitigasi: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, residualRisk: {...defaultRisk} }]);
   };
 
   const removeStep = (id: number) => {
@@ -99,6 +168,16 @@ export default function JSACreatePage() {
     else if (total >= 7) probability = 3;
     else if (total >= 4) probability = 2;
     return { ...r, total, probability, rpn: Number(r.severity) * probability };
+  };
+
+  
+  const updateControlField = (id: number, field: 'faktorPositif' | 'mitigasi', subField: keyof ControlDetail, value: string) => {
+    setJsaSteps(jsaSteps.map(step => {
+      if (step.id === id) {
+        return { ...step, [field]: { ...(step[field] as ControlDetail), [subField]: value } };
+      }
+      return step;
+    }));
   };
 
   const updateStepText = (id: number, field: keyof JsaStepData, value: string) => {
@@ -158,13 +237,15 @@ export default function JSACreatePage() {
             Formulir JSA
           </h1>
         </div>
-        <button onClick={handleSimpan} disabled={isSaving} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
-          {isSaving ? (
-            <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</span>
-          ) : (
-            <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Submit JSA</span>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={handleSimpan} disabled={isSaving} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
+            {isSaving ? (
+              <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</span>
+            ) : (
+              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Submit JSA</span>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -224,8 +305,15 @@ export default function JSACreatePage() {
                   <td className="border border-slate-300 p-1 align-top"><select value={step.jenisBahaya} onChange={(e) => updateStepText(step.id, 'jenisBahaya', e.target.value)} className="w-full p-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-primary">{BAHAYA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></td>
                   <td className="border border-slate-300 p-1 align-top"><textarea value={step.sebab} onChange={(e) => updateStepText(step.id, 'sebab', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Sebab / sumber bahaya..." /></td>
                   <td className="border border-slate-300 p-1 align-top"><textarea value={step.potensiBahaya} onChange={(e) => updateStepText(step.id, 'potensiBahaya', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Potensi bahaya..." /></td>
-                  <td className="border border-slate-300 p-1 align-top"><textarea value={step.faktorPositif} onChange={(e) => updateStepText(step.id, 'faktorPositif', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Pengendalian yang sudah ada..." /></td>
-                  
+                  <td className="border border-slate-300 p-1 align-top">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Eliminasi:</label><textarea value={step.faktorPositif.eliminasi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'eliminasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Substitusi:</label><textarea value={step.faktorPositif.substitusi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'substitusi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Rekayasa Alat:</label><textarea value={step.faktorPositif.rekayasa || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'rekayasa', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Administrasi:</label><textarea value={step.faktorPositif.administrasi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'administrasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">APD:</label><textarea value={step.faktorPositif.apd || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'apd', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                    </div>
+                  </td>
                   {/* Inherent Risk: Severity */}
                   <td className="border border-slate-300 p-1 align-top bg-orange-50/30"><input type="number" min="1" max="5" value={step.inherentRisk.severity} onChange={(e) => updateInherentRisk(step.id, 'severity', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
                   {/* Inherent Risk: Probability -> Intensitas, Kapabilitas, History, Total */}
@@ -238,7 +326,15 @@ export default function JSACreatePage() {
                   <td className={`border border-slate-300 p-1 align-middle text-center font-black text-sm ${getRpnColor(step.inherentRisk.rpn)}`}>{step.inherentRisk.rpn}</td>
                   
                   {/* Mitigasi */}
-                  <td className="border border-slate-300 p-1 align-top"><textarea value={step.mitigasi} onChange={(e) => updateStepText(step.id, 'mitigasi', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Tindakan mitigasi..." /></td>
+                  <td className="border border-slate-300 p-1 align-top">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Eliminasi:</label><textarea value={step.mitigasi.eliminasi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'eliminasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Substitusi:</label><textarea value={step.mitigasi.substitusi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'substitusi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Rekayasa Alat:</label><textarea value={step.mitigasi.rekayasa || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'rekayasa', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Administrasi:</label><textarea value={step.mitigasi.administrasi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'administrasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">APD:</label><textarea value={step.mitigasi.apd || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'apd', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                    </div>
+                  </td>
                   
                   {/* Residual Risk: Severity */}
                   <td className="border border-slate-300 p-1 align-top bg-emerald-50/30"><input type="number" min="1" max="5" value={step.residualRisk.severity} onChange={(e) => updateResidualRisk(step.id, 'severity', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>

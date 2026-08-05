@@ -59,24 +59,7 @@ export function VendorMobileSidebar() {
                 Proyek Aktif
               </Link>
             </li>
-            <li>
-              <Link href="/vendor/dashboard/pengajuan" onClick={handleLinkClick} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <FileSignature className="h-4 w-4" />
-                Pengajuan Projek
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/jsa" onClick={handleLinkClick} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <ShieldAlert className="h-4 w-4" />
-                Pengajuan JSA
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/ptw" onClick={handleLinkClick} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <Stamp className="h-4 w-4" />
-                Pengajuan PTW
-              </Link>
-            </li>
+
             <li>
               <Link href="/vendor/dashboard/inspection" onClick={handleLinkClick} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
                 <AlertTriangle className="h-4 w-4" />
@@ -97,6 +80,12 @@ export function VendorMobileSidebar() {
               </div>
             </li>
 
+            <li>
+              <Link href="/vendor/dashboard/dokumen" onClick={handleLinkClick} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
+                <FileSignature className="h-4 w-4" />
+                Dokumen K3
+              </Link>
+            </li>
             <li>
               <Link href="/vendor/dashboard/pekerja" onClick={handleLinkClick} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
                 <Users className="h-4 w-4" />

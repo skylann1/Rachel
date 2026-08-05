@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 
 export async function saveJsa(projectId: string, jsaData: any) {
   const supabase = await createClient();
@@ -38,17 +39,17 @@ export async function saveJsa(projectId: string, jsaData: any) {
     const stepsToInsert = jsaData.steps.map((step: any, index: number) => ({
       jsa_id: jsaId,
       step_number: index + 1,
-      description: step.langkah,
-      hazards: JSON.stringify({
+      pekerjaan: step.langkah,
+      bahaya: JSON.stringify({
         jenisBahaya: step.jenisBahaya,
         sebab: step.sebab,
         potensiBahaya: step.potensiBahaya
       }),
-      risks: JSON.stringify({
+      risiko: JSON.stringify({
         faktorPositif: step.faktorPositif,
         inherentRisk: step.inherentRisk
       }),
-      controls: JSON.stringify({
+      tindakan: JSON.stringify({
         mitigasi: step.mitigasi,
         residualRisk: step.residualRisk
       }),
@@ -57,6 +58,15 @@ export async function saveJsa(projectId: string, jsaData: any) {
     const { error: stepError } = await supabase.from('jsa_steps').insert(stepsToInsert);
     if (stepError) throw new Error(stepError.message);
   }
+
+  const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
+  await notifyUsersByRole({
+    role: 'pm',
+    type: 'action_required',
+    title: 'JSA Menunggu Review',
+    message: `JSA untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,
+    link: `/dashboard/projects/${projectId}`,
+  });
 }
 
 export async function getJsa(projectId: string) {
@@ -77,7 +87,9 @@ export async function getJsa(projectId: string) {
   let procedureSteps: string[] = [];
   if (proc?.content?.tahapanPekerjaan) {
     proc.content.tahapanPekerjaan.forEach((section: any) => {
-      procedureSteps.push(...(section.points || []));
+      if (section.title) {
+        procedureSteps.push(section.title);
+      }
     });
   }
     

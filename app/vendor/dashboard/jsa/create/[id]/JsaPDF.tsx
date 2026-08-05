@@ -11,7 +11,8 @@ Font.register({
 });
 
 const B = '#000';
-const GREY = '#e6e6e6';
+const HEADER_BG = '#E8D5B7'; // warm beige/tan matching Excel template
+const HEADER_BG_LIGHT = '#F0E6D2'; // lighter beige for sub-headers
 const fs = 4.5; // base font size
 
 const styles = StyleSheet.create({
@@ -21,15 +22,53 @@ const styles = StyleSheet.create({
     fontSize: fs,
     backgroundColor: '#fff'
   },
+  fixedHeader: {
+    // Rely on react-pdf native flow layout for fixed elements
+    width: '100%'
+  },
   titleBox: {
-    alignItems: 'center',
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: B,
+    marginBottom: 6,
+  },
+  titleLeft: {
+    width: '8%',
+    padding: 3,
+    borderRightWidth: 1,
+    borderColor: B,
     justifyContent: 'center',
-    marginBottom: 6
+    alignItems: 'center',
+  },
+  titleCenter: {
+    width: '72%',
+    padding: 3,
+    borderRightWidth: 1,
+    borderColor: B,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  titleRight: {
+    width: '20%',
+    padding: 3,
   },
   title: {
-    fontSize: 9,
+    fontSize: 7,
     fontWeight: 'bold',
     textAlign: 'center'
+  },
+  titleSub: {
+    fontSize: 6,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 1
+  },
+  companyName: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 2
   },
   // Header info section
   infoSection: {
@@ -94,7 +133,7 @@ const styles = StyleSheet.create({
   },
   tHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: GREY
+    backgroundColor: HEADER_BG
   },
   tCellHeader: {
     borderBottomWidth: 1,
@@ -189,7 +228,7 @@ const RiskBlockHeader = ({ label, sevNum, intNum, kapNum, hisNum, totNum, probNu
         <Text style={styles.bold}>Nilai{"\n"}Prob-{"\n"}ability</Text>
       </View>
       {/* Nilai RPN */}
-      <View style={{ width: '14.28%', justifyContent: 'center', alignItems: 'center', padding: 1, backgroundColor: '#d1d5db' }}>
+      <View style={{ width: '14.28%', justifyContent: 'center', alignItems: 'center', padding: 1, backgroundColor: HEADER_BG }}>
         <Text style={styles.bold}>Nilai{"\n"}RPN</Text>
       </View>
     </View>
@@ -239,6 +278,51 @@ const RiskBlockData = ({ risk, rpnStyle }: { risk: any; rpnStyle: any }) => (
   </View>
 );
 
+
+const renderControlCell = (control: any) => {
+  if (typeof control === 'string') {
+    return <View style={{ flex: 1, padding: 1.5 }}><Text style={{ fontSize: 3.5 }}>{control}</Text></View>;
+  }
+  if (!control) return <View style={{ flex: 1 }}></View>;
+
+  const rows = [
+    { label: 'Eliminasi', val: control.eliminasi },
+    { label: 'Substitusi', val: control.substitusi },
+    { label: 'Rekaya Alat', val: control.rekayasa },
+    { label: 'Administrasi', val: control.administrasi },
+    { label: 'APD', val: control.apd }
+  ];
+
+  return (
+    <View style={{ width: '100%' }}>
+      {rows.map((r, i) => (
+        <View key={i} style={{
+          flexDirection: 'row',
+          borderBottomWidth: i < rows.length - 1 ? 0.5 : 0,
+          borderColor: '#000',
+        }}>
+          <View style={{
+            width: '35%',
+            borderRightWidth: 0.5,
+            borderColor: '#000',
+            paddingVertical: 2,
+            paddingHorizontal: 1.5,
+          }}>
+            <Text style={{ fontSize: 3.5 }}>{r.label}</Text>
+          </View>
+          <View style={{
+            width: '65%',
+            paddingVertical: 2,
+            paddingHorizontal: 1.5,
+          }}>
+            <Text style={{ fontSize: 3.5 }}>{r.val || ''}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
+
 export default function JsaPDF({ projectId, steps }: any) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -246,10 +330,22 @@ export default function JsaPDF({ projectId, steps }: any) {
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
         
-        {/* Title */}
-        <View style={styles.titleBox}>
-          <Text style={styles.title}>FORMULIR ANALISA KESELAMATAN KERJA / JOB SAFETY ANALYSIS FORM</Text>
-        </View>
+        <View fixed style={styles.fixedHeader}>
+          {/* Title Box - 3 columns: Logo | Company+Title | Revisi */}
+          <View style={styles.titleBox}>
+            <View style={styles.titleLeft}>
+              <Text style={{ fontSize: 5, textAlign: 'center' }}>Logo</Text>
+            </View>
+            <View style={styles.titleCenter}>
+              <Text style={styles.companyName}>CV. JAYA PUTRA BAHARI</Text>
+              <Text style={styles.title}>FORMULIR ANALISA KESELAMATAN KERJA / JOB SAFETY ANALYSIS FORM</Text>
+            </View>
+            <View style={styles.titleRight}>
+              <View style={styles.infoRow}><Text style={{ fontSize: 4.5 }}>No</Text></View>
+              <View style={styles.infoRow}><Text style={{ fontSize: 4.5 }}>Revisi</Text></View>
+              <View style={styles.infoRow}><Text style={{ fontSize: 4.5, fontWeight: 'bold' }}>Tanggal Pembuatan</Text><Text style={{ fontSize: 4.5 }}>  {currentDate}</Text></View>
+            </View>
+          </View>
         
         {/* Header Information */}
         <View style={styles.infoSection}>
@@ -260,10 +356,6 @@ export default function JsaPDF({ projectId, steps }: any) {
             <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama Paket Pekerjaan</Text><Text style={styles.infoValue}>: Kontrak {projectId}</Text></View>
             <View style={styles.infoRow}><Text style={styles.infoLabel}>Nomor Kontrak</Text><Text style={styles.infoValue}>: {projectId}</Text></View>
             <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Kontrak</Text><Text style={styles.infoValue}>: {currentDate}</Text></View>
-          </View>
-          <View style={[styles.infoRight, { borderLeftWidth: 1, borderColor: B, marginLeft: -1 }]}>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Pembuatan</Text><Text style={styles.infoValue}>: {currentDate}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Revisi</Text><Text style={styles.infoValue}>: 0</Text></View>
           </View>
         </View>
 
@@ -293,8 +385,8 @@ export default function JsaPDF({ projectId, steps }: any) {
           </View>
         </View>
 
-        {/* ===== MAIN TABLE ===== */}
-        <View style={styles.table}>
+        {/* ===== MAIN TABLE HEADER ===== */}
+        <View style={[styles.table, { borderBottomWidth: 0 }]}>
           
           {/* ===== HEADER ROW 1: Main column labels + Risk group titles ===== */}
           <View style={styles.tHeaderRow}>
@@ -317,7 +409,7 @@ export default function JsaPDF({ projectId, steps }: any) {
           </View>
 
           {/* ===== HEADER ROW 2: Column numbers (1) - (21) ===== */}
-          <View style={[styles.tHeaderRow, { backgroundColor: '#f3f3f3' }]}>
+          <View style={[styles.tHeaderRow, { backgroundColor: HEADER_BG_LIGHT }]}>
             <View style={[styles.tCell, styles.colNo, styles.textCenter]}><Text>(1)</Text></View>
             <View style={[styles.tCell, styles.colLangkah, styles.textCenter]}><Text>(2)</Text></View>
             <View style={[styles.tCell, styles.colJenisBahaya, styles.textCenter]}><Text>(3)</Text></View>
@@ -331,7 +423,7 @@ export default function JsaPDF({ projectId, steps }: any) {
           </View>
 
           {/* ===== HEADER ROW 3: Italic descriptions ===== */}
-          <View style={[styles.tRow, { backgroundColor: '#fafafa' }]}>
+          <View style={[styles.tRow, { backgroundColor: '#fdf8f0' }]}>
             <View style={[styles.tCell, styles.colNo]}><Text style={styles.italic}> </Text></View>
             <View style={[styles.tCell, styles.colLangkah]}><Text style={styles.italic}>Kolom diisi dengan langkah-langkah pekerjaan yang di lakukan</Text></View>
             <View style={[styles.tCell, styles.colJenisBahaya]}><Text style={styles.italic}>Kolom diisi dengan jenis bahaya: Fisika, Kimia, Biologi, Ergonomi, Psikologi</Text></View>
@@ -359,20 +451,23 @@ export default function JsaPDF({ projectId, steps }: any) {
             ]} />
             <View style={[styles.tCell, styles.colParaf]}><Text style={styles.italic}>Tanda tangan penanggung jawab pekerjaan</Text></View>
           </View>
+        </View>
+      </View>
 
-          {/* ===== TABLE BODY ===== */}
-          {steps.map((step: any, index: number) => (
+      {/* ===== TABLE BODY ===== */}
+      <View style={[styles.table, { borderTopWidth: 0 }]}>
+        {steps.map((step: any, index: number) => (
             <View key={step.id || index} style={styles.tRow} wrap={false}>
               <View style={[styles.tCell, styles.colNo, styles.textCenter]}><Text>{index + 1}</Text></View>
               <View style={[styles.tCell, styles.colLangkah]}><Text>{step.langkah || ''}</Text></View>
               <View style={[styles.tCell, styles.colJenisBahaya]}><Text>{step.jenisBahaya || ''}</Text></View>
               <View style={[styles.tCell, styles.colSebab]}><Text>{step.sebab || ''}</Text></View>
               <View style={[styles.tCell, styles.colPotensi]}><Text>{step.potensiBahaya || ''}</Text></View>
-              <View style={[styles.tCell, styles.colFaktor]}><Text>{step.faktorPositif || ''}</Text></View>
+              <View style={[styles.tCell, styles.colFaktor, { padding: 0 }]}>{renderControlCell(step.faktorPositif)}</View>
 
               <RiskBlockData risk={step.inherentRisk} rpnStyle={getRpnStyle(step.inherentRisk?.rpn || 0)} />
 
-              <View style={[styles.tCell, styles.colMitigasi]}><Text>{step.mitigasi || ''}</Text></View>
+              <View style={[styles.tCell, styles.colMitigasi, { padding: 0 }]}>{renderControlCell(step.mitigasi)}</View>
 
               <RiskBlockData risk={step.residualRisk} rpnStyle={getRpnStyle(step.residualRisk?.rpn || 0)} />
 

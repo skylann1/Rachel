@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { Menu, X, LogOut } from 'lucide-react';
 import Image from "next/image";
 import { SidebarNav } from "./sidebar-nav";
@@ -59,7 +60,7 @@ export function InternalMobileSidebar({
         </div>
 
         {/* Sidebar User Info */}
-        <div className="px-6 py-5 border-b border-slate-100 shrink-0">
+        <Link href="/dashboard/profile" onClick={handleLinkClick} className="px-6 py-5 border-b border-slate-100 shrink-0 hover:bg-slate-50 transition-colors block cursor-pointer">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold shadow-inner shrink-0">
               {userEmail?.charAt(0).toUpperCase() || 'A'}
@@ -69,7 +70,7 @@ export function InternalMobileSidebar({
               <p className="text-xs text-slate-500 font-medium">HSE Manager</p>
             </div>
           </div>
-        </div>
+        </Link>
 
         {/* Navigation - Needs a wrapper that intercepts clicks */}
         <div onClick={handleLinkClick} className="flex-1 overflow-y-auto">

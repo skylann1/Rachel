@@ -3,13 +3,17 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive } from 'lucide-react';
 
 const menuUtama = [
   { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard, permission: { module: 'dashboard', action: 'view' } },
-  { name: 'Inspeksi & Temuan K3', href: '/dashboard/inspection', icon: Camera, permission: { module: 'inspection', action: 'view' } },
+  { name: 'My Task', href: '/dashboard/my-task', icon: CheckCircle, permission: { module: 'dashboard', action: 'view' } },
+  { name: 'Inspeksi Proyek', href: '/dashboard/inspection', icon: Camera, permission: { module: 'inspection', action: 'view' } },
   { name: 'Laporan Insiden', href: '/dashboard/incident', icon: AlertTriangle, permission: { module: 'incident', action: 'view' } },
-  { name: 'Verifikasi Dokumen', href: '/dashboard/approval', icon: FileSignature, permission: { module: 'approval', action: 'view' } },
+  { name: 'Kelola Proyek', href: '/dashboard/approval', icon: FileSignature, permission: { module: 'approval', action: 'view' } },
+  { name: 'Proyek Berjalan', href: '/dashboard/ongoing', icon: Rocket, permission: { module: 'approval', action: 'view' } },
+  { name: 'Arsip Proyek', href: '/dashboard/archive', icon: Archive, permission: { module: 'approval', action: 'view' } },
+  { name: 'Dokumen Vendor', href: '/dashboard/vendor-docs', icon: ClipboardList, permission: { module: 'vendorDocs', action: 'view' } },
 ];
 
 const masterData = [
@@ -19,7 +23,7 @@ const masterData = [
   { name: 'Data Proyek', href: '/dashboard/master-data/project', icon: Briefcase, permission: { module: 'masterData', action: 'view_project' } },
 ];
 
-export function SidebarNav({ userPermissions }: { userPermissions: Record<string, string[]> }) {
+export function SidebarNav({ userPermissions, isCollapsed }: { userPermissions: Record<string, string[]>, isCollapsed?: boolean }) {
   const pathname = usePathname();
 
   // Helper to check if a path is active
@@ -42,8 +46,8 @@ export function SidebarNav({ userPermissions }: { userPermissions: Record<string
   const filteredMasterData = masterData.filter(item => hasAccess(item.permission.module, item.permission.action));
 
   return (
-    <nav className="flex-1 overflow-y-auto py-6 px-4">
-      <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase">Menu Utama</div>
+    <nav className="flex-1 overflow-y-auto py-6 px-4 overflow-x-hidden">
+      {!isCollapsed && <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase whitespace-nowrap">Menu Utama</div>}
       <ul className="space-y-1 mb-6">
         {filteredMenuUtama.map((item) => {
           const active = isActive(item.href);
@@ -51,15 +55,18 @@ export function SidebarNav({ userPermissions }: { userPermissions: Record<string
           return (
             <li key={item.href}>
               <Link 
-                href={item.href} 
-                className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-all ${
+                href={item.href}
+                title={isCollapsed ? item.name : undefined}
+                className={`flex items-center rounded-xl py-3 text-sm transition-all ${
+                  isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
+                } ${
                   active 
                     ? 'font-bold bg-primary/10 text-primary' 
                     : 'font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
-                <Icon className={`h-5 w-5 ${active ? '' : 'opacity-70'}`} />
-                {item.name}
+                <Icon className={`h-5 w-5 shrink-0 ${active ? '' : 'opacity-70'}`} />
+                {!isCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
               </Link>
             </li>
           );
@@ -68,26 +75,29 @@ export function SidebarNav({ userPermissions }: { userPermissions: Record<string
 
       {filteredMasterData.length > 0 && (
         <>
-          <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase">Master Data</div>
+          {!isCollapsed && <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase whitespace-nowrap">Master Data</div>}
           <ul className="space-y-1">
             {filteredMasterData.map((item) => {
-          const active = isActive(item.href);
-          const Icon = item.icon;
-          return (
-            <li key={item.href}>
-              <Link 
-                href={item.href} 
-                className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-all ${
-                  active 
-                    ? 'font-bold bg-primary/10 text-primary' 
-                    : 'font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <Icon className={`h-5 w-5 ${active ? '' : 'opacity-70'}`} />
-                {item.name}
-              </Link>
-            </li>
-          );
+              const active = isActive(item.href);
+              const Icon = item.icon;
+              return (
+                <li key={item.href}>
+                  <Link 
+                    href={item.href}
+                    title={isCollapsed ? item.name : undefined}
+                    className={`flex items-center rounded-xl py-3 text-sm transition-all ${
+                      isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
+                    } ${
+                      active 
+                        ? 'font-bold bg-primary/10 text-primary' 
+                        : 'font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <Icon className={`h-5 w-5 shrink-0 ${active ? '' : 'opacity-70'}`} />
+                    {!isCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
+                  </Link>
+                </li>
+              );
             })}
           </ul>
         </>

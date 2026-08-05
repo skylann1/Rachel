@@ -1,8 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
-import { logout } from "@/app/vendor/login/actions";
-import Link from "next/link";
-import { LayoutDashboard, FileSignature, LogOut, Briefcase, ShieldAlert, Stamp, Users, Truck, AlertTriangle } from "lucide-react";
 import { VendorMobileSidebar } from "@/components/vendor-mobile-sidebar";
+import { VendorDesktopSidebar } from "@/components/vendor/desktop-sidebar";
+import Link from "next/link";
 
 export default async function VendorDashboardLayout({
   children,
@@ -14,86 +13,7 @@ export default async function VendorDashboardLayout({
 
   return (
     <div className="flex h-screen w-full bg-muted/20">
-      <aside className="w-64 flex-shrink-0 border-r bg-card flex flex-col hidden md:flex">
-        <div className="h-16 flex items-center px-6 border-b">
-          <Briefcase className="h-6 w-6 text-primary mr-2" />
-          <span className="font-bold text-lg text-primary tracking-tight">Portal Vendor</span>
-        </div>
-        <nav className="flex-1 overflow-y-auto py-4">
-          <ul className="space-y-1 px-3">
-            <li>
-              <Link href="/vendor/dashboard" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-foreground">
-                <LayoutDashboard className="h-4 w-4" />
-                Dashboard Vendor
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/projects" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <Briefcase className="h-4 w-4" />
-                Proyek Aktif
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/pengajuan" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <FileSignature className="h-4 w-4" />
-                Pengajuan Projek
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/jsa" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <ShieldAlert className="h-4 w-4" />
-                Pengajuan JSA
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/ptw" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <Stamp className="h-4 w-4" />
-                Pengajuan PTW
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/inspection" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <AlertTriangle className="h-4 w-4" />
-                Inbox Temuan K3
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/incident" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <AlertTriangle className="h-4 w-4 text-rose-500" />
-                Laporan Insiden
-              </Link>
-            </li>
-            
-            {/* Divider */}
-            <li className="pt-4 pb-2 px-3">
-              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Data Master
-              </div>
-            </li>
-
-            <li>
-              <Link href="/vendor/dashboard/pekerja" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <Users className="h-4 w-4" />
-                Data Pekerja
-              </Link>
-            </li>
-            <li>
-              <Link href="/vendor/dashboard/peralatan" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground text-muted-foreground">
-                <Truck className="h-4 w-4" />
-                Data Peralatan
-              </Link>
-            </li>
-          </ul>
-        </nav>
-        <div className="p-4 border-t">
-          <form action={logout}>
-            <button className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10">
-              <LogOut className="h-4 w-4" />
-              Keluar
-            </button>
-          </form>
-        </div>
-      </aside>
+      <VendorDesktopSidebar />
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 flex items-center justify-between px-6 border-b bg-card">
@@ -102,15 +22,25 @@ export default async function VendorDashboardLayout({
             <div className="font-medium text-sm text-muted-foreground hidden md:block">Mitra Kerja</div>
             <div className="font-bold text-sm text-primary md:hidden">Portal Vendor</div>
           </div>
-          <div className="flex items-center gap-4">
+          <Link href="/vendor/dashboard/profile" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
             <span className="text-sm font-medium hidden sm:block">{user?.email}</span>
             <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
               {user?.email?.charAt(0).toUpperCase()}
             </div>
-          </div>
+          </Link>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        {/* Sub-Header Banner */}
+        <div className="bg-white border-b border-slate-200 border-l-4 border-l-slate-300 px-6 lg:px-8 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 sm:gap-0 text-sm text-slate-600 shadow-sm z-10">
+          <div className="font-medium text-slate-500">
+            Welcome to Rachel v1.0
+          </div>
+          <div className="text-slate-500 text-xs">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 relative">
           {children}
         </div>
       </main>

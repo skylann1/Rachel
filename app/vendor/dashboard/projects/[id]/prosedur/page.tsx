@@ -79,6 +79,9 @@ export default function ProsedurKerjaForm() {
           setSelectedApd(content.selectedApd || []);
           setVendorSignature(content.vendorSignature || null);
           setRevisions(content.revisions || []);
+          if (content.perlengkapanLainnya) setPerlengkapanLainnya(content.perlengkapanLainnya);
+          if (content.tahapanPekerjaan) setTahapanPekerjaan(content.tahapanPekerjaan);
+          if (content.penyelesaianAkhir) setPenyelesaianAkhir(content.penyelesaianAkhir);
         }
       }
     }

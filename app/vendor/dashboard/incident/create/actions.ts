@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 
 export async function submitIncident(formData: FormData) {
   const supabase = await createClient();
@@ -30,7 +31,7 @@ export async function submitIncident(formData: FormData) {
   // We need the user's ID
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { error } = await supabase
+  const { data: incident, error } = await supabase
     .from('incidents')
     .insert({
       project_id,
@@ -43,12 +44,22 @@ export async function submitIncident(formData: FormData) {
       chronology,
       immediate_action,
       status: 'Menunggu Investigasi'
-    });
-    
+    })
+    .select('id')
+    .single();
+
   if (error) {
     console.error(error);
     throw new Error(error.message);
   }
+
+  await notifyUsersByRole({
+    role: 'hse',
+    type: 'warning',
+    title: `Laporan Insiden Baru: ${mappedType}`,
+    message: `Insiden baru dilaporkan di lokasi "${location}" dan menunggu investigasi.`,
+    link: `/dashboard/incident/${incident.id}`,
+  });
 }
 
 export async function getVendorProjects() {

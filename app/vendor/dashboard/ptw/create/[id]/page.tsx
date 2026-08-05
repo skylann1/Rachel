@@ -3,10 +3,11 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Users, Truck, ShieldAlert, Stamp } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Users, Truck, Stamp, ShieldAlert, FileText, HardHat } from 'lucide-react';
 import { PDFViewer } from '@react-pdf/renderer';
 import PtwPDF from './PtwPDF';
-import { savePtw } from './actions';
+import { savePtw, getPtw } from './actions';
+import { PTW_TYPES, HAZARD_SOURCES, APD_ITEMS, PtwType } from '@/lib/ptw-types';
 
 // Mock Master Data
 const mockPekerja = [
@@ -25,9 +26,44 @@ export default function PTWCreatePage() {
   const router = useRouter();
   const projectId = typeof params.id === 'string' ? decodeURIComponent(params.id) : 'PRJ-000';
 
+  const [ptwType, setPtwType] = useState<PtwType>('dingin');
+  const [selectedHazards, setSelectedHazards] = useState<string[]>([]);
+  
+  // APD state (Grouped by part)
+  const [selectedApd, setSelectedApd] = useState<{ [key: string]: string[] }>({
+    kepala: [], telinga: [], kaki: [], ketinggian: [], pernapasan: [], tangan: [], badan: []
+  });
+
   const [selectedPekerja, setSelectedPekerja] = useState<string[]>([]);
   const [selectedPeralatan, setSelectedPeralatan] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    async function loadData() {
+      if (projectId) {
+        const data = await getPtw(projectId);
+        if (data) {
+          if (data.workers) setSelectedPekerja(data.workers.map((w: any) => w.id || w.worker_id));
+          if (data.equipment) setSelectedPeralatan(data.equipment.map((e: any) => e.id || e.equipment_id));
+        }
+      }
+    }
+    loadData();
+  }, [projectId]);
+
+  const toggleHazard = (hz: string) => {
+    setSelectedHazards(prev => 
+      prev.includes(hz) ? prev.filter(x => x !== hz) : [...prev, hz]
+    );
+  };
+
+  const toggleApd = (category: string, item: string) => {
+    setSelectedApd(prev => {
+      const catList = prev[category] || [];
+      const updated = catList.includes(item) ? catList.filter(x => x !== item) : [...catList, item];
+      return { ...prev, [category]: updated };
+    });
+  };
 
   const togglePekerja = (id: string) => {
     setSelectedPekerja(prev => 
@@ -87,9 +123,65 @@ export default function PTWCreatePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* Left Column: Form Checkbox Selector */}
+        {/* Left Column: Form Settings */}
         <div className="space-y-6">
           
+          {/* PTW Type Selection */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><FileText className="w-5 h-5" /></div>
+              <h2 className="text-lg font-bold text-slate-800">Tipe PTW & Safety Checklist</h2>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Pilih tipe Permit to Work. Safety Checklist pada PDF akan otomatis menyesuaikan.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+              {PTW_TYPES.map(type => (
+                <label key={type.id} className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${ptwType === type.id ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'hover:bg-slate-50'}`}>
+                  <input type="radio" name="ptwType" value={type.id} checked={ptwType === type.id} onChange={(e) => setPtwType(e.target.value as PtwType)} className="text-indigo-600 focus:ring-indigo-500" />
+                  <span className="text-sm font-bold">{type.title.split('(')[0]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Hazard & APD */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-rose-50 text-rose-600 rounded-lg"><ShieldAlert className="w-5 h-5" /></div>
+              <h2 className="text-lg font-bold text-slate-800">Identifikasi Bahaya & APD</h2>
+            </div>
+            
+            <div className="mb-2">
+              <span className="text-sm font-bold text-slate-700">Sumber Bahaya (Pilih yang relevan)</span>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-6 max-h-40 overflow-y-auto p-2 border border-slate-100 rounded-xl bg-slate-50">
+              {HAZARD_SOURCES.map((hz, i) => (
+                <label key={i} className="flex items-center gap-2 text-xs bg-white border border-slate-200 px-2 py-1 rounded shadow-sm cursor-pointer hover:bg-slate-50">
+                  <input type="checkbox" checked={selectedHazards.includes(hz)} onChange={() => toggleHazard(hz)} className="rounded-sm" />
+                  <span>{hz}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="mb-2 flex items-center gap-2 mt-6">
+              <HardHat className="w-4 h-4 text-slate-500" />
+              <span className="text-sm font-bold text-slate-700">Alat Pelindung Diri (APD)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 border border-slate-100 rounded-xl bg-slate-50 p-4 max-h-60 overflow-y-auto">
+              {Object.entries(APD_ITEMS).map(([cat, items]) => (
+                <div key={cat} className="space-y-2">
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{cat}</div>
+                  {items.map(item => (
+                    <label key={item} className="flex items-center gap-2 text-xs">
+                       <input type="checkbox" checked={selectedApd[cat]?.includes(item)} onChange={() => toggleApd(cat, item)} className="rounded-sm" />
+                       <span>{item}</span>
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Pekerja Selector */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -153,7 +245,14 @@ export default function PTWCreatePage() {
           </div>
           <div className="flex-1 w-full bg-slate-500">
              <PDFViewer width="100%" height="100%" className="border-none">
-               <PtwPDF projectId={projectId} pekerja={selectedPekerjaData} peralatan={selectedPeralatanData} />
+               <PtwPDF 
+                 projectId={projectId} 
+                 ptwType={ptwType}
+                 hazards={selectedHazards}
+                 apd={selectedApd}
+                 pekerja={selectedPekerjaData} 
+                 peralatan={selectedPeralatanData} 
+               />
              </PDFViewer>
           </div>
         </div>

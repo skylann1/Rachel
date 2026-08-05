@@ -36,10 +36,10 @@ export async function saveJsa(projectId: string, jsaData: any) {
     const stepsToInsert = jsaData.steps.map((step: any, index: number) => ({
       jsa_id: jsaId,
       step_number: index + 1,
-      description: step.pekerjaan,
-      hazards: JSON.stringify(step.bahaya),
-      risks: JSON.stringify(step.risiko),
-      controls: JSON.stringify(step.mitigasi),
+      pekerjaan: step.pekerjaan,
+      bahaya: JSON.stringify(step.bahaya),
+      risiko: JSON.stringify(step.risiko),
+      tindakan: JSON.stringify(step.mitigasi),
     }));
 
     const { error: stepError } = await supabase.from('jsa_steps').insert(stepsToInsert);

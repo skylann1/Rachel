@@ -1,16 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, AlertTriangle, FileText, CheckCircle2, ShieldCheck, FileSignature } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, FileText, CheckCircle2, ShieldCheck, FileSignature, Loader2 } from 'lucide-react';
 import { PDFViewer } from '@react-pdf/renderer';
 import IncidentPDF from './IncidentPDF';
+import { getIncidentDetail, updateIncidentInvestigation } from '../actions';
 
 export default function IncidentInvestigationPage() {
   const params = useParams();
   const router = useRouter();
   const incidentId = typeof params.id === 'string' ? decodeURIComponent(params.id) : 'INC-2026-000';
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [incidentData, setIncidentData] = useState<any>(null);
 
   // State investigasi
   const [investigation, setInvestigation] = useState({
@@ -20,10 +25,52 @@ export default function IncidentInvestigationPage() {
     status: 'Menunggu Investigasi'
   });
 
-  const handleSimpan = () => {
-    setInvestigation(prev => ({ ...prev, status: 'Investigasi Selesai' }));
-    alert('Hasil investigasi berhasil disimpan dan Laporan Resmi K3 diterbitkan!');
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await getIncidentDetail(incidentId);
+        setIncidentData(data);
+        setInvestigation({
+          akarMasalah: data.rca_root_cause || '',
+          tindakanPerbaikan: data.rca_corrective || '',
+          tindakanPencegahan: data.rca_preventive || '',
+          status: data.status || 'Menunggu Investigasi'
+        });
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    load();
+  }, [incidentId]);
+
+  const handleSimpan = async () => {
+    setIsSaving(true);
+    try {
+      await updateIncidentInvestigation(incidentId, {
+        rca_root_cause: investigation.akarMasalah,
+        rca_corrective: investigation.tindakanPerbaikan,
+        rca_preventive: investigation.tindakanPencegahan,
+        status: 'Investigasi Selesai'
+      });
+      setInvestigation(prev => ({ ...prev, status: 'Investigasi Selesai' }));
+      alert('Hasil investigasi berhasil disimpan dan Laporan Resmi K3 diterbitkan!');
+    } catch (e) {
+      console.error(e);
+      alert('Gagal menyimpan hasil investigasi.');
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
+
+  if (!incidentData) {
+    return <div className="text-center p-12 text-slate-500">Data insiden tidak ditemukan.</div>;
+  }
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -32,7 +79,7 @@ export default function IncidentInvestigationPage() {
         <Link href="/dashboard/incident" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-primary transition-colors mb-4">
           <ArrowLeft className="w-4 h-4" /> Kembali ke Daftar Insiden
         </Link>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex gap-4 items-center">
             <div className="w-14 h-14 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
               <ShieldCheck className="w-7 h-7" />
@@ -43,8 +90,8 @@ export default function IncidentInvestigationPage() {
             </div>
           </div>
           {investigation.status !== 'Investigasi Selesai' && (
-            <button onClick={handleSimpan} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5" /> Terbitkan Laporan Akhir
+            <button onClick={handleSimpan} disabled={isSaving} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2 disabled:opacity-50">
+              {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />} Terbitkan Laporan Akhir
             </button>
           )}
         </div>
@@ -63,22 +110,30 @@ export default function IncidentInvestigationPage() {
             <div className="space-y-4 text-sm">
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-slate-500 font-medium">Vendor Pelapor</div>
-                <div className="col-span-2 font-bold text-slate-800">: PT. Vendor Konstruksi</div>
+                <div className="col-span-2 font-bold text-slate-800">: {incidentData.projects?.vendor_profiles?.company_name || 'Internal / Unknown'}</div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-slate-500 font-medium">Proyek Terkait</div>
+                <div className="col-span-2 font-bold text-slate-800">: {incidentData.projects?.name || '-'}</div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-slate-500 font-medium">Jenis Kejadian</div>
-                <div className="col-span-2 font-bold text-rose-600">: Near Miss</div>
+                <div className="col-span-2 font-bold text-rose-600">: {incidentData.type}</div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-slate-500 font-medium">Waktu & Lokasi</div>
-                <div className="col-span-2 font-bold text-slate-800">: 28 Juni 2026 10:15 WIB | Area Boiler 1</div>
+                <div className="col-span-2 font-bold text-slate-800">: {incidentData.incident_date} {incidentData.incident_time} | {incidentData.location}</div>
               </div>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mt-2">
                 <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Kronologi Awal</span>
-                <p className="text-slate-700 leading-relaxed">
-                  "Pekerja sedang berjalan di area Boiler 1 dan nyaris tertimpa pipa scaffolding yang tergelincir dari lantai 2. Tidak ada korban jiwa maupun luka, namun pekerja kaget dan pekerjaan langsung dihentikan."
-                </p>
+                <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{incidentData.chronology}</p>
               </div>
+              {incidentData.immediate_action && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mt-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Tindakan Langsung (Immediate Action)</span>
+                  <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{incidentData.immediate_action}</p>
+                </div>
+              )}
             </div>
           </div>
 
