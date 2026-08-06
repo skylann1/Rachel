@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+import { createNotification } from "@/app/dashboard/inbox/actions";
 
 export async function getInternalIncidents() {
   const supabase = await createClient();
@@ -57,9 +58,9 @@ export async function updateIncidentInvestigation(id: string, payload: {
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) throw new Error("Unauthorized");
-  
+
   const { error } = await supabase
     .from('incidents')
     .update({
@@ -69,6 +70,26 @@ export async function updateIncidentInvestigation(id: string, payload: {
     .eq('id', id);
 
   if (error) throw new Error(error.message);
+
+  if (payload.status === 'Investigasi Selesai') {
+    const { data: incident } = await supabase
+      .from('incidents')
+      .select('title, reported_by, projects ( name )')
+      .eq('id', id)
+      .single();
+
+    const proj: any = Array.isArray(incident?.projects) ? incident?.projects[0] : incident?.projects;
+    if (incident?.reported_by) {
+      await createNotification({
+        userId: incident.reported_by,
+        type: 'info',
+        title: 'Investigasi Insiden Selesai',
+        message: `Investigasi untuk laporan insiden "${incident.title}" pada proyek "${proj?.name || ''}" telah selesai.`,
+        link: `/vendor/dashboard/incident`,
+      });
+    }
+  }
+
   revalidatePath(`/dashboard/incident/${id}`);
   revalidatePath(`/dashboard/incident`);
 }

@@ -2,11 +2,19 @@ import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
 export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { jobStep } = await req.json();
 
     if (!jobStep || jobStep.trim() === '') {

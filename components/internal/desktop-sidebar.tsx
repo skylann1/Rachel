@@ -7,7 +7,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { logout } from "@/app/auth/login/actions";
 import { LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 
-export function DesktopSidebar({ user, permissions }: { user: any, permissions: any }) {
+export function DesktopSidebar({ user, permissions, roleLabel }: { user: any, permissions: any, roleLabel?: string }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
@@ -46,7 +46,7 @@ export function DesktopSidebar({ user, permissions }: { user: any, permissions: 
           {!isCollapsed && (
             <div className="overflow-hidden whitespace-nowrap">
               <p className="text-sm font-bold text-slate-800 truncate">{user?.email || 'admin@pgn.co.id'}</p>
-              <p className="text-xs text-slate-500 font-medium">HSE Manager</p>
+              <p className="text-xs text-slate-500 font-medium">{roleLabel || 'Pengguna'}</p>
             </div>
           )}
         </div>

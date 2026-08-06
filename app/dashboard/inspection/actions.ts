@@ -28,88 +28,11 @@ export async function getInspections() {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.warn("DB fetch failed, likely due to missing columns. Returning Dummy Data:", error.message);
-    
-    // Return Dummy Data for UI preview
-    return [
-      {
-        id: "dumm-y111-uuid-here",
-        title: "Pekerja tidak menggunakan full body harness saat bekerja di ketinggian 5 meter.",
-        finding_type: "Unsafe Act",
-        location: "Area Boiler 1 - Lantai 2",
-        priority: "High",
-        status: "Open",
-        image_url: "https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        is_project_activity: true,
-        vendor_profiles: { company_name: "PT. Maju Konstruksi" },
-        assigned_to: "dummy-user-1",
-        internal_profiles: { profiles: { full_name: "Budi Santoso (HSE)" } }
-      },
-      {
-        id: "dumm-y222-uuid-here",
-        title: "Kabel listrik terkelupas dan terendam genangan air di area fabrikasi.",
-        finding_type: "Unsafe Condition",
-        location: "Workshop Fabrikasi",
-        priority: "Critical",
-        status: "In Progress",
-        image_url: "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=500&q=80",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        is_project_activity: true,
-        vendor_profiles: { company_name: "CV. Elektro Mandiri" },
-        assigned_to: "dummy-user-2",
-        internal_profiles: { profiles: { full_name: "Andi Saputra" } }
-      },
-      {
-        id: "dumm-y333-uuid-here",
-        title: "Lantai pantri kantor licin karena tumpahan minyak goreng, tidak ada rambu peringatan.",
-        finding_type: "Unsafe Condition",
-        location: "Pantri Mess/Kantor",
-        priority: "Low",
-        status: "Closed",
-        image_url: "https://images.unsplash.com/photo-1584824486509-112e4181f1ce?w=500&q=80",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-        is_project_activity: false,
-        vendor_profiles: null,
-        assigned_to: null,
-        internal_profiles: null
-      }
-    ];
+    console.error("getInspections error:", error.message);
+    return [];
   }
 
-  // If real data exists, we can still prepend dummy data to show it off
-  const dummy = [
-      {
-        id: "dumm-y111-uuid-here",
-        title: "Pekerja tidak menggunakan full body harness saat bekerja di ketinggian 5 meter.",
-        finding_type: "Unsafe Act",
-        location: "Area Boiler 1 - Lantai 2",
-        priority: "High",
-        status: "Open",
-        image_url: "https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        is_project_activity: true,
-        vendor_profiles: { company_name: "PT. Maju Konstruksi" },
-        assigned_to: "dummy-user-1",
-        internal_profiles: { profiles: { full_name: "Budi Santoso (HSE)" } }
-      },
-      {
-        id: "dumm-y333-uuid-here",
-        title: "Lantai pantri licin karena tumpahan minyak goreng.",
-        finding_type: "Unsafe Condition",
-        location: "Pantri Mess/Kantor",
-        priority: "Low",
-        status: "Closed",
-        image_url: "https://images.unsplash.com/photo-1584824486509-112e4181f1ce?w=500&q=80",
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-        is_project_activity: false,
-        vendor_profiles: null,
-        assigned_to: null,
-        internal_profiles: null
-      }
-  ];
-
-  return [...dummy, ...data];
+  return data;
 }
 
 export async function createInspection(formData: FormData) {
@@ -241,43 +164,9 @@ export async function getInspectionLogs(inspectionId: string) {
     .order('created_at', { ascending: true });
 
   if (error) {
-    console.warn("Returning dummy logs:", error.message);
-    return [
-      {
-        id: 'log-1',
-        action: 'Laporan Temuan Baru Dibuat',
-        notes: 'Prioritas: High, Lokasi: Area Boiler 1',
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-        profiles: { full_name: 'Budi Santoso', role: 'Inspektur HSE' }
-      },
-      {
-        id: 'log-2',
-        action: 'Disposisi / Pendelegasian',
-        notes: 'Tolong lanjutkan investigasi karena pergantian shift.',
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        profiles: { full_name: 'Budi Santoso', role: 'Inspektur HSE' }
-      },
-      {
-        id: 'log-3',
-        action: 'Status Berubah: In Progress',
-        notes: 'Vendor sedang melakukan perbaikan di lokasi.',
-        created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        profiles: { full_name: 'Andi Saputra', role: 'Pengawas Lapangan' }
-      }
-    ];
-  }
-  
-  if (!data || data.length === 0) {
-     return [
-      {
-        id: 'log-dummy-1',
-        action: 'Laporan Temuan Baru Dibuat',
-        notes: 'Prioritas: High, Lokasi: Area Boiler 1',
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-        profiles: { full_name: 'Budi Santoso', role: 'Inspektur HSE' }
-      }
-     ];
+    console.error("getInspectionLogs error:", error.message);
+    return [];
   }
 
-  return data;
+  return data || [];
 }

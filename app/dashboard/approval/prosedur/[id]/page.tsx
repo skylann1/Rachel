@@ -15,7 +15,7 @@ export default async function ProsedurDetailPage(props: { params: Promise<{ id: 
     notFound();
   }
 
-  const userRole = profile?.role || 'admin';
+  const userRole = profile?.role || '';
 
   return (
     <ProsedurDetailClient 

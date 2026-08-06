@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
 import { getUserPermissions } from '@/utils/permissions';
 import AdminProjectClient from './AdminProjectClient';
+import { getJsaSignatories } from '@/lib/jsa-signatories';
 
 export default async function AdminProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,7 +19,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
     .select('role')
     .eq('id', user.id)
     .single();
-  const userRole = profile?.role || 'admin';
+  const userRole = profile?.role || '';
 
   // Fetch project + its JSA (including steps) + its PTW (including relations) + its procedure
   const { data: project, error } = await supabase
@@ -26,8 +27,8 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
     .select(`
       id, name, location, start_date, end_date, description, status,
       vendor_profiles ( company_name ),
-      jsa ( id, status, rejection_note, jsa_steps ( id, step_number, pekerjaan, bahaya, risiko, tindakan ) ),
-      ptw ( id, status, rejection_note, ptw_number, workers, equipment ),
+      jsa ( id, status, rejection_note, reviewer_id, reviewed_at, approver_id, approved_at, jsa_steps ( id, step_number, pekerjaan, bahaya, risiko, tindakan ) ),
+      ptw ( id, status, rejection_note, ptw_number, workers, equipment, ptw_type, hazards, apd ),
       procedures ( id, status, content )
     `)
     .eq('id', projectId)
@@ -46,12 +47,17 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
 
   if (!project) return notFound();
 
+  // Nama & jabatan penandatangan JSA untuk blok "Direview Oleh" / "Disetujui Oleh" pada form
+  const jsaRow = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
+  const jsaSignatories = await getJsaSignatories(supabase, jsaRow);
+
   return (
     <div className="p-8 pb-20 bg-slate-50 min-h-screen">
-      <AdminProjectClient 
-        project={project} 
-        userRole={userRole} 
-        currentUserId={user.id} 
+      <AdminProjectClient
+        project={project}
+        userRole={userRole}
+        currentUserId={user.id}
+        jsaSignatories={jsaSignatories}
       />
     </div>
   );

@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createNotification, notifyUsersByRole } from "@/app/dashboard/inbox/actions";
+import { JSA_STATUS } from "@/lib/jsa-status";
 
 // =====================================================================
 // FETCH FUNCTIONS
@@ -92,8 +93,8 @@ export async function getPendingJsa() {
     .from('jsa')
     .select(`
       id, status, created_at, rejection_note, project_id,
-      pm_id, pm_approved_at,
-      asset_manager_id, asset_manager_approved_at,
+      reviewer_id, reviewed_at,
+      approver_id, approved_at,
       projects ( name, vendor_profiles ( company_name ) )
     `)
     .order('created_at', { ascending: false });
@@ -132,10 +133,30 @@ export async function getPendingPtw() {
 // UPDATE FUNCTIONS
 // =====================================================================
 
+/**
+ * Every approve/reject action below re-derives the caller's role from
+ * `profiles` server-side and checks it against the record's *current*
+ * status. Never trust a role string passed in from the client — it's
+ * fully attacker-controlled since these are server actions callable
+ * directly over the wire.
+ */
+async function requireRole(supabase: any, userId: string, allowed: string[], errorMessage: string) {
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+  const role = profile?.role;
+  if (!role || (!allowed.includes(role) && role !== 'admin')) {
+    throw new Error(errorMessage);
+  }
+  return role;
+}
+
 export async function approveProcedure(procedureId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
+
+  const { data: current } = await supabase.from('procedures').select('status').eq('id', procedureId).single();
+  if (current?.status !== 'Menunggu Review PM') throw new Error("Prosedur tidak dalam tahap yang bisa disetujui.");
+  await requireRole(supabase, user.id, ['pm'], "Hanya PM yang dapat menyetujui Prosedur Kerja.");
 
   const { data: profile } = await supabase.from('internal_profiles').select('id').eq('id', user.id).single();
   const { error } = await supabase
@@ -161,10 +182,16 @@ export async function approveProcedure(procedureId: string) {
 
 export async function rejectProcedure(procedureId: string, note: string) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { data: currentCheck } = await supabase.from('procedures').select('status').eq('id', procedureId).single();
+  if (currentCheck?.status !== 'Menunggu Review PM') throw new Error("Prosedur tidak dalam tahap yang bisa ditolak.");
+  await requireRole(supabase, user.id, ['pm'], "Hanya PM yang dapat menolak Prosedur Kerja.");
 
   // Fetch current procedure to update its content JSON
   const { data: proc } = await supabase.from('procedures').select('content, project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
-  
+
   let updatedContent = proc?.content || {};
   let revisions = updatedContent.revisions || [];
   
@@ -200,36 +227,71 @@ export async function rejectProcedure(procedureId: string, note: string) {
   revalidatePath('/dashboard/approval');
 }
 
-export async function approveJsa(jsaId: string, role: string) {
+export async function approveJsa(jsaId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
+  const { data: current } = await supabase
+    .from('jsa')
+    .select('status, reviewer_id')
+    .eq('id', jsaId)
+    .single();
+
   let updatePayload: any = {};
   let nextStatus = '';
 
-  if (role === 'pm') {
-    updatePayload = { pm_id: user.id, pm_approved_at: new Date().toISOString(), status: 'Review Asset Manager' };
-    nextStatus = 'Review Asset Manager';
-  } else if (role === 'asset_manager') {
-    updatePayload = { asset_manager_id: user.id, asset_manager_approved_at: new Date().toISOString(), status: 'JSA Disetujui' };
-    nextStatus = 'JSA Disetujui';
+  if (current?.status === JSA_STATUS.reviewPgsol) {
+    // Tahap 1 — verifikasi teknis oleh Satker Pemberi Kerja (PGSOL).
+    await requireRole(supabase, user.id, ['pgsol_reviewer'], "Hanya Reviewer PGSOL yang dapat mereview JSA pada tahap ini.");
+    updatePayload = {
+      reviewer_id: user.id,
+      reviewed_at: new Date().toISOString(),
+      status: JSA_STATUS.approvalPgn,
+    };
+    nextStatus = JSA_STATUS.approvalPgn;
+  } else if (current?.status === JSA_STATUS.approvalPgn) {
+    // Tahap 2 — otorisasi formal oleh Satker Penanggung Jawab (PGN).
+    await requireRole(supabase, user.id, ['pgn_approver'], "Hanya Approver PGN yang dapat menyetujui JSA pada tahap ini.");
+    // Pemisahan wewenang: reviewer dan approver wajib dua orang berbeda.
+    if (current.reviewer_id && current.reviewer_id === user.id) {
+      throw new Error("JSA harus disetujui oleh orang yang berbeda dari yang melakukan review. Silakan minta Approver PGN lain untuk menyetujui.");
+    }
+    updatePayload = {
+      approver_id: user.id,
+      approved_at: new Date().toISOString(),
+      status: JSA_STATUS.approved,
+    };
+    nextStatus = JSA_STATUS.approved;
   } else {
-    throw new Error("Role tidak berwenang untuk menyetujui JSA.");
+    throw new Error("JSA tidak dalam tahap yang bisa disetujui.");
   }
 
   const { error } = await supabase.from('jsa').update(updatePayload).eq('id', jsaId);
   if (error) throw new Error(error.message);
 
-  // Notify vendor about JSA approval
   const { data: jsa } = await supabase.from('jsa').select('project_id, projects ( name, vendor_id )').eq('id', jsaId).single();
   const proj: any = Array.isArray(jsa?.projects) ? jsa?.projects[0] : jsa?.projects;
+
+  // Setelah review PGSOL selesai, giliran PGN yang harus bertindak.
+  if (nextStatus === JSA_STATUS.approvalPgn) {
+    await notifyUsersByRole({
+      role: 'pgn_approver',
+      type: 'action_required',
+      title: 'JSA Menunggu Persetujuan PGN',
+      message: `JSA untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu persetujuan Anda.`,
+      link: `/dashboard/projects/${jsa?.project_id}`,
+    });
+  }
+
   if (proj?.vendor_id) {
     await createNotification({
       userId: proj.vendor_id,
-      type: nextStatus === 'JSA Disetujui' ? 'approval' : 'info',
-      title: nextStatus === 'JSA Disetujui' ? `JSA Disetujui — Lanjut ke PTW` : `JSA: Tahap ${nextStatus}`,
-      message: `JSA untuk proyek "${proj.name}" telah ${nextStatus === 'JSA Disetujui' ? 'disetujui sepenuhnya' : 'memasuki tahap ' + nextStatus}.`,
+      type: nextStatus === JSA_STATUS.approved ? 'approval' : 'info',
+      title: nextStatus === JSA_STATUS.approved ? `JSA Disetujui — Lanjut ke PTW` : `JSA Telah Direview PGSOL`,
+      message: nextStatus === JSA_STATUS.approved
+        ? `JSA untuk proyek "${proj.name}" telah disetujui PGN. Anda dapat melanjutkan ke pengajuan PTW.`
+        : `JSA untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu persetujuan PGN.`,
       link: `/vendor/dashboard/projects/${jsa?.project_id}`,
     });
   }
@@ -238,9 +300,32 @@ export async function approveJsa(jsaId: string, role: string) {
 
 export async function rejectJsa(jsaId: string, note: string) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { data: current } = await supabase.from('jsa').select('status').eq('id', jsaId).single();
+  let penolak = '';
+  if (current?.status === JSA_STATUS.reviewPgsol) {
+    await requireRole(supabase, user.id, ['pgsol_reviewer'], "Hanya Reviewer PGSOL yang dapat menolak JSA pada tahap ini.");
+    penolak = 'PGSOL';
+  } else if (current?.status === JSA_STATUS.approvalPgn) {
+    await requireRole(supabase, user.id, ['pgn_approver'], "Hanya Approver PGN yang dapat menolak JSA pada tahap ini.");
+    penolak = 'PGN';
+  } else {
+    throw new Error("JSA tidak dalam tahap yang bisa ditolak.");
+  }
+
+  // Kembali ke awal: vendor harus memperbaiki, lalu direview ulang dari tahap PGSOL.
   const { error } = await supabase
     .from('jsa')
-    .update({ status: 'Pembahasan JSA', rejection_note: note, pm_id: null, pm_approved_at: null, asset_manager_id: null, asset_manager_approved_at: null })
+    .update({
+      status: JSA_STATUS.reviewPgsol,
+      rejection_note: note,
+      reviewer_id: null,
+      reviewed_at: null,
+      approver_id: null,
+      approved_at: null,
+    })
     .eq('id', jsaId);
   if (error) throw new Error(error.message);
 
@@ -251,33 +336,38 @@ export async function rejectJsa(jsaId: string, note: string) {
     await createNotification({
       userId: proj.vendor_id,
       type: 'warning',
-      title: `JSA Ditolak — Perlu Perbaikan`,
-      message: `JSA untuk proyek "${proj.name}" ditolak. Catatan: "${note}". Harap perbaiki dan ajukan ulang.`,
+      title: `JSA Ditolak ${penolak} — Perlu Perbaikan`,
+      message: `JSA untuk proyek "${proj.name}" ditolak oleh ${penolak}. Catatan: "${note}". Harap perbaiki dan ajukan ulang.`,
       link: `/vendor/dashboard/projects/${jsa?.project_id}`,
     });
   }
   revalidatePath('/dashboard/approval');
 }
 
-export async function approvePtw(ptwId: string, role: string) {
+export async function approvePtw(ptwId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
+  const { data: current } = await supabase.from('ptw').select('status').eq('id', ptwId).single();
+
   let updatePayload: any = {};
 
-  if (role === 'ptw_authority') {
+  if (current?.status === 'Menunggu Approval PM') {
+    await requireRole(supabase, user.id, ['ptw_authority'], "Hanya PTW Authority yang dapat menyetujui tahap ini.");
     updatePayload = { authority_id: user.id, authority_approved_at: new Date().toISOString(), status: 'Review PTW Issuer' };
-  } else if (role === 'ptw_issuer') {
+  } else if (current?.status === 'Review PTW Issuer') {
+    await requireRole(supabase, user.id, ['ptw_issuer'], "Hanya PTW Issuer yang dapat menyetujui tahap ini.");
     updatePayload = { issuer_id: user.id, issuer_approved_at: new Date().toISOString(), status: 'Menunggu Penomoran HSSE' };
-  } else if (role === 'hse') {
+  } else if (current?.status === 'Menunggu Penomoran HSSE') {
+    await requireRole(supabase, user.id, ['hse'], "Hanya HSE yang dapat menerbitkan nomor PTW.");
     // Generate PTW number: PTW-YYYY-XXX
     const year = new Date().getFullYear();
     const { count } = await supabase.from('ptw').select('*', { count: 'exact', head: true }).like('ptw_number', `PTW-${year}-%`);
     const nextNum = String((count || 0) + 1).padStart(3, '0');
     updatePayload = { hsse_id: user.id, ptw_number: `PTW-${year}-${nextNum}`, status: 'PTW Aktif' };
   } else {
-    throw new Error("Role tidak berwenang untuk menyetujui PTW.");
+    throw new Error("PTW tidak dalam tahap yang bisa disetujui.");
   }
 
   const { error } = await supabase.from('ptw').update(updatePayload).eq('id', ptwId);
@@ -330,6 +420,20 @@ export async function approvePtw(ptwId: string, role: string) {
 
 export async function rejectPtw(ptwId: string, note: string) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { data: current } = await supabase.from('ptw').select('status').eq('id', ptwId).single();
+  if (current?.status === 'Menunggu Approval PM') {
+    await requireRole(supabase, user.id, ['ptw_authority'], "Hanya PTW Authority yang dapat menolak tahap ini.");
+  } else if (current?.status === 'Review PTW Issuer') {
+    await requireRole(supabase, user.id, ['ptw_issuer'], "Hanya PTW Issuer yang dapat menolak tahap ini.");
+  } else if (current?.status === 'Menunggu Penomoran HSSE') {
+    await requireRole(supabase, user.id, ['hse'], "Hanya HSE yang dapat menolak tahap ini.");
+  } else {
+    throw new Error("PTW tidak dalam tahap yang bisa ditolak.");
+  }
+
   const { error } = await supabase
     .from('ptw')
     .update({ status: 'Draft', rejection_note: note, authority_id: null, authority_approved_at: null, issuer_id: null, issuer_approved_at: null })

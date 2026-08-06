@@ -2,26 +2,28 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { 
-  CheckCircle, 
-  FileSignature, 
-  ShieldAlert, 
+import {
+  CheckCircle,
+  FileSignature,
+  ShieldAlert,
   AlertTriangle,
-  Clock,
   ArrowRight,
   ClipboardList,
-  FolderOpen,
   Search,
-  Filter,
-  BarChart3,
   Timer,
   UserPlus,
   X,
   Loader2,
-  Eye
+  Eye,
+  ArrowUpDown,
+  Square,
+  CheckSquare,
+  ExternalLink,
+  Users,
+  Inbox,
+  Flame
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { TaskItem, delegateMonitoringTask } from './actions';
+import { TaskItem, TaskType, delegateMonitoringTask } from './actions';
 
 interface MyTaskClientProps {
   tasks: TaskItem[];
@@ -29,53 +31,89 @@ interface MyTaskClientProps {
   internalUsers?: any[];
 }
 
-const COLORS = {
-  Prosedur: '#4f46e5', // indigo
-  JSA: '#d97706',      // amber
-  PTW: '#059669',      // emerald
-  Insiden: '#e11d48',  // rose
-  Pengawasan: '#0ea5e9' // sky blue
+type SortMode = 'urgency' | 'oldest' | 'name';
+
+const TASK_TYPES: TaskType[] = ['Prosedur', 'JSA', 'PTW', 'Insiden', 'Pengawasan'];
+
+const TYPE_META: Record<TaskType, { color: string; icon: React.ElementType; soft: string; ink: string }> = {
+  Prosedur:   { color: '#4f46e5', icon: FileSignature,  soft: 'bg-indigo-50',  ink: 'text-indigo-600' },
+  JSA:        { color: '#d97706', icon: ClipboardList,  soft: 'bg-amber-50',   ink: 'text-amber-600' },
+  PTW:        { color: '#059669', icon: CheckCircle,    soft: 'bg-emerald-50', ink: 'text-emerald-600' },
+  Insiden:    { color: '#e11d48', icon: AlertTriangle,  soft: 'bg-rose-50',    ink: 'text-rose-600' },
+  Pengawasan: { color: '#0ea5e9', icon: Eye,            soft: 'bg-sky-50',     ink: 'text-sky-600' },
 };
+
+const URGENCY_META = {
+  High:   { rank: 0, label: 'Urgent',    bar: '#e11d48', chip: 'bg-rose-100 text-rose-700 border-rose-200',     dot: 'bg-rose-500' },
+  Medium: { rank: 1, label: 'Perhatian', bar: '#d97706', chip: 'bg-amber-100 text-amber-700 border-amber-200',  dot: 'bg-amber-500' },
+  Low:    { rank: 2, label: 'Normal',    bar: '#94a3b8', chip: 'bg-slate-100 text-slate-600 border-slate-200',  dot: 'bg-slate-400' },
+} as const;
+
+const urgencyOf = (u: string) => URGENCY_META[u as keyof typeof URGENCY_META] ?? URGENCY_META.Low;
+const taskKey = (t: TaskItem) => `${t.type}-${t.id}`;
 
 export default function MyTaskClient({ tasks: initialTasks, userRole, internalUsers = [] }: MyTaskClientProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('All');
-  
-  // Disposisi Modal State
+  const [sortMode, setSortMode] = useState<SortMode>('urgency');
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+
+  // Disposisi Modal State — handles both single-task and bulk disposisi
   const [isDisposisiModalOpen, setIsDisposisiModalOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
+  const [disposisiTargets, setDisposisiTargets] = useState<TaskItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Filter tasks based on search and category filter
   const filteredTasks = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return tasks.filter(task => {
-      const matchesSearch = task.projectName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            task.vendorName.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch =
+        task.projectName.toLowerCase().includes(q) ||
+        task.title.toLowerCase().includes(q) ||
+        task.vendorName.toLowerCase().includes(q);
       const matchesFilter = activeFilter === 'All' || task.type === activeFilter;
       return matchesSearch && matchesFilter;
     });
   }, [tasks, searchQuery, activeFilter]);
 
-  // Group filtered tasks by project name
+  const sortTasks = (list: TaskItem[]) => {
+    const copy = [...list];
+    if (sortMode === 'urgency') {
+      copy.sort((a, b) => urgencyOf(a.urgency).rank - urgencyOf(b.urgency).rank || new Date(a.date).getTime() - new Date(b.date).getTime());
+    } else if (sortMode === 'oldest') {
+      copy.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    } else {
+      copy.sort((a, b) => a.type.localeCompare(b.type));
+    }
+    return copy;
+  };
+
   const projectsWithTasks = useMemo(() => {
     const grouped: Record<string, TaskItem[]> = {};
     filteredTasks.forEach(task => {
-      if (!grouped[task.projectName]) {
-        grouped[task.projectName] = [];
-      }
+      if (!grouped[task.projectName]) grouped[task.projectName] = [];
       grouped[task.projectName].push(task);
     });
+    Object.keys(grouped).forEach(name => { grouped[name] = sortTasks(grouped[name]); });
     return grouped;
-  }, [filteredTasks]);
+  }, [filteredTasks, sortMode]);
 
-  const projectNames = Object.keys(projectsWithTasks);
+  const projectNames = useMemo(() => {
+    const names = Object.keys(projectsWithTasks);
+    if (sortMode === 'name') return names.sort((a, b) => a.localeCompare(b));
+    return names.sort((a, b) => {
+      const at = projectsWithTasks[a], bt = projectsWithTasks[b];
+      if (sortMode === 'oldest') return new Date(at[0].date).getTime() - new Date(bt[0].date).getTime();
+      const aRank = Math.min(...at.map(t => urgencyOf(t.urgency).rank));
+      const bRank = Math.min(...bt.map(t => urgencyOf(t.urgency).rank));
+      return aRank - bRank || new Date(at[0].date).getTime() - new Date(bt[0].date).getTime();
+    });
+  }, [projectsWithTasks, sortMode]);
+
   const [selectedProject, setSelectedProject] = useState<string | null>(
     projectNames.length > 0 ? projectNames[0] : null
   );
 
-  // Auto-select first project if current selection disappears due to filtering
   React.useEffect(() => {
     if (selectedProject && !projectNames.includes(selectedProject) && projectNames.length > 0) {
       setSelectedProject(projectNames[0]);
@@ -84,62 +122,69 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
     }
   }, [projectNames, selectedProject]);
 
-  // Chart Data preparation
-  const chartData = useMemo(() => {
-    const counts = { Prosedur: 0, JSA: 0, PTW: 0, Insiden: 0, Pengawasan: 0 };
-    tasks.forEach(t => counts[t.type as keyof typeof counts]++);
-    return Object.entries(counts)
-      .filter(([_, value]) => value > 0)
-      .map(([name, value]) => ({ name, value }));
+  const typeCounts = useMemo(() => {
+    const counts: Record<TaskType, number> = { Prosedur: 0, JSA: 0, PTW: 0, Insiden: 0, Pengawasan: 0 };
+    tasks.forEach(t => counts[t.type]++);
+    return counts;
   }, [tasks]);
 
-  const getTaskIcon = (type: string) => {
-    switch (type) {
-      case 'Prosedur': return <FileSignature className="w-5 h-5 text-indigo-600" />;
-      case 'JSA': return <ClipboardList className="w-5 h-5 text-amber-600" />;
-      case 'PTW': return <CheckCircle className="w-5 h-5 text-emerald-600" />;
-      case 'Insiden': return <AlertTriangle className="w-5 h-5 text-rose-600" />;
-      case 'Pengawasan': return <Eye className="w-5 h-5 text-sky-600" />;
-      default: return <Clock className="w-5 h-5 text-slate-600" />;
-    }
+  const urgencyCounts = useMemo(() => {
+    const counts = { High: 0, Medium: 0, Low: 0 };
+    tasks.forEach(t => { counts[t.urgency as keyof typeof counts]++; });
+    return counts;
+  }, [tasks]);
+
+  const selectedTasks = useMemo(
+    () => filteredTasks.filter(t => selectedKeys.has(taskKey(t))),
+    [filteredTasks, selectedKeys]
+  );
+  const allSelectedArePengawasan = selectedTasks.length > 0 && selectedTasks.every(t => t.type === 'Pengawasan');
+
+  const toggleSelect = (task: TaskItem) => {
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      const key = taskKey(task);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedKeys(new Set());
+
+  const openDisposisiFor = (targets: TaskItem[]) => {
+    setDisposisiTargets(targets);
+    setIsDisposisiModalOpen(true);
   };
 
-  const getTaskColor = (type: string) => {
-    switch (type) {
-      case 'Prosedur': return 'bg-indigo-50 border-indigo-100';
-      case 'JSA': return 'bg-amber-50 border-amber-100';
-      case 'PTW': return 'bg-emerald-50 border-emerald-100';
-      case 'Insiden': return 'bg-rose-50 border-rose-100';
-      case 'Pengawasan': return 'bg-sky-50 border-sky-100';
-      default: return 'bg-slate-50 border-slate-100';
-    }
-  };
-
-  const getUrgencyBadge = (urgency: string) => {
-    if (urgency === 'High') return <span className="bg-rose-100 text-rose-700 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border border-rose-200">Urgent</span>;
-    if (urgency === 'Medium') return <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border border-amber-200">Perhatian</span>;
-    return <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border border-slate-200">Normal</span>;
+  const handleOpenSelectedInTabs = () => {
+    selectedTasks.forEach(t => window.open(t.url, '_blank'));
+    clearSelection();
   };
 
   const handleDisposisi = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedTask) return;
+    if (disposisiTargets.length === 0) return;
     setIsSubmitting(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const assigneeId = formData.get('assignee') as string;
     const notes = formData.get('notes') as string;
 
     try {
-      if (selectedTask.id.includes('dummy')) {
-         alert('Ini adalah dummy data. Disposisi berhasil di-simulasikan!');
-      } else {
-         await delegateMonitoringTask(selectedTask.id, assigneeId, notes);
-         alert('Berhasil mendisposisikan pengawasan lapangan!');
-      }
-      
-      // Remove the task from the list since it's no longer ours
-      setTasks(prev => prev.filter(t => t.id !== selectedTask.id));
+      const realTargets = disposisiTargets.filter(t => !t.id.includes('dummy'));
+      const hadDummy = realTargets.length !== disposisiTargets.length;
+
+      await Promise.all(realTargets.map(t => delegateMonitoringTask(t.id, assigneeId, notes)));
+
+      if (hadDummy) alert('Sebagian data adalah dummy data — disposisi untuk data tersebut disimulasikan.');
+      alert(disposisiTargets.length > 1 ? `Berhasil mendisposisikan ${disposisiTargets.length} tugas pengawasan!` : 'Berhasil mendisposisikan pengawasan lapangan!');
+
+      const targetKeys = new Set(disposisiTargets.map(taskKey));
+      setTasks(prev => prev.filter(t => !targetKeys.has(taskKey(t))));
+      setSelectedKeys(prev => {
+        const next = new Set(prev);
+        targetKeys.forEach(k => next.delete(k));
+        return next;
+      });
       setIsDisposisiModalOpen(false);
     } catch (err) {
       console.error(err);
@@ -149,144 +194,197 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
     }
   };
 
+  const totalTasks = tasks.length;
+  const urgentPct = totalTasks > 0 ? Math.round((urgencyCounts.High / totalTasks) * 100) : 0;
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12 flex flex-col h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
-      {/* Header & Main Stats Row */}
-      <div className="flex flex-col lg:flex-row gap-6 justify-between items-start">
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
-            <CheckCircle className="w-8 h-8 text-primary" /> My Task Overview
-          </h1>
-          <p className="text-sm text-slate-500 mt-2 max-w-2xl">
-            Sistem merangkum seluruh dokumen K3 dan pelaporan yang membutuhkan otorisasi atau tinjauan lanjutan dari Anda.
-          </p>
-          <div className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 bg-primary/10 text-primary text-xs font-bold rounded-full border border-primary/20">
-            <ShieldAlert className="w-3.5 h-3.5" />
-            Role Aktif: <span className="uppercase">{userRole}</span>
+    <div className="max-w-7xl mx-auto pb-28 space-y-5">
+
+      {/* ── Command Header ─────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 text-white p-6 md:p-8 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-primary/20 blur-3xl" />
+        <div className="pointer-events-none absolute right-40 -bottom-24 h-56 w-56 rounded-full bg-sky-400/10 blur-3xl" />
+
+        <div className="relative flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/10 backdrop-blur text-white/80 text-[10px] font-bold rounded-full border border-white/15 uppercase tracking-widest">
+              <ShieldAlert className="w-3 h-3" /> {userRole}
+            </div>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight mt-3">Antrean Tugas Saya</h1>
+            <p className="text-sm text-slate-400 mt-2 max-w-lg leading-relaxed">
+              Seluruh dokumen K3 dan pelaporan yang membutuhkan otorisasi atau tinjauan lanjutan dari Anda.
+            </p>
+          </div>
+
+          {/* Workload summary */}
+          <div className="shrink-0 w-full lg:w-auto">
+            <div className="flex items-end gap-3 mb-3">
+              <span className="text-6xl font-black leading-none tabular-nums">{totalTasks}</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider pb-2">Tugas<br />Menunggu</span>
+            </div>
+
+            {totalTasks > 0 && (
+              <>
+                <div className="flex h-1.5 w-full lg:w-72 rounded-full overflow-hidden gap-[2px] mb-3">
+                  {(['High', 'Medium', 'Low'] as const).map(u =>
+                    urgencyCounts[u] > 0 && (
+                      <div
+                        key={u}
+                        style={{ backgroundColor: URGENCY_META[u].bar, flexGrow: urgencyCounts[u] }}
+                        title={`${URGENCY_META[u].label}: ${urgencyCounts[u]}`}
+                      />
+                    )
+                  )}
+                </div>
+                <div className="flex items-center gap-4 text-[11px] font-bold">
+                  {(['High', 'Medium', 'Low'] as const).map(u => (
+                    <span key={u} className="flex items-center gap-1.5 text-slate-300">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: URGENCY_META[u].bar }} />
+                      {URGENCY_META[u].label} <span className="text-white tabular-nums">{urgencyCounts[u]}</span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Chart Summary */}
-        {tasks.length > 0 && (
-          <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center gap-6 shrink-0 w-full lg:w-auto">
-            <div className="h-24 w-24 shrink-0 relative">
-               <ResponsiveContainer width="100%" height="100%">
-                 <PieChart>
-                   <Pie
-                     data={chartData}
-                     cx="50%"
-                     cy="50%"
-                     innerRadius={25}
-                     outerRadius={40}
-                     paddingAngle={5}
-                     dataKey="value"
-                     stroke="none"
-                   >
-                     {chartData.map((entry, index) => (
-                       <Cell key={`cell-${index}`} fill={COLORS[entry.name as keyof typeof COLORS]} />
-                     ))}
-                   </Pie>
-                   <Tooltip formatter={(value) => [`${value} Tugas`, 'Jumlah']} />
-                 </PieChart>
-               </ResponsiveContainer>
-               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                 <span className="text-lg font-black text-slate-700">{tasks.length}</span>
-               </div>
-            </div>
-            <div className="flex flex-col gap-2">
-               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Komposisi Tugas</h3>
-               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                 {chartData.map(d => (
-                   <div key={d.name} className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[d.name as keyof typeof COLORS] }}></span>
-                     {d.name} ({d.value})
-                   </div>
-                 ))}
-               </div>
-            </div>
+        {urgencyCounts.High > 0 && (
+          <div className="relative mt-6 pt-5 border-t border-white/10 flex items-center gap-2.5 text-sm">
+            <Flame className="w-4 h-4 text-rose-400 shrink-0" />
+            <span className="text-slate-300">
+              <span className="font-bold text-white">{urgencyCounts.High} tugas</span> sudah lebih dari 2 hari dalam antrean
+              <span className="text-slate-500"> — {urgentPct}% dari beban kerja Anda.</span>
+            </span>
           </div>
         )}
       </div>
 
-      {/* Filters & Search */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between z-10 sticky top-20">
-        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar">
-          <Filter className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-          {['All', 'PTW', 'JSA', 'Prosedur', 'Pengawasan', 'Insiden'].map((filter) => (
+      {/* ── Type filter strip ──────────────────────────────────────── */}
+      <div className="flex gap-2.5 overflow-x-auto hide-scrollbar pb-1 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '60ms' }}>
+        <button
+          onClick={() => setActiveFilter('All')}
+          className={`shrink-0 px-4 py-3 rounded-2xl border-2 transition-all text-left min-w-[104px] ${
+            activeFilter === 'All' ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-800'
+          }`}
+        >
+          <p className={`text-[10px] font-bold uppercase tracking-wider ${activeFilter === 'All' ? 'text-slate-400' : 'text-slate-500'}`}>Semua</p>
+          <p className="text-2xl font-black tabular-nums leading-tight">{totalTasks}</p>
+        </button>
+
+        {TASK_TYPES.map(type => {
+          const meta = TYPE_META[type];
+          const Icon = meta.icon;
+          const active = activeFilter === type;
+          return (
             <button
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-                activeFilter === filter 
-                  ? 'bg-slate-800 text-white shadow-md' 
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              key={type}
+              onClick={() => setActiveFilter(active ? 'All' : type)}
+              className={`group shrink-0 px-4 py-3 rounded-2xl border-2 transition-all text-left min-w-[124px] ${
+                active ? 'bg-white shadow-lg' : 'bg-white border-slate-200 hover:border-slate-300'
               }`}
+              style={active ? { borderColor: meta.color } : undefined}
             >
-              {filter === 'All' ? 'Semua Tugas' : filter}
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: meta.color }} />
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">{type}</p>
+              </div>
+              <p className="text-2xl font-black text-slate-800 tabular-nums leading-tight">{typeCounts[type]}</p>
             </button>
-          ))}
-        </div>
-        
-        <div className="relative w-full md:w-64 shrink-0">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input 
-            type="text" 
-            placeholder="Cari proyek atau vendor..." 
+          );
+        })}
+      </div>
+
+      {/* ── Toolbar ────────────────────────────────────────────────── */}
+      <div className="sticky top-20 z-20 bg-white/80 backdrop-blur-md border border-slate-200 rounded-2xl p-2.5 shadow-sm flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Cari proyek, dokumen, atau vendor..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
           />
+        </div>
+        <div className="relative flex items-center shrink-0">
+          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 pointer-events-none" />
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            className="w-full sm:w-auto pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
+          >
+            <option value="urgency">Urgensi Tertinggi</option>
+            <option value="oldest">Antrean Terlama</option>
+            <option value="name">Nama Proyek</option>
+          </select>
         </div>
       </div>
 
       {filteredTasks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-16 bg-white border-2 border-dashed border-slate-200 rounded-3xl animate-in fade-in duration-700">
-          <CheckCircle className="w-16 h-16 text-emerald-400 mb-4" />
-          <h3 className="text-xl font-bold text-slate-700">Tidak Ada Tugas Ditemukan</h3>
-          <p className="text-slate-500 text-sm mt-2 text-center max-w-md">
-            Mungkin sudah diselesaikan semua, atau gunakan filter pencarian yang berbeda untuk menemukan apa yang Anda cari.
+        <div className="flex flex-col items-center justify-center py-24 bg-white border-2 border-dashed border-slate-200 rounded-3xl animate-in fade-in duration-700">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4">
+            <CheckCircle className="w-8 h-8 text-emerald-500" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-700">Antrean Anda Bersih</h3>
+          <p className="text-slate-500 text-sm mt-2 text-center max-w-sm">
+            Tidak ada tugas yang cocok. Semua mungkin sudah diselesaikan, atau coba ubah filter pencarian Anda.
           </p>
         </div>
       ) : (
-        <div className="flex flex-col lg:flex-row gap-6 items-start animate-in slide-in-from-bottom-8 duration-700">
-          
-          {/* Left Column: Project List */}
-          <div className="w-full lg:w-[35%] flex flex-col gap-3 sticky top-40">
-            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Antrean Proyek ({projectNames.length})</h2>
-            <div className="flex flex-col gap-3">
+        <div className="flex flex-col lg:flex-row gap-5 items-start">
+
+          {/* ── Project rail ─────────────────────────────────────── */}
+          <div className="w-full lg:w-[320px] xl:w-[360px] shrink-0 lg:sticky lg:top-40 flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1 mb-1">
+              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Proyek</h2>
+              <span className="text-[10px] font-black text-slate-400 tabular-nums">{projectNames.length}</span>
+            </div>
+
+            <div className="flex flex-col gap-2 lg:max-h-[calc(100vh-16rem)] lg:overflow-y-auto lg:pr-1 hide-scrollbar">
               {projectNames.map((projectName) => {
                 const projectTasks = projectsWithTasks[projectName];
                 const isSelected = selectedProject === projectName;
-                
+                const topUrgency = projectTasks.reduce(
+                  (acc, t) => (urgencyOf(t.urgency).rank < urgencyOf(acc).rank ? t.urgency : acc),
+                  'Low' as string
+                );
+                const dist = TASK_TYPES
+                  .map(t => ({ type: t, n: projectTasks.filter(x => x.type === t).length }))
+                  .filter(d => d.n > 0);
+
                 return (
                   <button
                     key={projectName}
                     onClick={() => setSelectedProject(projectName)}
-                    className={`w-full text-left p-4 rounded-2xl flex flex-col gap-2 transition-all border-2 ${
-                      isSelected 
-                        ? 'bg-white border-primary shadow-md shadow-primary/10 ring-4 ring-primary/5' 
-                        : 'bg-white/60 border-slate-200 hover:border-slate-300 hover:bg-white'
+                    className={`group relative w-full text-left rounded-2xl overflow-hidden transition-all border ${
+                      isSelected
+                        ? 'bg-white border-slate-300 shadow-md'
+                        : 'bg-white/60 border-slate-200 hover:bg-white hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex items-start justify-between w-full">
-                      <div className="flex items-center gap-2 text-slate-800 font-bold">
-                        <FolderOpen className={`w-5 h-5 ${isSelected ? 'text-primary' : 'text-slate-400'}`} />
-                        <span className="line-clamp-2 leading-tight">{projectName}</span>
+                    <span
+                      className="absolute left-0 top-0 bottom-0 w-1 transition-all"
+                      style={{ backgroundColor: urgencyOf(topUrgency).bar, opacity: isSelected ? 1 : 0.35 }}
+                    />
+                    <div className="pl-4 pr-3 py-3">
+                      <div className="flex items-start justify-between gap-2 mb-2.5">
+                        <span className={`text-sm font-bold leading-snug line-clamp-2 ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>
+                          {projectName}
+                        </span>
+                        <span className={`shrink-0 text-[11px] font-black tabular-nums px-1.5 py-0.5 rounded-md ${
+                          isSelected ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {projectTasks.length}
+                        </span>
                       </div>
-                      <span className="bg-rose-100 text-rose-600 text-xs font-black px-2 py-0.5 rounded-full shrink-0">
-                        {projectTasks.length}
-                      </span>
-                    </div>
-                    
-                    {/* Tiny preview of what tasks are inside */}
-                    <div className="flex items-center gap-1 mt-2">
-                       {projectTasks.slice(0,4).map((t, i) => (
-                         <div key={i} className="w-5 h-5 rounded-full border border-white flex items-center justify-center bg-slate-100 shrink-0" title={t.type}>
-                           <span className="scale-[0.6]">{getTaskIcon(t.type)}</span>
-                         </div>
-                       ))}
-                       {projectTasks.length > 4 && <span className="text-[10px] text-slate-400 font-bold ml-1">+{projectTasks.length - 4}</span>}
+
+                      {/* type distribution */}
+                      <div className="flex h-1 rounded-full overflow-hidden gap-[2px]">
+                        {dist.map(d => (
+                          <div key={d.type} style={{ backgroundColor: TYPE_META[d.type].color, flexGrow: d.n }} title={`${d.type}: ${d.n}`} />
+                        ))}
+                      </div>
                     </div>
                   </button>
                 );
@@ -294,101 +392,161 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
             </div>
           </div>
 
-          {/* Right Column: Task Details */}
-          <div className="w-full lg:w-[65%]">
-             <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 px-2">Rincian Dokumen & Tindakan</h2>
-             
-             {selectedProject && projectsWithTasks[selectedProject] && (
-               <div className="space-y-4 relative">
-                 {/* Timeline Line indicator */}
-                 <div className="absolute left-6 top-6 bottom-6 w-0.5 bg-slate-200 -z-10 rounded-full hidden md:block"></div>
-                 
-                 {projectsWithTasks[selectedProject].map((task) => (
-                   <div 
-                     key={`${task.id}-${task.type}`} 
-                     className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 flex flex-col md:flex-row gap-5 hover:shadow-lg hover:shadow-slate-200/50 transition-all relative overflow-hidden group"
-                   >
-                     {/* Left Icon Area */}
-                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border ${getTaskColor(task.type)} relative bg-white`}>
-                       {getTaskIcon(task.type)}
-                     </div>
-                     
-                     {/* Main Content Area */}
-                     <div className="flex-1 flex flex-col">
-                       {/* Top Metadata */}
-                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                         <div className="flex items-center gap-2">
-                           <span className="text-xs font-black px-2 py-1 bg-slate-100 text-slate-600 rounded-md uppercase tracking-wider">
-                             {task.type}
-                           </span>
-                           {getUrgencyBadge(task.urgency)}
-                         </div>
-                         <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400">
-                           <Timer className="w-3.5 h-3.5" />
-                           Antrean: {task.timeInQueue}
-                         </div>
-                       </div>
-                       
-                       {/* Title & Desc */}
-                       <h3 className="font-extrabold text-slate-800 text-lg md:text-xl mb-1">{task.title}</h3>
-                       <p className="text-sm font-medium text-slate-500 mb-4">
-                         Dikirim oleh vendor <span className="font-bold text-primary">{task.vendorName}</span> pada {new Date(task.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                       </p>
-                       
-                       {/* Action Footer */}
-                       <div className="mt-auto pt-4 flex flex-col sm:flex-row sm:items-center justify-between border-t border-slate-100 gap-4">
-                         <div className="flex flex-col">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Status Saat Ini</span>
-                            <span className={`text-sm font-bold flex items-center gap-1.5 ${task.type === 'Pengawasan' ? 'text-sky-600' : 'text-amber-600'}`}>
-                              <span className={`w-2 h-2 rounded-full animate-pulse ${task.type === 'Pengawasan' ? 'bg-sky-500' : 'bg-amber-500'}`}></span>
-                              {task.status}
+          {/* ── Task detail column ───────────────────────────────── */}
+          <div className="w-full min-w-0 flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1 mb-1">
+              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">
+                {selectedProject ?? 'Rincian Tugas'}
+              </h2>
+              {selectedProject && (
+                <span className="text-[10px] font-black text-slate-400 tabular-nums shrink-0">
+                  {projectsWithTasks[selectedProject]?.length ?? 0} dokumen
+                </span>
+              )}
+            </div>
+
+            {selectedProject && projectsWithTasks[selectedProject] && (
+              <div className="flex flex-col gap-2.5">
+                {projectsWithTasks[selectedProject].map((task) => {
+                  const key = taskKey(task);
+                  const isChecked = selectedKeys.has(key);
+                  const meta = TYPE_META[task.type];
+                  const Icon = meta.icon;
+                  const urg = urgencyOf(task.urgency);
+
+                  return (
+                    <div
+                      key={key}
+                      className={`group relative bg-white rounded-2xl overflow-hidden border transition-all hover:shadow-lg hover:shadow-slate-200/60 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                        isChecked ? 'border-primary ring-2 ring-primary/10' : 'border-slate-200'
+                      }`}
+                    >
+                      <span className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: urg.bar }} />
+
+                      <div className="pl-5 pr-4 py-4 flex gap-3.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelect(task)}
+                          className="shrink-0 h-fit mt-0.5 text-slate-300 hover:text-primary transition-colors"
+                          aria-label="Pilih tugas"
+                        >
+                          {isChecked ? <CheckSquare className="w-[18px] h-[18px] text-primary" /> : <Square className="w-[18px] h-[18px]" />}
+                        </button>
+
+                        <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${meta.soft}`}>
+                          <Icon className="w-[18px] h-[18px]" style={{ color: meta.color }} />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{task.type}</span>
+                            <span className="text-slate-300">·</span>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${urg.chip}`}>
+                              {urg.label}
                             </span>
-                         </div>
-                         
-                         <div className="flex gap-2 w-full sm:w-auto">
-                            {task.type === 'Pengawasan' && (
-                               <button 
-                                 onClick={() => {
-                                    setSelectedTask(task);
-                                    setIsDisposisiModalOpen(true);
-                                 }}
-                                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 px-4 py-2.5 rounded-xl transition-all"
-                               >
-                                 <UserPlus className="w-4 h-4" /> Disposisi
-                               </button>
-                            )}
-                            <Link 
-                              href={task.url}
-                              className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-sm font-bold text-white bg-slate-900 hover:bg-primary px-6 py-2.5 rounded-xl transition-all shadow-md hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0"
-                            >
-                              {task.type === 'Pengawasan' ? 'Buka Proyek' : 'Eksekusi Tugas'} <ArrowRight className="w-4 h-4" />
-                            </Link>
-                         </div>
-                       </div>
-                     </div>
-                   </div>
-                 ))}
-               </div>
-             )}
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 ml-auto shrink-0">
+                              <Timer className="w-3 h-3" /> {task.timeInQueue}
+                            </span>
+                          </div>
+
+                          <h3 className="font-bold text-slate-900 text-base leading-snug mb-1">{task.title}</h3>
+
+                          <p className="text-xs text-slate-500 mb-3">
+                            <span className="font-semibold text-slate-600">{task.vendorName}</span>
+                            {' · '}
+                            {new Date(task.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </p>
+
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                            <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600 min-w-0">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${urg.dot} animate-pulse`} />
+                              <span className="truncate">{task.status}</span>
+                            </span>
+
+                            <div className="flex gap-2 shrink-0">
+                              {task.type === 'Pengawasan' && (
+                                <button
+                                  onClick={() => openDisposisiFor([task])}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 px-3 py-2 rounded-lg transition-all"
+                                >
+                                  <UserPlus className="w-3.5 h-3.5" /> Disposisi
+                                </button>
+                              )}
+                              <Link
+                                href={task.url}
+                                className="flex items-center gap-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-primary px-4 py-2 rounded-lg transition-all shadow-sm hover:shadow-md hover:shadow-primary/25"
+                              >
+                                {task.type === 'Pengawasan' ? 'Buka Proyek' : 'Eksekusi'}
+                                <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Modal Disposisi Pengawasan */}
-      {isDisposisiModalOpen && selectedTask && (
+      {/* ── Floating bulk action bar ───────────────────────────────── */}
+      {selectedTasks.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white rounded-2xl shadow-2xl shadow-slate-900/30 px-4 py-3 flex items-center gap-3 animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <span className="flex items-center gap-2 text-sm font-bold whitespace-nowrap">
+            <Inbox className="w-4 h-4 text-slate-400" />
+            {selectedTasks.length} dipilih
+          </span>
+          <div className="h-5 w-px bg-white/15" />
+          {allSelectedArePengawasan ? (
+            <button
+              onClick={() => openDisposisiFor(selectedTasks)}
+              className="flex items-center gap-1.5 text-sm font-bold bg-sky-600 hover:bg-sky-500 px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <Users className="w-4 h-4" /> Disposisi Massal
+            </button>
+          ) : (
+            <button
+              onClick={handleOpenSelectedInTabs}
+              className="flex items-center gap-1.5 text-sm font-bold bg-primary hover:bg-primary/90 px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <ExternalLink className="w-4 h-4" /> Buka Semua
+            </button>
+          )}
+          <button onClick={clearSelection} className="text-slate-400 hover:text-white transition-colors" aria-label="Batal pilih">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* ── Disposisi modal ────────────────────────────────────────── */}
+      {isDisposisiModalOpen && disposisiTargets.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <form onSubmit={handleDisposisi} className="bg-white rounded-2xl w-full max-w-md flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><UserPlus className="w-5 h-5 text-sky-600" /> Disposisi Pengawasan</h2>
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-sky-600" />
+                {disposisiTargets.length > 1 ? `Disposisi Massal (${disposisiTargets.length} Proyek)` : 'Disposisi Pengawasan'}
+              </h2>
               <button type="button" onClick={() => setIsDisposisiModalOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-5 space-y-4">
-              <div className="bg-sky-50 p-3 rounded-lg border border-sky-100">
-                <span className="text-xs font-bold text-sky-700 block mb-1">Proyek: {selectedTask.projectName}</span>
-                <p className="text-sm font-medium text-slate-700 line-clamp-2">"Anda melepaskan tugas pengawasan lapangan untuk proyek ini kepada rekan lain."</p>
+              <div className="bg-sky-50 p-3 rounded-lg border border-sky-100 max-h-32 overflow-y-auto">
+                {disposisiTargets.length > 1 ? (
+                  <ul className="text-sm font-medium text-slate-700 space-y-1">
+                    {disposisiTargets.map(t => <li key={taskKey(t)}>• {t.projectName}</li>)}
+                  </ul>
+                ) : (
+                  <>
+                    <span className="text-xs font-bold text-sky-700 block mb-1">Proyek: {disposisiTargets[0].projectName}</span>
+                    <p className="text-sm font-medium text-slate-700 line-clamp-2">"Anda melepaskan tugas pengawasan lapangan untuk proyek ini kepada rekan lain."</p>
+                  </>
+                )}
               </div>
 
               <div>
@@ -403,10 +561,10 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
 
               <div>
                 <label className="text-sm font-semibold text-slate-700 block mb-2">Catatan Disposisi</label>
-                <textarea 
+                <textarea
                    name="notes"
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm resize-none" 
-                   rows={3} 
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm resize-none"
+                   rows={3}
                    placeholder="Misal: Tolong lanjutkan pemantauan karena saya sedang dinas luar..."
                 ></textarea>
               </div>
@@ -414,7 +572,7 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
 
             <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
               <button type="button" onClick={() => setIsDisposisiModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
-              <button 
+              <button
                 type="submit"
                 disabled={isSubmitting}
                 className="px-4 py-2 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 rounded-xl transition-colors flex items-center gap-2 shadow-md shadow-sky-600/20"

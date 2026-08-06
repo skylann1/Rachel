@@ -323,8 +323,10 @@ const renderControlCell = (control: any) => {
   );
 };
 
-export default function JsaPDF({ projectId, steps }: any) {
+export default function JsaPDF({ projectId, steps, signatories, preparer }: any) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+  const reviewer = signatories?.reviewer ?? null;
+  const approver = signatories?.approver ?? null;
 
   return (
     <Document>
@@ -363,25 +365,25 @@ export default function JsaPDF({ projectId, steps }: any) {
         <View style={styles.approvalSection}>
           <View style={styles.approvalCol}>
             <Text style={styles.approvalTitle}>Disiapkan Oleh</Text>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: Vendor Representative</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: Site Supervisor</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Perusahaan / Satker</Text><Text style={styles.infoValue}>: CV. Mitra Kerja</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal</Text><Text style={styles.infoValue}>: {currentDate}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {preparer?.nama || 'Vendor Representative'}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {preparer?.jabatan || 'Site Supervisor'}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Perusahaan / Satker</Text><Text style={styles.infoValue}>: {preparer?.satker || '-'}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal</Text><Text style={styles.infoValue}>: {preparer?.tanggal || currentDate}</Text></View>
           </View>
           <View style={styles.approvalCol}>
             <Text style={styles.approvalTitle}>Direview Oleh</Text>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>:</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>:</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Pemberi Kerja</Text><Text style={styles.infoValue}>:</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Review</Text><Text style={styles.infoValue}>:</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {reviewer?.nama || ''}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {reviewer?.jabatan || ''}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Pemberi Kerja</Text><Text style={styles.infoValue}>: {reviewer?.satker || ''}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Review</Text><Text style={styles.infoValue}>: {reviewer?.tanggal || ''}</Text></View>
           </View>
           <View style={[styles.approvalCol, { borderRightWidth: 0 }]}>
             <Text style={styles.approvalTitle}>Disetujui Oleh</Text>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Penanggung Jawab</Text><Text style={styles.infoValue}>:</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>:</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>:</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Penanggung Jawab</Text><Text style={styles.infoValue}>:</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Persetujuan</Text><Text style={styles.infoValue}>:</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver?.satker || ''}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {approver?.nama || ''}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {approver?.jabatan || ''}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver?.satker || ''}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Persetujuan</Text><Text style={styles.infoValue}>: {approver?.tanggal || ''}</Text></View>
           </View>
         </View>
 

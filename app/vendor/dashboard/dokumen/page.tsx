@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, UploadCloud, FileText, Download, Trash2, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react';
+import { Search, Plus, UploadCloud, FileText, Download, Trash2, Loader2 } from 'lucide-react';
 import { getVendorDocuments, saveDocumentMetadata, deleteVendorDocument } from './actions';
 import { uploadVendorDocument } from '@/utils/supabase/storage';
 
@@ -115,21 +115,20 @@ export default function DokumenK3Page() {
                 <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nama Dokumen</th>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Jenis Dokumen</th>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tanggal Upload</th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status Validasi</th>
                 <th scope="col" className="relative px-6 py-4"><span className="sr-only">Aksi</span></th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                     Memuat dokumen...
                   </td>
                 </tr>
               ) : documents.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
                     Belum ada dokumen yang diunggah.
                   </td>
                 </tr>
@@ -152,18 +151,6 @@ export default function DokumenK3Page() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
                       {new Date(doc.created_at).toLocaleDateString('id-ID')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        doc.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 
-                        doc.status === 'Rejected' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
-                        'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}>
-                        {doc.status === 'Approved' ? <CheckCircle2 className="w-3 h-3" /> : 
-                         doc.status === 'Rejected' ? <XCircle className="w-3 h-3" /> : 
-                         <Clock className="w-3 h-3" />}
-                        {doc.status || 'Pending'}
-                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileSignature, LogOut, Briefcase, ShieldAlert, Stamp, Users, Truck, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { logout } from "@/app/vendor/login/actions";
 
 const menuUtama = [
@@ -31,52 +31,71 @@ export function VendorDesktopSidebar() {
   };
 
   return (
-    <aside className={`flex-shrink-0 border-r bg-card flex flex-col hidden md:flex transition-all duration-300 relative ${isCollapsed ? 'w-20' : 'w-64'}`}>
-      
+    <aside className={`flex-shrink-0 bg-gradient-to-b from-slate-900 to-slate-950 border-r border-slate-800 flex flex-col hidden md:flex shadow-xl z-20 transition-all duration-300 relative ${isCollapsed ? 'w-20' : 'w-64'}`}>
+
       {/* Toggle Button */}
-      <button 
+      <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="absolute -right-3 top-6 bg-white border border-slate-200 rounded-full p-1 z-50 hover:bg-slate-50 text-slate-500 shadow-sm transition-transform"
       >
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
 
-      <div className={`h-16 flex items-center border-b overflow-hidden ${isCollapsed ? 'justify-center' : 'px-6'}`}>
-        <Briefcase className="h-6 w-6 text-primary shrink-0" />
-        {!isCollapsed && <span className="font-bold text-lg text-primary tracking-tight ml-2 whitespace-nowrap">Portal Vendor</span>}
+      {/* Brand */}
+      <div className={`h-20 flex items-center border-b border-slate-800/80 overflow-hidden ${isCollapsed ? 'justify-center' : 'px-5 gap-3'}`}>
+        <div className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-950/50">
+          <Briefcase className="h-5 w-5 text-white" />
+        </div>
+        {!isCollapsed && (
+          <div className="overflow-hidden whitespace-nowrap">
+            <p className="font-black text-sm text-white tracking-tight leading-none">Portal Vendor</p>
+            <p className="text-[10px] text-slate-400 font-bold mt-1.5 tracking-widest uppercase">SIPERMIT K3</p>
+          </div>
+        )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 overflow-x-hidden">
+      <nav className="flex-1 overflow-y-auto py-5 overflow-x-hidden">
         <ul className="space-y-1 px-3">
+          {!isCollapsed && (
+            <li className="px-3 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+              Menu Utama
+            </li>
+          )}
           {menuUtama.map(item => {
             const active = isActive(item.href);
             const Icon = item.icon;
             return (
               <li key={item.href}>
-                <Link 
+                <Link
                   href={item.href}
                   title={isCollapsed ? item.name : undefined}
-                  className={`flex items-center rounded-md py-2 text-sm font-medium transition-colors ${
+                  className={`flex items-center rounded-xl py-2.5 text-sm font-semibold transition-all ${
                     isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
                   } ${
-                    active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  } ${item.danger && !active ? 'text-rose-500 hover:text-rose-600' : ''}`}
+                    active
+                      ? item.danger
+                        ? 'bg-rose-500/15 text-rose-400'
+                        : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-950/40'
+                      : item.danger
+                        ? 'text-rose-400/80 hover:bg-rose-500/10 hover:text-rose-400'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`}
                 >
-                  <Icon className={`h-4 w-4 shrink-0 ${item.danger ? 'text-rose-500' : ''}`} />
+                  <Icon className="h-4 w-4 shrink-0" />
                   {!isCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
                 </Link>
               </li>
             );
           })}
-          
+
           {/* Divider */}
-          <li className="pt-4 pb-2">
+          <li className="pt-5 pb-2">
             {!isCollapsed ? (
-              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-3 whitespace-nowrap">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 whitespace-nowrap">
                 Data Master
               </div>
             ) : (
-              <div className="mx-auto w-8 border-t border-border"></div>
+              <div className="mx-auto w-8 border-t border-slate-800"></div>
             )}
           </li>
 
@@ -85,13 +104,15 @@ export function VendorDesktopSidebar() {
             const Icon = item.icon;
             return (
               <li key={item.href}>
-                <Link 
+                <Link
                   href={item.href}
                   title={isCollapsed ? item.name : undefined}
-                  className={`flex items-center rounded-md py-2 text-sm font-medium transition-colors ${
+                  className={`flex items-center rounded-xl py-2.5 text-sm font-semibold transition-all ${
                     isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
                   } ${
-                    active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    active
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-950/40'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
@@ -103,11 +124,11 @@ export function VendorDesktopSidebar() {
         </ul>
       </nav>
 
-      <div className="p-4 border-t overflow-hidden">
+      <div className="p-3 border-t border-slate-800/80 overflow-hidden">
         <form action={logout}>
-          <button 
+          <button
             title={isCollapsed ? "Keluar" : undefined}
-            className={`flex w-full items-center rounded-md py-2 text-sm font-medium text-destructive hover:bg-destructive/10 ${
+            className={`flex w-full items-center rounded-xl py-2.5 text-sm font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors ${
               isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
             }`}
           >

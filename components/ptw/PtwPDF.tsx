@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Font, Image } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer';
 import { PTW_TYPES, HAZARD_SOURCES, APD_ITEMS, PtwType } from '@/lib/ptw-types';
 
 // Register fonts
@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     flexDirection: 'column',
   },
-  
+
   // Top Header (Dynamic color)
   topHeader: {
     flexDirection: 'row',
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: fs_header,
   },
-  
+
   // A. UMUM
   umumRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: B, minHeight: 12, alignItems: 'center' },
   umumLabel: { width: '32%', paddingLeft: 4, fontWeight: 'bold' },
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   tHeaderRow: { flexDirection: 'row', backgroundColor: SECTION_BG, borderBottomWidth: 1, borderColor: B, alignItems: 'stretch' },
   tRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: B },
   tCell: { paddingVertical: 1, paddingHorizontal: 2, borderRightWidth: 1, borderColor: B, justifyContent: 'center' },
-  
+
   // Verifikasi (End of checklist)
   verifRow: { flexDirection: 'row', borderTopWidth: 1, borderColor: B },
   verifLabel: { width: '30%', borderRightWidth: 1, borderColor: B, padding: 2, alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
@@ -128,18 +128,52 @@ const styles = StyleSheet.create({
   tableCell: { flex: 1, borderRightWidth: 1, borderColor: B, padding: 2, alignItems: 'center', justifyContent: 'center' }
 });
 
+interface PtwPerson { worker_name?: string; worker_role?: string; name?: string; }
+interface PtwAsset { name?: string; type?: string; }
+
 interface PtwPDFProps {
   projectId: string;
+  ptwNumber?: string | null;
+  projectName?: string;
+  vendorName?: string;
+  location?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  description?: string;
   ptwType: PtwType;
   hazards: string[];
   apd: { [key: string]: string[] };
-  pekerja: any[];
-  peralatan: any[];
+  pekerja: PtwPerson[];
+  peralatan: PtwAsset[];
 }
 
-export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, peralatan }: PtwPDFProps) {
+const formatDate = (value?: string | null) => {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+export default function PtwPDF({
+  projectId,
+  ptwNumber,
+  projectName,
+  vendorName,
+  location,
+  startDate,
+  endDate,
+  description,
+  ptwType,
+  hazards,
+  apd,
+  pekerja,
+  peralatan,
+}: PtwPDFProps) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const typeDef = PTW_TYPES.find(t => t.id === ptwType) || PTW_TYPES[0];
+
+  const daftarPekerja = pekerja.map(p => p.worker_name || p.name).filter(Boolean).join(', ') || '-';
+  const daftarPeralatan = peralatan.map(p => p.name).filter(Boolean).join(', ') || '-';
 
   const renderCheckList = (items: string[], selected: string[], itemStyle: any = styles.checkItem) => {
     return items.map((item, i) => (
@@ -153,7 +187,7 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
-        
+
         {/* TOP HEADER */}
         <View style={[styles.topHeader, { backgroundColor: typeDef.color }]}>
           <View style={styles.topHeaderLogo}>
@@ -162,22 +196,22 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
           <View style={styles.topHeaderCenter}>
             <Text style={[styles.headerTitle, { color: typeDef.textColor }]}>{typeDef.title.toUpperCase()}</Text>
             <Text style={[styles.headerSubtitle, { color: typeDef.textColor }]}>PT PERUSAHAAN GAS NEGARA Tbk</Text>
-            <Text style={[styles.headerRegion, { color: typeDef.textColor }]}>[wilayah]</Text>
+            <Text style={[styles.headerRegion, { color: typeDef.textColor }]}>{location || '[wilayah]'}</Text>
           </View>
         </View>
 
         {/* MAIN BODY: 2 COLUMNS */}
         <View style={styles.mainColumns}>
-          
+
           {/* LEFT COLUMN: A, B, C, D */}
           <View style={styles.leftColumn}>
-            
+
             {/* A. UMUM */}
             <View style={styles.sectionBox}>
               <Text style={styles.sectionHeader}>A. UMUM</Text>
               <View style={styles.umumRow}>
                 <Text style={styles.umumLabel}>Nomor</Text>
-                <Text style={styles.umumVal}>: PTW-{projectId.split('-')[1] || '001'}</Text>
+                <Text style={styles.umumVal}>: {ptwNumber || `Draft - ${projectId.slice(0, 8)}`}</Text>
               </View>
               <View style={styles.umumRow}>
                 <Text style={styles.umumLabel}>Tanggal pengesahan</Text>
@@ -187,7 +221,7 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
                 <Text style={styles.umumLabel}>Masa Berlaku</Text>
                 <View style={[styles.umumVal, { flexDirection: 'row', paddingLeft: 0, borderLeftWidth: 0 }]}>
                   <View style={{ flex: 1, borderLeftWidth: 1, borderColor: B, paddingLeft: 4, justifyContent: 'center' }}>
-                     <Text>Tanggal: {currentDate} s/d {currentDate}</Text>
+                     <Text>Tanggal: {formatDate(startDate)} s/d {formatDate(endDate)}</Text>
                   </View>
                   <View style={{ flex: 1, borderLeftWidth: 1, borderColor: B, paddingLeft: 4, justifyContent: 'center' }}>
                      <Text>Waktu: 08:00 s/d 17:00</Text>
@@ -196,15 +230,23 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
               </View>
               <View style={styles.umumRow}>
                 <Text style={styles.umumLabel}>Lokasi Pekerjaan</Text>
-                <Text style={styles.umumVal}>: Area Proyek {projectId}</Text>
+                <Text style={styles.umumVal}>: {location || `Area Proyek ${projectName || projectId}`}</Text>
               </View>
               <View style={styles.umumRow}>
                 <Text style={styles.umumLabel}>Pelaksana Pekerjaan</Text>
-                <Text style={styles.umumVal}>: Vendor Terdaftar</Text>
+                <Text style={styles.umumVal}>: {vendorName || 'Vendor Terdaftar'}</Text>
+              </View>
+              <View style={styles.umumRow}>
+                <Text style={styles.umumLabel}>Uraian Pekerjaan</Text>
+                <Text style={styles.umumVal}>: {description || 'Pemeliharaan dan Perbaikan'}</Text>
+              </View>
+              <View style={styles.umumRow}>
+                <Text style={styles.umumLabel}>Daftar Pekerja</Text>
+                <Text style={[styles.umumVal, { fontSize: 4.5 }]}>: {daftarPekerja}</Text>
               </View>
               <View style={[styles.umumRow, { borderBottomWidth: 0 }]}>
-                <Text style={styles.umumLabel}>Uraian Pekerjaan</Text>
-                <Text style={styles.umumVal}>: Pemeliharaan dan Perbaikan</Text>
+                <Text style={styles.umumLabel}>Daftar Peralatan</Text>
+                <Text style={[styles.umumVal, { fontSize: 4.5 }]}>: {daftarPeralatan}</Text>
               </View>
             </View>
 
@@ -255,7 +297,7 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
           <View style={styles.rightColumn}>
             <View style={[styles.sectionBox, { flex: 1 }]}>
               <Text style={styles.sectionHeader}>E. SAFETY CHECKLIST</Text>
-              
+
               {/* Table Header */}
               <View style={styles.tHeaderRow}>
                 <View style={[styles.tCell, { width: '4%' }]}><Text style={{ textAlign: 'center' }}>No</Text></View>
@@ -317,12 +359,12 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
 
         {/* FOOTER: 2 COLUMNS */}
         <View style={styles.footerColumns}>
-          
+
           {/* Footer Left: PENGESAHAN */}
           <View style={styles.footerLeft}>
             <Text style={styles.sectionHeader}>PENGESAHAN DAN PERSETUJUAN PERMIT TO WORK</Text>
             <Text style={styles.disclaimer}>Saya memahami semua tindakan pencegahan dan akan memastikan pelaksanaan mitigasi sesuai dengan dokumen izin kerja yang ada.</Text>
-            
+
             <View style={styles.signRow}>
               <View style={styles.signCell}>
                 <Text style={styles.signLabel}>Pemohon Permit To Work</Text>
@@ -362,13 +404,13 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
 
           {/* Footer Right: DIHENTIKAN & PENYELESAIAN */}
           <View style={styles.footerRight}>
-            
+
             <View style={styles.footerBox}>
               <Text style={styles.sectionHeader}>DIHENTIKAN SEMENTARA</Text>
               <View style={{ padding: 4 }}>
                 <Text style={{ marginBottom: 4 }}>Saya menyatakan, saya menghentikan pekerjaan di PTW ini dan saya telah menginformasikan kepada penerbit PTW / wewenang operasi dengan ALASAN :</Text>
                 <Text style={{ marginBottom: 12 }}>................................................................................................................................................................</Text>
-                
+
                 <View style={styles.tableRow}>
                    <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text>Tanggal</Text></View>
                    <View style={styles.tableCell}><Text>Waktu</Text></View>
@@ -397,7 +439,7 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
               <Text style={styles.sectionHeader}>PENYELESAIAN PERMIT TO WORK</Text>
               <View style={{ padding: 4 }}>
                 <Text style={{ marginBottom: 6 }}>Kami yang bertandatangan di bawah ini menyatakan bahwa pekerjaan yang tercantum pada PTW ini :</Text>
-                
+
                 <View style={{ flexDirection: 'row' }}>
                   <View style={{ width: '40%' }}>
                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 2 }}><View style={styles.checkBoxEmpty}/><Text style={{ flex: 1, lineHeight: 1.2 }}>Selesai dan diperiksa, lokasi kerja ditinggalkan dalam keadaan aman.</Text></View>
@@ -419,7 +461,7 @@ export default function PtwPDF({ projectId, ptwType, hazards, apd, pekerja, pera
                       </View>
                   </View>
                 </View>
-                
+
               </View>
             </View>
 

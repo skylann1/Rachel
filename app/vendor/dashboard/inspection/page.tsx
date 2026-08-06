@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, AlertTriangle, CheckCircle, Clock, MapPin, UploadCloud, X, ArrowRight, Loader2 } from 'lucide-react';
+import { Camera, AlertTriangle, CheckCircle, Clock, MapPin, UploadCloud, X, ArrowRight, Loader2, Inbox } from 'lucide-react';
 import { getVendorInspections, submitVendorResponse } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
 
@@ -29,12 +29,13 @@ export default function VendorInspectionPage() {
       status: d.status,
       priority: d.priority,
       image: d.image_url || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-      feedbackHSE: d.vendor_response || 'Segera tindak lanjuti temuan ini.', // Wait, HSE feedback should be from another column, but for now fallback
+      feedbackHSE: d.title,
     }));
     setInspections(formatted);
   }
 
   const filteredInspections = inspections.filter(item => filter === 'All' || item.status === filter);
+  const openCount = inspections.filter(item => item.status === 'Open').length;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -78,13 +79,21 @@ export default function VendorInspectionPage() {
         <div className="flex gap-2 w-full sm:w-auto bg-slate-100 p-1 rounded-xl overflow-x-auto">
            <button onClick={() => setFilter('All')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'All' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
            <button onClick={() => setFilter('Open')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors whitespace-nowrap flex items-center gap-2 ${filter === 'Open' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              Perlu Tindakan <span className="bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded text-[10px]">1</span>
+              Perlu Tindakan <span className="bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded text-[10px]">{openCount}</span>
            </button>
            <button onClick={() => setFilter('Closed')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${filter === 'Closed' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Selesai</button>
         </div>
       </div>
 
       {/* Grid of Finding Cards */}
+      {filteredInspections.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 bg-white border-2 border-dashed border-slate-200 rounded-2xl">
+          <Inbox className="w-10 h-10 text-slate-300 mb-3" />
+          <p className="text-sm font-medium text-slate-500">
+            {inspections.length === 0 ? 'Belum ada temuan K3 yang dilaporkan untuk proyek Anda.' : 'Tidak ada temuan pada kategori ini.'}
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredInspections.map((item) => (
           <div key={item.id} className={`bg-white border-2 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group ${item.status === 'Open' ? 'border-rose-200' : 'border-slate-200'}`}>
@@ -147,6 +156,7 @@ export default function VendorInspectionPage() {
           </div>
         ))}
       </div>
+      )}
 
       {/* Modal Tindak Lanjut */}
       {selectedInspection && (

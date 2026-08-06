@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { getEffectivePtwStatus } from "@/lib/ptw-status";
+import { JSA_STATUS, JSA_STAGE_ROLES, JSA_PENDING_STATUSES } from "@/lib/jsa-status";
 
 export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan';
 export type UrgencyType = 'High' | 'Medium' | 'Low';
@@ -80,22 +82,24 @@ export async function getMyTasks(): Promise<TaskItem[]> {
     }
   }
 
-  // 2. Fetch JSA
-  if (role === 'admin' || role === 'pm' || role === 'hse') {
+  // 2. Fetch JSA — dua tahap: Review PGSOL, lalu Persetujuan PGN (orang berbeda)
+  if (role === 'admin' || role === 'pgsol_reviewer' || role === 'pgn_approver') {
     const { data: jsas } = await supabase
       .from('jsa')
       .select(`
-        id, status, created_at, project_id,
+        id, status, created_at, project_id, reviewer_id,
         projects ( name, vendor_profiles ( company_name ) )
       `)
-      .in('status', ['Menunggu Approval PM', 'Pembahasan JSA', 'Menunggu Review HSE', 'Draft']);
+      .in('status', JSA_PENDING_STATUSES);
 
     if (jsas) {
       jsas.forEach((jsa: any) => {
-        let isMyTask = false;
-        if (role === 'admin') isMyTask = true;
-        if (role === 'pm' && (jsa.status === 'Menunggu Approval PM' || jsa.status === 'Pembahasan JSA' || jsa.status === 'Draft')) isMyTask = true;
-        if (role === 'hse' && (jsa.status === 'Menunggu Review HSE' || jsa.status === 'Draft' || jsa.status === 'Pembahasan JSA')) isMyTask = true;
+        const stageRoles = JSA_STAGE_ROLES[jsa.status] || [];
+        // Pemisahan wewenang: yang sudah mereview tidak boleh muncul lagi sebagai approver.
+        const sudahDireviewOlehSaya =
+          jsa.status === JSA_STATUS.approvalPgn && jsa.reviewer_id === user.id;
+        const isMyTask =
+          (stageRoles.includes(role) || role === 'admin') && !sudahDireviewOlehSaya;
 
         if (isMyTask) {
            const proj = Array.isArray(jsa.projects) ? jsa.projects[0] : jsa.projects;
@@ -104,7 +108,9 @@ export async function getMyTasks(): Promise<TaskItem[]> {
 
           tasks.push({
             id: jsa.id,
-            title: `Review Job Safety Analysis (JSA)`,
+            title: jsa.status === JSA_STATUS.reviewPgsol
+              ? `Review JSA (PGSOL)`
+              : `Persetujuan JSA (PGN)`,
             type: 'JSA',
             projectName: proj?.name || 'Unknown Project',
             vendorName: companyName || 'Internal',
@@ -195,28 +201,21 @@ export async function getMyTasks(): Promise<TaskItem[]> {
     const { data: monitoring, error } = await supabase
       .from('projects')
       .select(`
-        id, name, start_date, status, assigned_inspector,
-        vendor_profiles ( company_name )
+        id, name, start_date, end_date, status, assigned_inspector,
+        vendor_profiles ( company_name ),
+        ptw ( status )
       `)
-      .eq('status', 'PTW Aktif')
       .eq('assigned_inspector', user.id);
 
     if (error) {
-      // Fallback for UI dummy data before SQL migration
-      tasks.push({
-        id: "dummy-monitoring-123",
-        title: "Pengawasan Pekerjaan Ngelas Pipa",
-        type: 'Pengawasan',
-        projectName: "Dummy Project: Instalasi Pipa Gas",
-        vendorName: "PT. Maju Bersama",
-        date: new Date().toISOString(),
-        url: `/dashboard/projects`,
-        status: "Aktif",
-        urgency: "Medium",
-        timeInQueue: "Monitoring"
-      });
+      console.error('Monitoring tasks fetch error:', error.message);
     } else if (monitoring) {
-      monitoring.forEach((proj: any) => {
+      monitoring
+        .filter((proj: any) => {
+          const ptw = Array.isArray(proj.ptw) ? proj.ptw[0] : proj.ptw;
+          return getEffectivePtwStatus(ptw?.status, proj.end_date) === 'PTW Aktif';
+        })
+        .forEach((proj: any) => {
         const companyName = Array.isArray(proj.vendor_profiles) 
            ? proj.vendor_profiles[0]?.company_name 
            : proj.vendor_profiles?.company_name;

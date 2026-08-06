@@ -8,7 +8,7 @@ export default async function ApprovalPage() {
     getAllProjectsWithRelations(),
   ]);
 
-  const userRole = profile?.role || 'admin';
+  const userRole = profile?.role || '';
 
   return (
     <ApprovalPageClient

@@ -13,6 +13,9 @@ import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, r
 import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
+import PtwPDF from '@/components/ptw/PtwPDF';
+import { getEffectivePtwStatus } from '@/lib/ptw-status';
+import { JSA_STATUS, JSA_STAGE_ROLES, isJsaPending } from '@/lib/jsa-status';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const PDFViewer = dynamic(
@@ -68,6 +71,16 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
   isLoading: boolean;
 }) {
   const [note, setNote] = useState('');
+  const [showError, setShowError] = useState(false);
+
+  const handleSubmit = () => {
+    if (!note.trim()) {
+      setShowError(true);
+      return;
+    }
+    onConfirm(note);
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
@@ -82,17 +95,20 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
         </div>
         <textarea
           value={note}
-          onChange={e => setNote(e.target.value)}
-          className="w-full h-32 p-3 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none"
+          onChange={e => { setNote(e.target.value); if (showError) setShowError(false); }}
+          className={`w-full h-32 p-3 border rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 resize-none ${showError ? 'border-rose-400 focus:ring-rose-300' : 'border-slate-200 focus:ring-rose-300'}`}
           placeholder="Contoh: Tolong lengkapi mitigasi pada langkah ke-3..."
         />
+        {showError && (
+          <p className="text-xs font-semibold text-rose-600 mt-1.5">Catatan revisi wajib diisi sebelum menolak dokumen.</p>
+        )}
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onCancel} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-xl transition-colors">
             Batal
           </button>
           <button
-            onClick={() => onConfirm(note)}
-            disabled={!note.trim() || isLoading}
+            onClick={handleSubmit}
+            disabled={isLoading}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl transition-colors"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
@@ -104,10 +120,63 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
   );
 }
 
-export default function AdminProjectClient({ project, userRole, currentUserId }: { project: any, userRole: string, currentUserId: string }) {
+const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
+  prosedur: { title: 'Setujui Prosedur Kerja?', desc: 'Dokumen SOP akan ditandai disetujui dan vendor dapat melanjutkan ke tahap JSA.' },
+  jsa: { title: 'Setujui Job Safety Analysis?', desc: 'JSA akan ditandai disetujui pada tahap ini dan lanjut ke tahap berikutnya.' },
+  'jsa-review': {
+    title: 'Selesaikan Review PGSOL?',
+    desc: 'Anda menyatakan JSA sudah benar secara teknis. JSA akan diteruskan ke PGN untuk persetujuan akhir oleh orang yang berbeda.',
+  },
+  'jsa-approve': {
+    title: 'Setujui JSA sebagai PGN?',
+    desc: 'Persetujuan akhir: Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan. Vendor dapat lanjut ke pengajuan PTW.',
+  },
+  ptw: { title: 'Setujui Permit to Work?', desc: 'PTW akan ditandai disetujui pada tahap ini dan lanjut ke tahap berikutnya.' },
+};
+
+// Reuse ApproveModal
+function ApproveModal({ labelKey, onConfirm, onCancel, isLoading }: {
+  labelKey: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isLoading: boolean;
+}) {
+  const { title, desc } = APPROVE_LABELS[labelKey] ?? APPROVE_LABELS.prosedur;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+            <Check className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-800">{title}</h3>
+            <p className="text-xs text-slate-500">{desc}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-2">
+          <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-xl transition-colors">
+            Batal
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition-colors shadow-sm shadow-emerald-200"
+          >
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            Ya, Setujui
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminProjectClient({ project, userRole, currentUserId, jsaSignatories }: { project: any, userRole: string, currentUserId: string, jsaSignatories?: any }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<{ type: 'prosedur' | 'jsa' | 'ptw'; id: string } | null>(null);
+  const [approveTarget, setApproveTarget] = useState<{ type: 'prosedur' | 'jsa' | 'ptw'; id: string } | null>(null);
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [fullScreenPreview, setFullScreenPreview] = useState<'prosedur' | 'jsa' | 'ptw' | null>(null);
 
@@ -119,14 +188,19 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
   const prosedurStatus = prosedur?.status === 'Prosedur Disetujui' ? 'Approved' : prosedur?.status === 'Menunggu Review PM' ? 'Pending' : (prosedur?.status === 'Draft' && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
-  const jsaStatus = jsa?.status === 'JSA Disetujui' ? 'Approved' : jsa?.status === 'Pembahasan JSA' || jsa?.status === 'Review PM' || jsa?.status === 'Review Asset Manager' ? 'Pending' : jsa?.rejection_note ? 'Rejected' : jsa ? 'Draft' : 'Draft';
-  const ptwStatus = ptw?.status === 'PTW Aktif' ? 'Approved' : ptw?.status === 'Draft' ? 'Rejected' : ptw ? 'Pending' : 'Draft';
+  const jsaStatus = jsa?.status === JSA_STATUS.approved ? 'Approved' : isJsaPending(jsa?.status) ? 'Pending' : jsa?.rejection_note ? 'Rejected' : jsa ? 'Draft' : 'Draft';
+  const effectivePtwStatus = getEffectivePtwStatus(ptw?.status, project.end_date);
+  const ptwStatus = effectivePtwStatus === 'PTW Aktif' ? 'Approved'
+    : effectivePtwStatus === 'Expired' ? 'Expired'
+    : effectivePtwStatus === 'Draft' ? 'Rejected'
+    : ptw ? 'Pending' : 'Draft';
 
   const getStepStyle = (status: string) => {
     switch (status) {
       case 'Approved': return 'bg-emerald-500 text-white border-emerald-500';
       case 'Pending': return 'bg-amber-400 text-white border-amber-400';
       case 'Rejected': return 'bg-rose-500 text-white border-rose-500';
+      case 'Expired': return 'bg-slate-400 text-white border-slate-400';
       default: return 'bg-slate-100 text-slate-400 border-slate-200';
     }
   };
@@ -137,21 +211,34 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
     if (status === 'Approved') return <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Disetujui</span>;
     if (status === 'Pending') return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded font-bold uppercase">{detailedStatus || 'Menunggu Review'}</span>;
     if (status === 'Rejected') return <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Ditolak / Revisi</span>;
+    if (status === 'Expired') return <span className="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Kedaluwarsa</span>;
     return <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Belum Dibuat</span>;
   };
 
   // Check if current user can approve specific docs
   const canApproveProsedur = userRole === 'pm' && prosedurStatus === 'Pending';
-  const canApproveJsa = (userRole === 'pm' && jsa?.status === 'Pembahasan JSA') || (userRole === 'asset_manager' && jsa?.status === 'Review Asset Manager') || userRole === 'admin';
+
+  // JSA: dua tahap, dua orang berbeda.
+  //   Review PGSOL    -> hanya pgsol_reviewer (atau admin)
+  //   Persetujuan PGN -> hanya pgn_approver (atau admin), DAN bukan orang yang mereview
+  const isTahapReviewPgsol = jsa?.status === JSA_STATUS.reviewPgsol;
+  const jsaStageRoles = JSA_STAGE_ROLES[jsa?.status] || [];
+  const jsaSudahDireviewOlehSaya = jsa?.status === JSA_STATUS.approvalPgn && jsa?.reviewer_id === currentUserId;
+  const canApproveJsa =
+    jsaStageRoles.length > 0 &&
+    (jsaStageRoles.includes(userRole) || userRole === 'admin') &&
+    !jsaSudahDireviewOlehSaya;
   const canApprovePtw = (userRole === 'ptw_authority' && ptw?.status === 'Menunggu Approval PM') || (userRole === 'ptw_issuer' && ptw?.status === 'Review PTW Issuer') || (userRole === 'hse' && ptw?.status === 'Menunggu Penomoran HSSE') || userRole === 'admin';
 
-  const handleApprove = async (type: 'prosedur' | 'jsa' | 'ptw', id: string) => {
-    if (!confirm('Anda yakin ingin menyetujui dokumen ini?')) return;
+  const handleConfirmApprove = async () => {
+    if (!approveTarget) return;
+    const { type, id } = approveTarget;
     setIsLoading(true);
     try {
       if (type === 'prosedur') await approveProcedure(id);
-      if (type === 'jsa') await approveJsa(id, userRole);
-      if (type === 'ptw') await approvePtw(id, userRole);
+      if (type === 'jsa') await approveJsa(id);
+      if (type === 'ptw') await approvePtw(id);
+      setApproveTarget(null);
       router.refresh();
     } catch (e) {
       alert('Error: ' + (e as Error).message);
@@ -207,10 +294,23 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {rejectTarget && (
-        <RejectModal 
-          onConfirm={handleConfirmReject} 
-          onCancel={() => setRejectTarget(null)} 
-          isLoading={isLoading} 
+        <RejectModal
+          onConfirm={handleConfirmReject}
+          onCancel={() => setRejectTarget(null)}
+          isLoading={isLoading}
+        />
+      )}
+
+      {approveTarget && (
+        <ApproveModal
+          labelKey={
+            approveTarget.type === 'jsa'
+              ? (isTahapReviewPgsol ? 'jsa-review' : 'jsa-approve')
+              : approveTarget.type
+          }
+          onConfirm={handleConfirmApprove}
+          onCancel={() => setApproveTarget(null)}
+          isLoading={isLoading}
         />
       )}
 
@@ -376,6 +476,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
                             dataKey="value"
                             stroke="none"
                             cornerRadius={4}
+                            isAnimationActive={false}
                           >
                             {chartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -424,7 +525,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
                        </div>
                        <div className="flex gap-2">
                          <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
-                         <button onClick={() => handleApprove('prosedur', prosedur.id)} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui SOP</button>
+                         <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui SOP</button>
                        </div>
                     </div>
                     <div className="bg-slate-100 p-2">
@@ -449,6 +550,24 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
                  </div>
                )}
 
+               {/* JSA sudah direview oleh saya — pemisahan wewenang, harus orang lain yang menyetujui */}
+               {jsaStatus === 'Pending' && jsaSudahDireviewOlehSaya && (
+                 <div className="bg-white rounded-3xl border border-sky-200 shadow-sm overflow-hidden ring-4 ring-sky-50 mb-6">
+                    <div className="bg-sky-50 p-6 flex items-start gap-3">
+                       <div className="w-10 h-10 shrink-0 rounded-xl bg-sky-100 flex items-center justify-center text-sky-600">
+                         <CheckCircle2 className="w-5 h-5" />
+                       </div>
+                       <div>
+                         <h3 className="font-bold text-sky-900 mb-1">Anda sudah mereview JSA ini</h3>
+                         <p className="text-sky-700 text-sm">
+                           JSA menunggu <strong>Persetujuan PGN</strong>. Sesuai pemisahan wewenang, persetujuan akhir
+                           harus dilakukan oleh orang yang berbeda dari yang melakukan review.
+                         </p>
+                       </div>
+                    </div>
+                 </div>
+               )}
+
                {/* JIKA JSA PENDING */}
                {jsaStatus === 'Pending' && canApproveJsa && (
                  <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
@@ -457,17 +576,26 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
                          <div className="flex items-center gap-2 mb-1">
                            <ShieldAlert className="w-5 h-5 text-amber-600" />
                            <h3 className="text-lg font-bold text-amber-900">Job Safety Analysis (JSA)</h3>
+                           <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
+                             {isTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : 'Tahap 2 — Persetujuan PGN'}
+                           </span>
                          </div>
-                         <p className="text-amber-700 text-sm">Vendor telah mengajukan JSA. Silakan review mitigasi risiko di bawah ini.</p>
+                         <p className="text-amber-700 text-sm">
+                           {isTahapReviewPgsol
+                             ? 'Verifikasi teknis: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar.'
+                             : 'Otorisasi akhir: JSA sudah direview PGSOL. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
+                         </p>
                        </div>
                        <div className="flex gap-2">
                          <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
-                         <button onClick={() => handleApprove('jsa', jsa.id)} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui JSA</button>
+                         <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
+                           {isTahapReviewPgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
+                         </button>
                        </div>
                     </div>
                     <div className="bg-slate-100 p-2">
                       <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
-                         <JsaPDF projectId={project.id} steps={jsa?.jsa_steps?.map((step: any) => {
+                         <JsaPDF projectId={project.id} signatories={jsaSignatories} preparer={{ satker: project.vendor_profiles?.company_name }} steps={jsa?.jsa_steps?.map((step: any) => {
                            let bahayaObj: any = {}; let risikoObj: any = {}; let tindakanObj: any = {};
                            try { bahayaObj = typeof step.bahaya === 'string' ? JSON.parse(step.bahaya) : step.bahaya || {}; } catch(e) {}
                            try { risikoObj = typeof step.risiko === 'string' ? JSON.parse(step.risiko) : step.risiko || {}; } catch(e) {}
@@ -496,7 +624,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
                        </div>
                        <div className="flex gap-2">
                          <button onClick={() => setRejectTarget({ type: 'ptw', id: ptw.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
-                         <button onClick={() => handleApprove('ptw', ptw.id)} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
+                         <button onClick={() => setApproveTarget({ type: 'ptw', id: ptw.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
                        </div>
                     </div>
                     <div className="p-6">
@@ -626,7 +754,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
                         <h3 className="font-bold text-slate-800 text-lg">Job Safety Analysis</h3>
                         <p className="text-sm text-slate-500 mt-1 mb-6">Dokumen identifikasi bahaya dan mitigasi risiko proyek.</p>
                         <BlobProvider document={
-                          <JsaPDF projectId={project.id} steps={jsa?.jsa_steps?.map((step: any) => {
+                          <JsaPDF projectId={project.id} signatories={jsaSignatories} preparer={{ satker: project.vendor_profiles?.company_name }} steps={jsa?.jsa_steps?.map((step: any) => {
                             let bahayaObj: any = {}; let risikoObj: any = {}; let tindakanObj: any = {};
                             try { bahayaObj = typeof step.bahaya === 'string' ? JSON.parse(step.bahaya) : step.bahaya || {}; } catch(e) {}
                             try { risikoObj = typeof step.risiko === 'string' ? JSON.parse(step.risiko) : step.risiko || {}; } catch(e) {}
@@ -658,7 +786,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
                   )}
 
                   {/* REFERENSI PTW */}
-                  {ptwStatus === 'Approved' ? (
+                  {(ptwStatus === 'Approved' || ptwStatus === 'Expired') ? (
                      <div className="bg-white border border-emerald-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full -z-10 transition-transform group-hover:scale-110"></div>
                         <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
@@ -666,48 +794,33 @@ export default function AdminProjectClient({ project, userRole, currentUserId }:
                         </div>
                         <h3 className="font-bold text-slate-800 text-lg">Permit to Work</h3>
                         <p className="text-sm text-slate-500 mt-1 mb-6">Surat Izin Kerja Aman (SIKA) yang telah aktif.</p>
-                        <button 
-                          onClick={() => {
-                            const newWin = window.open('', '_blank');
-                            if(newWin) {
-                              newWin.document.write(`
-                                <html>
-                                  <head>
-                                    <title>Permit to Work</title>
-                                    <style>
-                                      body { font-family: sans-serif; padding: 40px; }
-                                      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                                      th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-                                      th { background: #eee; }
-                                    </style>
-                                  </head>
-                                  <body>
-                                    <h1 style="text-align:center;">PERMIT TO WORK (PTW)</h1>
-                                    <h3 style="margin-top: 40px;">Daftar Pekerja Terdaftar</h3>
-                                    <table>
-                                      <thead><tr><th>Nama Pekerja</th><th>Peran</th></tr></thead>
-                                      <tbody>
-                                        ${ptw.workers?.map((w: any) => `<tr><td>${w.worker_name}</td><td>${w.worker_role}</td></tr>`).join('') || ''}
-                                      </tbody>
-                                    </table>
-                                    <h3 style="margin-top: 40px;">Daftar Peralatan & Tools</h3>
-                                    <table>
-                                      <thead><tr><th>Nama Peralatan</th><th>Jenis</th></tr></thead>
-                                      <tbody>
-                                        ${ptw.equipment?.map((e: any) => `<tr><td>${e.name}</td><td>${e.type}</td></tr>`).join('') || ''}
-                                      </tbody>
-                                    </table>
-                                    <script>window.print();</script>
-                                  </body>
-                                </html>
-                              `);
-                              newWin.document.close();
-                            }
-                          }}
-                          className="w-full py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors"
-                        >
-                          Buka & Print PTW
-                        </button>
+                        <BlobProvider document={
+                          <PtwPDF
+                            projectId={project.id}
+                            ptwNumber={ptw.ptw_number}
+                            projectName={project.name}
+                            vendorName={project.vendor_profiles?.company_name}
+                            location={project.location}
+                            startDate={project.start_date}
+                            endDate={project.end_date}
+                            description={project.description}
+                            ptwType={ptw.ptw_type || 'dingin'}
+                            hazards={ptw.hazards || []}
+                            apd={ptw.apd || {}}
+                            pekerja={ptw.workers || []}
+                            peralatan={ptw.equipment || []}
+                          />
+                        }>
+                          {({ url, loading }) => (
+                            <button
+                              disabled={loading}
+                              onClick={() => { if(url) window.open(url, '_blank'); }}
+                              className="w-full py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors disabled:opacity-50"
+                            >
+                              {loading ? 'Membuat PDF...' : 'Buka & Print PTW'}
+                            </button>
+                          )}
+                        </BlobProvider>
                      </div>
                   ) : (
                      <div className="bg-slate-50 border border-slate-200 border-dashed rounded-2xl p-6 text-center opacity-70">

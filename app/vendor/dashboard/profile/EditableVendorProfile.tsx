@@ -5,7 +5,14 @@ import { User, Mail, Shield, BadgeCheck, Star, Calendar, FileText, CheckCircle, 
 import Image from "next/image";
 import { updateVendorProfile } from "@/app/actions/profile";
 
-export function EditableVendorProfile({ user, initialVendorData }: { user: any, initialVendorData: any }) {
+type VendorStats = {
+  activeProjects: number;
+  ptwApproved: number;
+  pendingReview: number;
+  incidents: number;
+};
+
+export function EditableVendorProfile({ user, initialVendorData, stats }: { user: any, initialVendorData: any, stats: VendorStats }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -239,7 +246,7 @@ export function EditableVendorProfile({ user, initialVendorData }: { user: any, 
             </div>
           </div>
           <div>
-            <div className="text-3xl font-black text-slate-800">12</div>
+            <div className="text-3xl font-black text-slate-800">{stats.activeProjects}</div>
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">Proyek Aktif</div>
           </div>
         </div>
@@ -251,7 +258,7 @@ export function EditableVendorProfile({ user, initialVendorData }: { user: any, 
             </div>
           </div>
           <div>
-            <div className="text-3xl font-black text-slate-800">45</div>
+            <div className="text-3xl font-black text-slate-800">{stats.ptwApproved}</div>
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">PTW Disetujui</div>
           </div>
         </div>
@@ -263,7 +270,7 @@ export function EditableVendorProfile({ user, initialVendorData }: { user: any, 
             </div>
           </div>
           <div>
-            <div className="text-3xl font-black text-slate-800">2</div>
+            <div className="text-3xl font-black text-slate-800">{stats.pendingReview}</div>
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">Menunggu Review</div>
           </div>
         </div>
@@ -275,7 +282,7 @@ export function EditableVendorProfile({ user, initialVendorData }: { user: any, 
             </div>
           </div>
           <div>
-            <div className="text-3xl font-black text-slate-800">0</div>
+            <div className="text-3xl font-black text-slate-800">{stats.incidents}</div>
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">Insiden</div>
           </div>
         </div>

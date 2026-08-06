@@ -21,10 +21,10 @@ export async function submitIncident(formData: FormData) {
   switch (type) {
     case 'near_miss': mappedType = 'Near Miss'; break;
     case 'first_aid': mappedType = 'First Aid'; break;
-    case 'medical_treatment': mappedType = 'Medical Treatment Case'; break;
-    case 'lti': mappedType = 'Lost Time Injury'; break;
+    case 'medical_treatment': mappedType = 'Medical Treatment'; break;
+    case 'lti': mappedType = 'LTI'; break;
     case 'fatality': mappedType = 'Fatality'; break;
-    case 'environmental': mappedType = 'Environmental Spill'; break;
+    case 'environmental': mappedType = 'Environmental'; break;
     case 'property_damage': mappedType = 'Property Damage'; break;
   }
   

@@ -42,7 +42,7 @@ export async function addAccount(formData: FormData) {
 
     if (error) {
       console.error('Error creating user:', error);
-      return { error: error.message || JSON.stringify(error) || 'Terjadi kesalahan tidak diketahui.' };
+      return { error: error.message || 'Terjadi kesalahan tidak diketahui saat membuat akun.' };
     }
 
     if (data.user) {

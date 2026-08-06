@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Search, Briefcase, MapPin, Calendar, ArrowRight, FileSignature } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
+import { getEffectivePtwStatus } from '@/lib/ptw-status';
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -11,6 +12,7 @@ function StatusBadge({ status }: { status: string }) {
     'Prosedur Disetujui': 'bg-sky-100 text-sky-700',
     'JSA Disetujui':      'bg-violet-100 text-violet-700',
     'PTW Aktif':          'bg-emerald-100 text-emerald-700',
+    'Expired':            'bg-slate-200 text-slate-600',
     'Selesai':            'bg-slate-100 text-slate-600',
     'Ditolak':            'bg-rose-100 text-rose-700',
   };
@@ -39,7 +41,9 @@ export default async function VendorProjectsPage() {
     const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
     const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
 
-    if (ptw?.status === 'PTW Aktif') return 'PTW Aktif';
+    const effectivePtwStatus = getEffectivePtwStatus(ptw?.status, project.end_date);
+    if (effectivePtwStatus === 'PTW Aktif') return 'PTW Aktif';
+    if (effectivePtwStatus === 'Expired') return 'Expired';
     if (jsa?.status === 'JSA Disetujui') return 'JSA Disetujui';
     if (prosedur?.status === 'Prosedur Disetujui') return 'Prosedur Disetujui';
     if (prosedur?.status === 'Menunggu Review PM') return 'Menunggu Review PM';
@@ -100,6 +104,15 @@ export default async function VendorProjectsPage() {
           <div className="flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 py-2.5 rounded-xl">
             ✅ PTW Aktif — Pekerjaan Berjalan
           </div>
+        );
+      case 'Expired':
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-slate-600 bg-slate-100 border border-slate-200 hover:bg-slate-200 py-2.5 rounded-xl transition-colors"
+          >
+            PTW Kedaluwarsa — Ajukan Ulang
+          </Link>
         );
       default:
         return (

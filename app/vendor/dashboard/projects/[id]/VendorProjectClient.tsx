@@ -11,6 +11,9 @@ import { ProjectDiscussion } from '@/components/project-discussion';
 import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
+import PtwPDF from '@/components/ptw/PtwPDF';
+import { getEffectivePtwStatus } from '@/lib/ptw-status';
+import { isJsaPending } from '@/lib/jsa-status';
 
 const BlobProvider = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.BlobProvider),
@@ -47,26 +50,35 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
   );
 }
 
-export function VendorProjectClient({ project, currentUserId }: { project: any; currentUserId: string }) {
+export function VendorProjectClient({ project, currentUserId, jsaSignatories }: { project: any; currentUserId: string; jsaSignatories?: any }) {
   const [activeTab, setActiveTab] = useState('ringkasan');
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
   const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
   const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
+  const vendorProfile = Array.isArray(project.vendor_profiles) ? project.vendor_profiles[0] : project.vendor_profiles;
 
   const prosedurRevisions = prosedur?.content?.revisions || [];
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
   // Normalize statuses for UI logic
   const prosedurStatus = prosedur?.status === 'Prosedur Disetujui' ? 'Approved' : prosedur?.status === 'Menunggu Review PM' ? 'Pending' : (prosedur?.status === 'Draft' && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
-  const jsaStatus = jsa?.status === 'JSA Disetujui' ? 'Approved' : jsa?.status === 'Pembahasan JSA' || jsa?.status === 'Review PM' || jsa?.status === 'Review Asset Manager' ? 'Pending' : jsa?.rejection_note ? 'Rejected' : jsa ? 'Draft' : 'Draft';
-  const ptwStatus = ptw?.status === 'PTW Aktif' ? 'Approved' : ptw?.status === 'Draft' ? 'Rejected' : ptw ? 'Pending' : 'Draft';
+  const jsaStatus = jsa?.rejection_note ? 'Rejected'
+    : jsa?.status === 'JSA Disetujui' ? 'Approved'
+    : isJsaPending(jsa?.status) ? 'Pending'
+    : jsa ? 'Draft' : 'Draft';
+  const effectivePtwStatus = getEffectivePtwStatus(ptw?.status, project.end_date);
+  const ptwStatus = effectivePtwStatus === 'PTW Aktif' ? 'Approved'
+    : effectivePtwStatus === 'Expired' ? 'Expired'
+    : effectivePtwStatus === 'Draft' ? 'Rejected'
+    : ptw ? 'Pending' : 'Draft';
 
   const getStepStyle = (status: string) => {
     switch (status) {
       case 'Approved': return 'bg-emerald-500 text-white border-emerald-500';
       case 'Pending': return 'bg-amber-400 text-white border-amber-400';
       case 'Rejected': return 'bg-rose-500 text-white border-rose-500';
+      case 'Expired': return 'bg-slate-400 text-white border-slate-400';
       default: return 'bg-slate-100 text-slate-400 border-slate-200';
     }
   };
@@ -77,6 +89,7 @@ export function VendorProjectClient({ project, currentUserId }: { project: any; 
     if (status === 'Approved') return <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Disetujui</span>;
     if (status === 'Pending') return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded font-bold uppercase">{detailedStatus || 'Dalam Review'}</span>;
     if (status === 'Rejected') return <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Perlu Revisi</span>;
+    if (status === 'Expired') return <span className="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Kedaluwarsa</span>;
     return <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Belum Dibuat</span>;
   };
 
@@ -295,7 +308,7 @@ export function VendorProjectClient({ project, currentUserId }: { project: any; 
                   {(jsaStatus === 'Pending' || jsaStatus === 'Approved' || jsaStatus === 'Rejected') && (
                     <div className="flex-1">
                       <BlobProvider document={
-                        <JsaPDF projectId={project.id} steps={jsa?.jsa_steps?.map((step: any) => {
+                        <JsaPDF projectId={project.id} signatories={jsaSignatories} preparer={{ satker: vendorProfile?.company_name }} steps={jsa?.jsa_steps?.map((step: any) => {
                           let bahayaObj: any = {}; let risikoObj: any = {}; let tindakanObj: any = {};
                           try { bahayaObj = typeof step.bahaya === 'string' ? JSON.parse(step.bahaya) : step.bahaya || {}; } catch(e) {}
                           try { risikoObj = typeof step.risiko === 'string' ? JSON.parse(step.risiko) : step.risiko || {}; } catch(e) {}
@@ -353,50 +366,35 @@ export function VendorProjectClient({ project, currentUserId }: { project: any; 
                 )}
 
                 <div className="flex gap-4">
-                  {(ptwStatus === 'Pending' || ptwStatus === 'Approved' || ptwStatus === 'Rejected') && (
+                  {(ptwStatus === 'Pending' || ptwStatus === 'Approved' || ptwStatus === 'Rejected' || ptwStatus === 'Expired') && (
                     <div className="flex-1">
-                      <button 
-                        onClick={() => {
-                          const newWin = window.open('', '_blank');
-                          if(newWin) {
-                            newWin.document.write(`
-                              <html>
-                                <head>
-                                  <title>Permit to Work</title>
-                                  <style>
-                                    body { font-family: sans-serif; padding: 40px; }
-                                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                                    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-                                    th { background: #eee; }
-                                  </style>
-                                </head>
-                                <body>
-                                  <h1 style="text-align:center;">PERMIT TO WORK (PTW)</h1>
-                                  <h3 style="margin-top: 40px;">Daftar Pekerja Terdaftar</h3>
-                                  <table>
-                                    <thead><tr><th>Nama Pekerja</th><th>Peran</th></tr></thead>
-                                    <tbody>
-                                      ${ptw.workers?.map((w: any) => `<tr><td>${w.worker_name}</td><td>${w.worker_role}</td></tr>`).join('') || ''}
-                                    </tbody>
-                                  </table>
-                                  <h3 style="margin-top: 40px;">Daftar Peralatan & Tools</h3>
-                                  <table>
-                                    <thead><tr><th>Nama Peralatan</th><th>Jenis</th></tr></thead>
-                                    <tbody>
-                                      ${ptw.equipment?.map((e: any) => `<tr><td>${e.name}</td><td>${e.type}</td></tr>`).join('') || ''}
-                                    </tbody>
-                                  </table>
-                                  <script>window.print();</script>
-                                </body>
-                              </html>
-                            `);
-                            newWin.document.close();
-                          }
-                        }}
-                        className="w-full py-3 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-colors shadow-sm"
-                      >
-                        Buka & Print PTW
-                      </button>
+                      <BlobProvider document={
+                        <PtwPDF
+                          projectId={project.id}
+                          ptwNumber={ptw.ptw_number}
+                          projectName={project.name}
+                          vendorName={vendorProfile?.company_name}
+                          location={project.location}
+                          startDate={project.start_date}
+                          endDate={project.end_date}
+                          description={project.description}
+                          ptwType={ptw.ptw_type || 'dingin'}
+                          hazards={ptw.hazards || []}
+                          apd={ptw.apd || {}}
+                          pekerja={ptw.workers || []}
+                          peralatan={ptw.equipment || []}
+                        />
+                      }>
+                        {({ url, loading }) => (
+                          <button
+                            disabled={loading}
+                            onClick={() => { if(url) window.open(url, '_blank'); }}
+                            className="w-full py-3 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                          >
+                            {loading ? 'Membuat PDF...' : 'Buka & Print PTW'}
+                          </button>
+                        )}
+                      </BlobProvider>
                     </div>
                   )}
 

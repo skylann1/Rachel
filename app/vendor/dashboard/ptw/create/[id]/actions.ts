@@ -13,9 +13,16 @@ export async function getPtw(projectId: string) {
   return data;
 }
 
-export async function savePtw(projectId: string, workers: any[], equipment: any[]) {
+export async function savePtw(
+  projectId: string,
+  workers: any[],
+  equipment: any[],
+  ptwType: string,
+  hazards: string[],
+  apd: Record<string, string[]>
+) {
   const supabase = await createClient();
-  
+
   const { data: existing } = await supabase
     .from('ptw')
     .select('id')
@@ -28,10 +35,14 @@ export async function savePtw(projectId: string, workers: any[], equipment: any[
       .update({
         workers,
         equipment,
-        status: 'Menunggu Approval PM'
+        ptw_type: ptwType,
+        hazards,
+        apd,
+        status: 'Menunggu Approval PM',
+        rejection_note: null
       })
       .eq('id', existing.id);
-      
+
     if (error) {
       console.error(error);
       throw new Error(error.message);
@@ -43,9 +54,12 @@ export async function savePtw(projectId: string, workers: any[], equipment: any[
         project_id: projectId,
         workers,
         equipment,
+        ptw_type: ptwType,
+        hazards,
+        apd,
         status: 'Menunggu Approval PM'
       });
-      
+
     if (error) {
       console.error(error);
       throw new Error(error.message);

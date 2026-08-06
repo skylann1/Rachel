@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
+import { JSA_STATUS } from "@/lib/jsa-status";
 
 export async function saveJsa(projectId: string, jsaData: any) {
   const supabase = await createClient();
@@ -20,7 +21,7 @@ export async function saveJsa(projectId: string, jsaData: any) {
       .from('jsa')
       .insert({
         project_id: projectId,
-        status: 'Pembahasan JSA'
+        status: JSA_STATUS.reviewPgsol
       })
       .select('id')
       .single();
@@ -28,7 +29,7 @@ export async function saveJsa(projectId: string, jsaData: any) {
     if (error) throw new Error(error.message);
     jsaId = newJsa.id;
   } else {
-    await supabase.from('jsa').update({ status: 'Pembahasan JSA' }).eq('id', jsaId);
+    await supabase.from('jsa').update({ status: JSA_STATUS.reviewPgsol, rejection_note: null }).eq('id', jsaId);
   }
 
   // Delete existing steps
@@ -61,9 +62,9 @@ export async function saveJsa(projectId: string, jsaData: any) {
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
   await notifyUsersByRole({
-    role: 'pm',
+    role: 'pgsol_reviewer',
     type: 'action_required',
-    title: 'JSA Menunggu Review',
+    title: 'JSA Menunggu Review PGSOL',
     message: `JSA untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,
     link: `/dashboard/projects/${projectId}`,
   });

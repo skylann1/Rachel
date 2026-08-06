@@ -7,12 +7,14 @@ import { Menu, X, LogOut } from 'lucide-react';
 import Image from "next/image";
 import { SidebarNav } from "./sidebar-nav";
 
-export function InternalMobileSidebar({ 
-  userPermissions, 
-  userEmail 
-}: { 
+export function InternalMobileSidebar({
+  userPermissions,
+  userEmail,
+  roleLabel
+}: {
   userPermissions: Record<string, string[]>;
   userEmail: string;
+  roleLabel?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -67,7 +69,7 @@ export function InternalMobileSidebar({
             </div>
             <div className="overflow-hidden">
               <p className="text-sm font-bold text-slate-800 truncate">{userEmail || 'admin@pgn.co.id'}</p>
-              <p className="text-xs text-slate-500 font-medium">HSE Manager</p>
+              <p className="text-xs text-slate-500 font-medium">{roleLabel || 'Pengguna'}</p>
             </div>
           </div>
         </Link>

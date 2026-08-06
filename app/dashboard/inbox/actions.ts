@@ -26,12 +26,20 @@ export async function getNotifications(): Promise<NotificationItem[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data, error } = await supabase
+  const mutedTypes = await getNotificationPreferences();
+
+  let query = supabase
     .from('notifications')
     .select('*')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
-    .limit(50);
+    .limit(150);
+
+  if (mutedTypes.length > 0) {
+    query = query.not('type', 'in', `(${mutedTypes.join(',')})`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.warn("Notifications fetch error:", error.message);
@@ -46,14 +54,50 @@ export async function getUnreadCount(): Promise<number> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 0;
 
-  const { count, error } = await supabase
+  const mutedTypes = await getNotificationPreferences();
+
+  let query = supabase
     .from('notifications')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .eq('is_read', false);
 
+  if (mutedTypes.length > 0) {
+    query = query.not('type', 'in', `(${mutedTypes.join(',')})`);
+  }
+
+  const { count, error } = await query;
+
   if (error) return 0;
   return count || 0;
+}
+
+// =====================================================================
+// PREFERENCES
+// =====================================================================
+export async function getNotificationPreferences(): Promise<NotificationType[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .select('muted_types')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error || !data) return [];
+  return (data.muted_types || []) as NotificationType[];
+}
+
+export async function updateNotificationPreferences(mutedTypes: NotificationType[]) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from('notification_preferences')
+    .upsert({ user_id: user.id, muted_types: mutedTypes, updated_at: new Date().toISOString() });
 }
 
 // =====================================================================
@@ -85,6 +129,24 @@ export async function deleteNotification(notificationId: string) {
     .from('notifications')
     .delete()
     .eq('id', notificationId);
+}
+
+export async function markManyAsRead(notificationIds: string[]) {
+  if (notificationIds.length === 0) return;
+  const supabase = await createClient();
+  await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .in('id', notificationIds);
+}
+
+export async function deleteMany(notificationIds: string[]) {
+  if (notificationIds.length === 0) return;
+  const supabase = await createClient();
+  await supabase
+    .from('notifications')
+    .delete()
+    .in('id', notificationIds);
 }
 
 // =====================================================================
