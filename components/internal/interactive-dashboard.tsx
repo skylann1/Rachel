@@ -19,6 +19,7 @@ export interface DashboardData {
   pipeline: { stage: string; disetujui: number; menunggu: number }[];
   prioritas: { level: string; value: number }[];
   anomali: { open: number; progres: number; closed: number };
+  vendorScorecard: { nama: string; anomali: number; terbuka: number; positif: number; total: number; rasio: number }[];
   jadwal: { onSchedule: number; terlambat: number };
   insidenTipe: { tipe: string; value: number }[];
   daysWithoutIncident: number | null;
@@ -135,7 +136,7 @@ function StackedRow({
 export function InteractiveDashboard({ data }: { data: DashboardData }) {
   const [detailConfig, setDetailConfig] = useState<DetailModalConfig | null>(null);
 
-  const { trend, pipeline, prioritas, anomali, jadwal, insidenTipe, daysWithoutIncident, streakLabel, totalIncidents } = data;
+  const { trend, pipeline, prioritas, anomali, jadwal, insidenTipe, daysWithoutIncident, streakLabel, totalIncidents, vendorScorecard } = data;
 
   const trendTotal = trend.reduce((s, t) => s + t.positif + t.anomali, 0);
   const anomaliTotal = anomali.open + anomali.progres + anomali.closed;
@@ -377,7 +378,74 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
         </Card>
       </div>
 
-      {/* ------------------------------------------------ Row 3: quick nav */}
+      {/* --------------------------------- Row 3: vendor safety scorecard */}
+      <Card
+        title="Rapor Keselamatan Vendor"
+        subtitle="Temuan K3 per vendor — diurutkan dari yang paling perlu perhatian"
+        className="animate-fade-up"
+        onClick={() => setDetailConfig({
+          title: 'Tindak Lanjut Anomali',
+          fetchFn: getAnomaliDetails,
+          viewAllHref: '/dashboard/inspection',
+          viewAllLabel: 'Lihat Semua Inspeksi',
+        })}
+      >
+        {vendorScorecard.length === 0 ? (
+          <EmptyHint label="Belum ada temuan inspeksi yang ditautkan ke vendor." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[520px]">
+              <thead>
+                <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                  <th className="text-left font-bold pb-2">Vendor</th>
+                  <th className="text-right font-bold pb-2 w-24">Anomali</th>
+                  <th className="text-right font-bold pb-2 w-24">Terbuka</th>
+                  <th className="text-right font-bold pb-2 w-24">Positif</th>
+                  <th className="text-left font-bold pb-2 w-40 pl-4">Rasio Anomali</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendorScorecard.map(v => (
+                  <tr key={v.nama} className="border-b border-slate-50 last:border-0">
+                    <td className="py-2.5 pr-3 font-bold text-slate-700">{v.nama}</td>
+                    <td className="py-2.5 text-right font-semibold text-slate-700 tabular-nums">{v.anomali}</td>
+                    <td className="py-2.5 text-right tabular-nums">
+                      {v.terbuka > 0 ? (
+                        <span className="inline-flex items-center gap-1 font-bold" style={{ color: C.critical }}>
+                          <AlertTriangle className="w-3 h-3" />
+                          {v.terbuka}
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-slate-400">0</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 text-right font-semibold text-slate-500 tabular-nums">{v.positif}</td>
+                    <td className="py-2.5 pl-4">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden min-w-[60px]">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${v.rasio}%`,
+                              background: v.rasio >= 50 ? C.critical : v.rasio >= 25 ? C.warning : C.good,
+                            }}
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-slate-600 tabular-nums w-9 text-right">{v.rasio}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[10px] text-slate-400 mt-3">
+              Rasio anomali = temuan tidak aman dibanding seluruh temuan vendor. Semakin rendah semakin baik.
+            </p>
+          </div>
+        )}
+      </Card>
+
+      {/* ------------------------------------------------ Row 4: quick nav */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 animate-fade-up">
         <h3 className="text-sm font-bold text-slate-800 mb-1">Navigasi Cepat</h3>
         <p className="text-xs text-slate-400 mb-4">Klik kartu grafik di atas untuk rincian, atau lompat langsung ke alur kerja.</p>

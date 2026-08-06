@@ -36,7 +36,7 @@ export default async function DashboardOverviewPage() {
      supabase.from('procedures').select('status'),
      supabase.from('jsa').select('status'),
      supabase.from('ptw').select('status, workers, projects ( end_date )'),
-     supabase.from('inspections').select('status, finding_type, priority, created_at'),
+     supabase.from('inspections').select('status, finding_type, priority, created_at, target_vendor, vendor_profiles:target_vendor ( company_name )'),
      supabase.from('incidents').select('type, incident_date'),
    ]);
 
@@ -80,6 +80,39 @@ export default async function DashboardOverviewPage() {
      level,
      value: openAnomalies.filter(i => i.priority === level).length,
    }));
+
+   // ------------------------------------------------ vendor safety scorecard
+   // Anomalies attributed to each vendor via inspections.target_vendor.
+   // Vendors with no findings at all are omitted rather than shown as a
+   // perfect score — absence of a record is not evidence of safe work.
+   const vendorAgg = new Map<string, { nama: string; anomali: number; terbuka: number; positif: number }>();
+   for (const i of inspections || []) {
+     const vid = (i as any).target_vendor as string | null;
+     if (!vid) continue;
+     const vp: any = Array.isArray((i as any).vendor_profiles) ? (i as any).vendor_profiles[0] : (i as any).vendor_profiles;
+     const entry = vendorAgg.get(vid) ?? { nama: vp?.company_name || 'Vendor tidak diketahui', anomali: 0, terbuka: 0, positif: 0 };
+     if (ANOMALI_TYPES.includes(i.finding_type)) {
+       entry.anomali++;
+       if (i.status !== 'Closed') entry.terbuka++;
+     } else if (POSITIF_TYPES.includes(i.finding_type)) {
+       entry.positif++;
+     }
+     vendorAgg.set(vid, entry);
+   }
+
+   const vendorScorecard = [...vendorAgg.values()]
+     .map(v => {
+       const total = v.anomali + v.positif;
+       return {
+         ...v,
+         total,
+         // Share of findings that were anomalies — lower is better.
+         rasio: total > 0 ? Math.round((v.anomali / total) * 100) : 0,
+       };
+     })
+     // Worst first: most unresolved, then most anomalies overall.
+     .sort((a, b) => b.terbuka - a.terbuka || b.anomali - a.anomali)
+     .slice(0, 5);
 
    // ------------------------------------------------------- 6-month trend
    const trendWindow: { key: string; label: string }[] = [];
@@ -160,6 +193,7 @@ export default async function DashboardOverviewPage() {
      ],
      prioritas,
      anomali: { open: anomaliOpen, progres: anomaliProgres, closed: anomaliClosed },
+     vendorScorecard,
      jadwal: { onSchedule, terlambat },
      insidenTipe,
      daysWithoutIncident,
