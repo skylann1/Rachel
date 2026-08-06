@@ -1,218 +1,388 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, LabelList, Legend
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import {
-  Rocket, ShieldAlert, ClipboardCheck, AlertTriangle, Archive, ListChecks, ArrowRight
+  Rocket, ClipboardCheck, AlertTriangle, Archive, ListChecks, ArrowRight,
+  ShieldCheck, Inbox, CalendarClock, Flame,
 } from 'lucide-react';
+import { DashboardDetailModal, DetailModalConfig } from './dashboard-detail-modal';
+import {
+  getProjectScheduleDetails, getPtwDetails, getInspectionDetails, getAnomaliDetails,
+} from '@/app/dashboard/actions/dashboard-detail';
 
 export interface DashboardData {
-  proyekData: { name: string; value: number; color: string }[];
-  progresProyekData: { name: string; onSchedule: number; terlambat: number }[];
-  prosedurData: { name: string; value: number; color: string }[];
-  jsaData: { name: string; value: number; color: string }[];
-  ptwData: { name: string; value: number; color: string }[];
-  inspeksiData: { name: string; positif: number; anomali: number }[];
-  anomaliData: { name: string; closed: number; progres: number; open: number }[];
-  jka: number;
-  incidents: number;
+  trend: { month: string; positif: number; anomali: number }[];
+  pipeline: { stage: string; disetujui: number; menunggu: number }[];
+  prioritas: { level: string; value: number }[];
+  anomali: { open: number; progres: number; closed: number };
+  jadwal: { onSchedule: number; terlambat: number };
+  insidenTipe: { tipe: string; value: number }[];
+  daysWithoutIncident: number | null;
+  streakLabel: string;
+  totalIncidents: number;
+  safeManHours: number;
 }
 
-const TOOLTIP_STYLE = {
-  borderRadius: 10,
-  border: '1px solid #e1e0d9',
-  fontSize: 12,
-  boxShadow: '0 4px 16px rgba(11,11,11,0.08)',
+/**
+ * Palette — every set below was checked with the dataviz validator against a
+ * white card surface. Notable result: the intuitive green/red pairing for
+ * Closed vs Open FAILS colorblind separation (ΔE 4.1), so Closed is blue.
+ */
+const C = {
+  positif: '#2a78d6',   // categorical slot 1 — pairs clean with slot 2 (all checks pass)
+  anomali: '#eb6834',   // categorical slot 2
+  good: '#0ca30c',      // status: good
+  warning: '#fab219',   // status: warning
+  critical: '#d03b3b',  // status: critical
+  grid: '#e1e0d9',
+  axis: '#c3c2b7',
+  muted: '#898781',
+  ink: '#52514e',
 };
 
-const ChartCard = ({ title, children, onClick }: { title: string, children: React.ReactNode, onClick?: () => void }) => (
-  <div
-    className={`group bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-56 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 ${onClick ? 'cursor-pointer' : ''}`}
-    onClick={onClick}
-  >
-    <h3 className="text-xs font-bold text-slate-700 text-center mb-2 pb-1.5 inline-block mx-auto relative after:content-[''] after:absolute after:left-1/2 after:-translate-x-1/2 after:-bottom-0 after:h-0.5 after:w-8 after:rounded-full after:bg-gradient-to-r after:from-primary after:to-blue-400 after:transition-all group-hover:after:w-12">
-      {title}
-    </h3>
-    <div className="flex-1 w-full relative">
-      {children}
-    </div>
-  </div>
-);
+// Ordinal ramp for the ordered priority tiers — one hue, monotone lightness (all checks pass).
+const PRIORITY_RAMP = ['#86b6ef', '#5598e7', '#2a78d6', '#184f95'];
+const PRIORITY_LABEL: Record<string, string> = {
+  Low: 'Rendah', Medium: 'Sedang', High: 'Tinggi', Critical: 'Kritis',
+};
 
 const QUICK_LINKS = [
-  { label: 'Proyek Berjalan', desc: 'Pantau PTW aktif & progres lapangan', href: '/dashboard/ongoing', icon: Rocket, tone: 'bg-blue-50 text-blue-600' },
-  { label: 'Persetujuan', desc: 'Prosedur, JSA & PTW menunggu review', href: '/dashboard/approval', icon: ClipboardCheck, tone: 'bg-amber-50 text-amber-600' },
-  { label: 'Inbox Temuan K3', desc: 'Tindak lanjuti inspeksi & anomali', href: '/dashboard/inspection', icon: ListChecks, tone: 'bg-emerald-50 text-emerald-600' },
-  { label: 'Laporan Insiden', desc: 'Investigasi insiden yang dilaporkan', href: '/dashboard/incident', icon: AlertTriangle, tone: 'bg-rose-50 text-rose-600' },
-  { label: 'Arsip Proyek', desc: 'Riwayat proyek yang telah selesai', href: '/dashboard/archive', icon: Archive, tone: 'bg-slate-100 text-slate-600' },
+  { label: 'Proyek Berjalan', desc: 'Progres lapangan', href: '/dashboard/ongoing', icon: Rocket, tone: 'bg-blue-50 text-blue-600' },
+  { label: 'Persetujuan', desc: 'Dokumen menunggu review', href: '/dashboard/approval', icon: ClipboardCheck, tone: 'bg-amber-50 text-amber-600' },
+  { label: 'Inbox Temuan K3', desc: 'Inspeksi & anomali', href: '/dashboard/inspection', icon: ListChecks, tone: 'bg-emerald-50 text-emerald-600' },
+  { label: 'Laporan Insiden', desc: 'Investigasi insiden', href: '/dashboard/incident', icon: AlertTriangle, tone: 'bg-rose-50 text-rose-600' },
+  { label: 'Arsip Proyek', desc: 'Riwayat proyek selesai', href: '/dashboard/archive', icon: Archive, tone: 'bg-slate-100 text-slate-600' },
 ];
 
+/* ------------------------------------------------------------------ pieces */
+
+function Card({
+  title, subtitle, onClick, className = '', children,
+}: {
+  title: string; subtitle?: string; onClick?: () => void; className?: string; children: React.ReactNode;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''} ${className}`}
+    >
+      <div className="mb-4">
+        <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+        {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+      </div>
+      <div className="flex-1 flex flex-col">{children}</div>
+    </div>
+  );
+}
+
+function EmptyHint({ label }: { label: string }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center text-center py-6 gap-2">
+      <Inbox className="w-7 h-7 text-slate-300" />
+      <p className="text-xs text-slate-400 max-w-[22ch]">{label}</p>
+    </div>
+  );
+}
+
+/** Horizontal part-to-whole bar. Values are always shown as text, never color-only. */
+function StackedRow({
+  label, segments, total,
+}: {
+  label?: string;
+  segments: { name: string; value: number; color: string }[];
+  total: number;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {label && (
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xs font-bold text-slate-600">{label}</span>
+          <span className="text-xs font-semibold text-slate-400 tabular-nums">{total}</span>
+        </div>
+      )}
+      {total === 0 ? (
+        <div className="h-2.5 rounded-full bg-slate-100" />
+      ) : (
+        <div className="flex gap-[2px] h-2.5">
+          {segments.filter(s => s.value > 0).map((s, i, arr) => (
+            <div
+              key={s.name}
+              title={`${s.name}: ${s.value}`}
+              style={{ width: `${(s.value / total) * 100}%`, background: s.color }}
+              className={`h-full ${i === 0 ? 'rounded-l-full' : ''} ${i === arr.length - 1 ? 'rounded-r-full' : ''}`}
+            />
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        {segments.map(s => (
+          <span key={s.name} className="inline-flex items-center gap-1.5 text-[10px] font-medium text-slate-500">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+            {s.name} <span className="font-bold text-slate-700 tabular-nums">{s.value}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------- main */
+
 export function InteractiveDashboard({ data }: { data: DashboardData }) {
-  const router = useRouter();
+  const [detailConfig, setDetailConfig] = useState<DetailModalConfig | null>(null);
 
-  const {
-    proyekData,
-    progresProyekData,
-    prosedurData,
-    jsaData,
-    ptwData,
-    inspeksiData,
-    anomaliData,
-    jka,
-    incidents
-  } = data;
+  const { trend, pipeline, prioritas, anomali, jadwal, insidenTipe, daysWithoutIncident, streakLabel, totalIncidents } = data;
 
-  const goTo = (href: string) => router.push(href);
+  const trendTotal = trend.reduce((s, t) => s + t.positif + t.anomali, 0);
+  const anomaliTotal = anomali.open + anomali.progres + anomali.closed;
+  const prioritasTotal = prioritas.reduce((s, p) => s + p.value, 0);
+  const prioritasMax = Math.max(1, ...prioritas.map(p => p.value));
+  const jadwalTotal = jadwal.onSchedule + jadwal.terlambat;
+  const closedPct = anomaliTotal > 0 ? Math.round((anomali.closed / anomaliTotal) * 100) : null;
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 mt-6">
-      {/* Left Column: Charts Area */}
-      <div className="flex-1 flex flex-col gap-6">
+    <div className="space-y-4">
 
-        {/* Row 1: 5 Small Charts */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      {/* ---------------------------------------- Row 1: trend + safety hero */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-          <ChartCard title="Jumlah Proyek" onClick={() => goTo('/dashboard/ongoing')}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={proyekData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" paddingAngle={2} cornerRadius={4}>
-                  {proyekData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="#fcfcfb" strokeWidth={2} />)}
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
-                <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartCard>
+        <Card
+          title="Tren Temuan K3"
+          subtitle="Hasil inspeksi 6 bulan terakhir"
+          className="lg:col-span-2 animate-fade-up"
+          onClick={() => setDetailConfig({
+            title: 'Hasil Inspeksi',
+            fetchFn: getInspectionDetails,
+            viewAllHref: '/dashboard/inspection',
+            viewAllLabel: 'Lihat Semua Inspeksi',
+          })}
+        >
+          {trendTotal === 0 ? (
+            <EmptyHint label="Belum ada data inspeksi pada 6 bulan terakhir." />
+          ) : (
+            <div className="h-[260px] -ml-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trend} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+                  <CartesianGrid stroke={C.grid} strokeWidth={1} vertical={false} />
+                  <XAxis
+                    dataKey="month" tickLine={false} axisLine={{ stroke: C.axis }}
+                    tick={{ fill: C.muted, fontSize: 11 }} dy={4}
+                  />
+                  <YAxis
+                    allowDecimals={false} tickLine={false} axisLine={false}
+                    tick={{ fill: C.muted, fontSize: 11 }} width={32}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: C.axis, strokeWidth: 1 }}
+                    contentStyle={{
+                      borderRadius: 10, border: `1px solid ${C.grid}`,
+                      fontSize: 12, boxShadow: '0 4px 16px rgba(11,11,11,0.08)',
+                    }}
+                  />
+                  <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                  {/*
+                    isAnimationActive={false} is load-bearing, not a preference:
+                    recharts' entry animation never paints the line path under
+                    React 19 here — the previous dashboard's pies/bars rendered
+                    as empty cards for the same reason.
+                  */}
+                  <Line
+                    name="Temuan Positif" dataKey="positif" stroke={C.positif}
+                    strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    name="Anomali" dataKey="anomali" stroke={C.anomali}
+                    strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
 
-          <ChartCard title="Progres Proyek" onClick={() => goTo('/dashboard/ongoing')}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={progresProyekData} layout="vertical" margin={{ left: -30, right: 10 }} barGap={2}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" hide />
-                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(37,106,191,0.06)' }} />
-                <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-                <Bar name="On Schedule" dataKey="onSchedule" stackId="a" fill="#0ca30c" radius={[4, 0, 0, 4]}>
-                    <LabelList dataKey="onSchedule" position="center" fill="#fff" fontWeight="bold"/>
-                </Bar>
-                <Bar name="Terlambat" dataKey="terlambat" stackId="a" fill="#d03b3b" radius={[0, 4, 4, 0]}>
-                    <LabelList dataKey="terlambat" position="center" fill="#fff" fontWeight="bold"/>
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
+        {/* Safety hero — the number a safety board leads with */}
+        <div className="animate-fade-up bg-slate-900 rounded-2xl shadow-sm p-5 flex flex-col text-white relative overflow-hidden" style={{ animationDelay: '60ms' }}>
+          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-emerald-500/10 blur-2xl" />
+          <div className="relative flex-1 flex flex-col">
+            <div className="flex items-center gap-2 mb-4">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold">Rekor Keselamatan</h3>
+            </div>
 
-          <ChartCard title="Jumlah Prosedur" onClick={() => goTo('/dashboard/approval')}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={prosedurData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="40%" paddingAngle={2} cornerRadius={4}>
-                  {prosedurData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="#fcfcfb" strokeWidth={2} />)}
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
-                <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          <ChartCard title="Jumlah JSA" onClick={() => goTo('/dashboard/approval')}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={jsaData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="40%" paddingAngle={2} cornerRadius={4}>
-                  {jsaData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="#fcfcfb" strokeWidth={2} />)}
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
-                <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          <ChartCard title="Jumlah PTW" onClick={() => goTo('/dashboard/approval')}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={ptwData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" paddingAngle={2} cornerRadius={4}>
-                  {ptwData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="#fcfcfb" strokeWidth={2} />)}
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
-                <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-        </div>
-
-        {/* Row 2: Inspeksi, Anomali, Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          <ChartCard title="Hasil Inspeksi" onClick={() => goTo('/dashboard/inspection')}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={inspeksiData} margin={{ left: -30, right: 10, top: 20 }} barGap={4}>
-                <XAxis dataKey="name" hide />
-                <YAxis hide />
-                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(37,106,191,0.06)' }} />
-                <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-                <Bar name="Aspek Positif" dataKey="positif" fill="#0ca30c" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="positif" position="top" fill="#64748b" fontWeight="bold"/>
-                </Bar>
-                <Bar name="Anomali" dataKey="anomali" fill="#ec835a" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="anomali" position="top" fill="#64748b" fontWeight="bold"/>
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          <ChartCard title="Tindak Lanjut Anomali" onClick={() => goTo('/dashboard/inspection')}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={anomaliData} layout="vertical" margin={{ left: -40, right: 10 }} barGap={2}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" hide />
-                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(37,106,191,0.06)' }} />
-                <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-                <Bar name="Closed" dataKey="closed" stackId="b" fill="#0ca30c" radius={[4, 0, 0, 4]}>
-                    <LabelList dataKey="closed" position="center" fill="#fff" fontWeight="bold"/>
-                </Bar>
-                <Bar name="Progres" dataKey="progres" stackId="b" fill="#fab219" >
-                    <LabelList dataKey="progres" position="center" fill="#fff" fontWeight="bold"/>
-                </Bar>
-                <Bar name="Open" dataKey="open" stackId="b" fill="#d03b3b" radius={[0, 4, 4, 0]}>
-                    <LabelList dataKey="open" position="center" fill="#fff" fontWeight="bold"/>
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center h-56 transition-all duration-300 hover:shadow-md">
-            <h3 className="text-sm font-bold text-slate-800 mb-4 border-b pb-2">HSSE Statistik</h3>
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-slate-500 font-semibold uppercase">Safe Man-Hours</p>
-                <p className="text-3xl font-black text-slate-800 tabular-nums">{jka.toLocaleString('id-ID')}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 font-semibold uppercase">Total Insiden</p>
-                <p className={`text-3xl font-black tabular-nums ${incidents === 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {incidents}
+            <div className="flex-1 flex flex-col justify-center">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hari Tanpa Insiden</p>
+              {daysWithoutIncident === null ? (
+                <p className="text-2xl font-black leading-tight mt-2 text-slate-300">Belum ada data</p>
+              ) : (
+                <p className="text-5xl font-black leading-none mt-2">
+                  {daysWithoutIncident.toLocaleString('id-ID')}
                 </p>
+              )}
+              <p className="text-xs text-slate-400 mt-2">{streakLabel}</p>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Insiden</span>
+                <span className={`text-lg font-black tabular-nums ${totalIncidents === 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {totalIncidents}
+                </span>
               </div>
+              {insidenTipe.length > 0 ? (
+                <div className="space-y-1">
+                  {insidenTipe.map(t => (
+                    <div key={t.tipe} className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1.5 text-slate-300">
+                        <Flame className="w-3 h-3 text-rose-400" />
+                        {t.tipe}
+                      </span>
+                      <span className="font-bold tabular-nums">{t.value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500">Nihil — pertahankan catatan ini.</p>
+              )}
             </div>
           </div>
-
         </div>
       </div>
 
-      {/* Right Column: Quick Navigation */}
-      <div className="w-full xl:w-96 flex-shrink-0 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-        <div className="flex items-center gap-2 mb-1">
-          <ShieldAlert className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-bold text-slate-800">Navigasi Cepat</h3>
-        </div>
-        <p className="text-xs text-slate-400 mb-4">Klik grafik di samping, atau pilih pintasan berikut untuk masuk ke alur kerja terkait.</p>
+      {/* --------------------------- Row 2: pipeline / prioritas / anomali */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        <div className="flex-1 flex flex-col gap-2">
-          {QUICK_LINKS.map((link) => {
+        <Card
+          title="Pipeline Persetujuan"
+          subtitle="Posisi dokumen di tiap tahap"
+          className="animate-fade-up"
+          onClick={() => setDetailConfig({
+            title: 'Dokumen Menunggu Persetujuan',
+            fetchFn: getPtwDetails,
+            viewAllHref: '/dashboard/approval',
+            viewAllLabel: 'Lihat Semua Persetujuan',
+          })}
+        >
+          {pipeline.every(p => p.disetujui + p.menunggu === 0) ? (
+            <EmptyHint label="Belum ada dokumen yang diajukan." />
+          ) : (
+            <div className="space-y-4">
+              {pipeline.map(p => (
+                <StackedRow
+                  key={p.stage}
+                  label={p.stage}
+                  total={p.disetujui + p.menunggu}
+                  segments={[
+                    { name: 'Disetujui', value: p.disetujui, color: C.good },
+                    { name: 'Menunggu', value: p.menunggu, color: C.warning },
+                  ]}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="Prioritas Anomali Terbuka"
+          subtitle="Temuan yang belum ditutup"
+          className="animate-fade-up"
+          onClick={() => setDetailConfig({
+            title: 'Tindak Lanjut Anomali',
+            fetchFn: getAnomaliDetails,
+            viewAllHref: '/dashboard/inspection',
+            viewAllLabel: 'Lihat Semua Inspeksi',
+          })}
+        >
+          {prioritasTotal === 0 ? (
+            <EmptyHint label="Tidak ada anomali terbuka. Semua temuan sudah ditutup." />
+          ) : (
+            <div className="space-y-3">
+              {prioritas.map((p, i) => (
+                <div key={p.level} className="space-y-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs font-bold text-slate-600">{PRIORITY_LABEL[p.level] ?? p.level}</span>
+                    <span className="text-xs font-black text-slate-800 tabular-nums">{p.value}</span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${(p.value / prioritasMax) * 100}%`, background: PRIORITY_RAMP[i] }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-slate-400 pt-1">
+                Total {prioritasTotal} temuan menunggu tindak lanjut.
+              </p>
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="Tindak Lanjut & Jadwal"
+          subtitle="Penyelesaian anomali dan ketepatan waktu proyek"
+          className="animate-fade-up"
+          onClick={() => setDetailConfig({
+            title: 'Progres Proyek',
+            fetchFn: getProjectScheduleDetails,
+            viewAllHref: '/dashboard/ongoing',
+            viewAllLabel: 'Lihat Semua Proyek',
+          })}
+        >
+          <div className="space-y-5">
+            <div>
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-xs font-bold text-slate-600">Penyelesaian Anomali</span>
+                {closedPct !== null && (
+                  <span className="text-lg font-black text-slate-800 tabular-nums">{closedPct}%</span>
+                )}
+              </div>
+              {anomaliTotal === 0 ? (
+                <p className="text-[11px] text-slate-400">Belum ada anomali tercatat.</p>
+              ) : (
+                <StackedRow
+                  total={anomaliTotal}
+                  segments={[
+                    { name: 'Closed', value: anomali.closed, color: C.positif },
+                    { name: 'Progres', value: anomali.progres, color: C.warning },
+                    { name: 'Open', value: anomali.open, color: C.critical },
+                  ]}
+                />
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-2 mb-2">
+                <CalendarClock className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-xs font-bold text-slate-600">Jadwal Proyek Aktif</span>
+              </div>
+              {jadwalTotal === 0 ? (
+                <p className="text-[11px] text-slate-400">Belum ada proyek berjalan.</p>
+              ) : (
+                <StackedRow
+                  total={jadwalTotal}
+                  segments={[
+                    { name: 'On Schedule', value: jadwal.onSchedule, color: C.good },
+                    { name: 'Terlambat', value: jadwal.terlambat, color: C.critical },
+                  ]}
+                />
+              )}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ------------------------------------------------ Row 3: quick nav */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 animate-fade-up">
+        <h3 className="text-sm font-bold text-slate-800 mb-1">Navigasi Cepat</h3>
+        <p className="text-xs text-slate-400 mb-4">Klik kartu grafik di atas untuk rincian, atau lompat langsung ke alur kerja.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2">
+          {QUICK_LINKS.map(link => {
             const Icon = link.icon;
             return (
               <Link
@@ -234,6 +404,7 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
         </div>
       </div>
 
+      <DashboardDetailModal config={detailConfig} onClose={() => setDetailConfig(null)} />
     </div>
   );
 }

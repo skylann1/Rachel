@@ -29,6 +29,55 @@ export async function updateUserMetadata(metadata: Record<string, any>) {
   return { success: true };
 }
 
+export async function updateInternalProfile(data: {
+  fullName: string;
+  nip: string;
+}) {
+  const supabase = await createClient();
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { error: 'Unauthorized' };
+  }
+
+  // 1. Update Auth Metadata
+  const { error: metaError } = await supabase.auth.updateUser({
+    data: { full_name: data.fullName }
+  });
+
+  if (metaError) {
+    console.error("Error updating user metadata:", metaError);
+    return { error: metaError.message };
+  }
+
+  // 2. Update Profiles Table (source of truth used across assignee lists, logs, etc.)
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update({ full_name: data.fullName })
+    .eq('id', user.id);
+
+  if (profileError) {
+    console.error("Error updating profiles table:", profileError);
+    return { error: profileError.message };
+  }
+
+  // 3. Update Internal Profiles Table
+  const { error: internalProfileError } = await supabase
+    .from('internal_profiles')
+    .update({ nip: data.nip })
+    .eq('id', user.id);
+
+  if (internalProfileError) {
+    console.error("Error updating internal_profiles table:", internalProfileError);
+    return { error: internalProfileError.message };
+  }
+
+  revalidatePath('/dashboard/profile');
+  revalidatePath('/dashboard');
+
+  return { success: true };
+}
+
 export async function updateVendorProfile(data: {
   companyName: string;
   picName: string;
