@@ -2,32 +2,66 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Search, Plus, MapPin, Calendar, Clock, Edit2, Trash2, Building2, Briefcase, Activity, X } from 'lucide-react';
+import { Search, Plus, MapPin, Calendar, Clock, Edit2, Trash2, Building2, Briefcase, X, ArrowRight, Hourglass, CheckCircle2 } from 'lucide-react';
 import { createProject } from './actions';
+import { STAGE_TONE_CLASS, StageTone } from '@/lib/project-stage';
 
 interface ProjectClientProps {
   initialProjects: any[];
   vendors: any[];
 }
 
+/** Filter options describe the workflow stage, not the raw enum. */
+const STAGE_FILTERS = [
+  { value: 'all', label: 'Semua Tahap' },
+  { value: 'waiting-vendor', label: 'Menunggu Vendor' },
+  { value: 'waiting-internal', label: 'Perlu Review Anda' },
+  { value: 'done', label: 'Selesai / Aktif' },
+  { value: 'rejected', label: 'Ditolak / Kedaluwarsa' },
+];
+
+const STAGE_ICON: Record<StageTone, React.ElementType> = {
+  'waiting-vendor': Hourglass,
+  'waiting-internal': Clock,
+  'done': CheckCircle2,
+  'rejected': X,
+};
+
 export default function ProjectClient({ initialProjects, vendors }: ProjectClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Simple search filter
-  const filteredProjects = initialProjects.filter(p => 
-    p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.vendor?.company_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [stageFilter, setStageFilter] = useState('all');
+  // Set after a successful create so the admin is told what happens next
+  // instead of being dropped back onto an unchanged-looking list.
+  const [justCreated, setJustCreated] = useState<{ name: string; vendor: string } | null>(null);
+
+  const filteredProjects = initialProjects.filter(p => {
+    const matchesSearch =
+      p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.vendor?.company_name?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStage = stageFilter === 'all' || p.stage?.tone === stageFilter;
+    return matchesSearch && matchesStage;
+  });
+
+  const waitingOnVendor = initialProjects.filter(p => p.stage?.tone === 'waiting-vendor').length;
+  const waitingOnMe = initialProjects.filter(p => p.stage?.tone === 'waiting-internal').length;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
-    await createProject(formData);
-    setIsSubmitting(false);
-    setIsModalOpen(false);
+    const name = formData.get('name') as string;
+    const vendorId = formData.get('vendor_id') as string;
+    const vendorName = vendors.find(v => v.id === vendorId)?.company_name || 'vendor terkait';
+
+    try {
+      await createProject(formData);
+      setJustCreated({ name, vendor: vendorName });
+      setIsModalOpen(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -47,6 +81,72 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
         </button>
       </div>
 
+      {/* Post-create guidance: name the next actor explicitly. */}
+      {justCreated && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-start gap-3">
+            <div className="bg-white p-2 rounded-xl text-emerald-600 shadow-sm shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-emerald-900 font-bold text-sm">
+                Proyek &ldquo;{justCreated.name}&rdquo; berhasil dibuat
+              </h3>
+              <p className="text-emerald-800/80 text-xs mt-1 max-w-2xl">
+                Langkah berikutnya ada di <strong>{justCreated.vendor}</strong>. Notifikasi sudah dikirim
+                agar vendor mengajukan <strong>Prosedur Kerja</strong>. Setelah diajukan, proyek akan
+                muncul di <strong>Persetujuan</strong> untuk Anda review.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/dashboard/approval"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5 whitespace-nowrap"
+            >
+              Buka Persetujuan <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <button
+              onClick={() => setJustCreated(null)}
+              className="p-2 text-emerald-700/60 hover:text-emerald-900 rounded-lg hover:bg-emerald-100 transition-colors"
+              title="Tutup"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Workflow summary — what is blocked on whom. */}
+      {(waitingOnVendor > 0 || waitingOnMe > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={() => setStageFilter(stageFilter === 'waiting-internal' ? 'all' : 'waiting-internal')}
+            className={`text-left bg-white border rounded-2xl p-4 flex items-center gap-3 transition-all hover:shadow-md ${stageFilter === 'waiting-internal' ? 'border-primary ring-2 ring-primary/20' : 'border-slate-200'}`}
+          >
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-black text-slate-800 leading-none">{waitingOnMe}</p>
+              <p className="text-xs font-semibold text-slate-500 mt-1">Perlu review internal</p>
+            </div>
+          </button>
+          <button
+            onClick={() => setStageFilter(stageFilter === 'waiting-vendor' ? 'all' : 'waiting-vendor')}
+            className={`text-left bg-white border rounded-2xl p-4 flex items-center gap-3 transition-all hover:shadow-md ${stageFilter === 'waiting-vendor' ? 'border-primary ring-2 ring-primary/20' : 'border-slate-200'}`}
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <Hourglass className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-black text-slate-800 leading-none">{waitingOnVendor}</p>
+              <p className="text-xs font-semibold text-slate-500 mt-1">Menunggu dokumen vendor</p>
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="relative w-full sm:w-96">
@@ -62,12 +162,14 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
           />
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <select className="block w-full sm:w-40 pl-3 pr-10 py-2 text-base border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm rounded-xl bg-slate-50">
-            <option>Semua Status</option>
-            <option>On Progress</option>
-            <option>Preparation</option>
-            <option>Completed</option>
-            <option>On Hold</option>
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value)}
+            className="block w-full sm:w-52 pl-3 pr-10 py-2 text-base border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm rounded-xl bg-slate-50"
+          >
+            {STAGE_FILTERS.map(f => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -83,12 +185,17 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
                 <Briefcase className="w-7 h-7" />
               </div>
               <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-lg">{project.id.substring(0,8)}</span>
-                  {project.status === 'On Progress' && <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full flex items-center gap-1"><Activity className="w-3 h-3" /> Berjalan</span>}
-                  {project.status === 'Completed' && <span className="text-[10px] uppercase font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Selesai</span>}
-                  {project.status === 'Preparation' && <span className="text-[10px] uppercase font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Persiapan</span>}
-                  {project.status === 'On Hold' && <span className="text-[10px] uppercase font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">Ditunda</span>}
+                  {project.stage && (() => {
+                    const StageIcon = STAGE_ICON[project.stage.tone as StageTone];
+                    return (
+                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${STAGE_TONE_CLASS[project.stage.tone as StageTone]}`}>
+                        <StageIcon className="w-3 h-3" />
+                        {project.stage.label}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <h3 className="text-lg font-bold text-slate-800 leading-tight">
                   {project.name}
@@ -97,6 +204,9 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
                   <Building2 className="w-4 h-4" />
                   {project.vendor?.company_name || 'Tanpa Vendor'}
                 </div>
+                {project.stage && (
+                  <p className="text-xs text-slate-500 pt-0.5">{project.stage.hint}</p>
+                )}
               </div>
             </div>
 
@@ -132,11 +242,19 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
               </div>
             </div>
 
-            <div className="flex items-center justify-end lg:border-l lg:border-slate-100 lg:pl-6 gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-              <Link href={`/dashboard/master-data/project/${encodeURIComponent(project.id)}`} className="p-2.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-colors bg-slate-50 border border-slate-200 hover:border-primary/30" title="Edit Data Proyek">
+            <div className="flex items-center justify-end lg:border-l lg:border-slate-100 lg:pl-6 gap-2">
+              {/* Always visible: the workflow view is the actual next step, not a hover affordance. */}
+              <Link
+                href={`/dashboard/projects/${encodeURIComponent(project.id)}`}
+                className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-white hover:bg-primary px-3 py-2.5 rounded-xl transition-colors bg-primary/10 border border-primary/20 whitespace-nowrap"
+                title="Lihat progres dokumen K3"
+              >
+                Lihat Progres <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <Link href={`/dashboard/master-data/project/${encodeURIComponent(project.id)}`} className="p-2.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-colors bg-slate-50 border border-slate-200 hover:border-primary/30 opacity-100 sm:opacity-0 group-hover:opacity-100" title="Edit Data Proyek">
                 <Edit2 className="w-4 h-4" />
               </Link>
-              <button className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors bg-slate-50 border border-slate-200 hover:border-rose-200" title="Hapus Proyek">
+              <button className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors bg-slate-50 border border-slate-200 hover:border-rose-200 opacity-100 sm:opacity-0 group-hover:opacity-100" title="Hapus Proyek">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
