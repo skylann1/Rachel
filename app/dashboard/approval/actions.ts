@@ -4,6 +4,8 @@ import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createNotification, notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 import { JSA_STATUS } from "@/lib/jsa-status";
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_ROLES } from "@/lib/procedure-status";
+import { PTW_STATUS, PTW_STAGE_ROLES } from "@/lib/ptw-status";
 
 // =====================================================================
 // FETCH FUNCTIONS
@@ -18,27 +20,31 @@ export async function getAllProjectsWithRelations() {
       vendor_profiles ( company_name ),
       procedures ( id, status ),
       jsa ( id, status ),
-      ptw ( id, status, ptw_number )
+      ptw ( id, status, ptw_number, valid_to )
     `)
     .order('created_at', { ascending: false });
   if (error) { console.error("GET PROJECTS ERROR:", error); return []; }
 
   // 3. PTW Expiry Tracking Logic
-  // Check if any active PTW has passed its project's end date
+  // Masa berlaku dihitung dari valid_to milik PTW itu sendiri; baris lama yang
+  // belum punya valid_to jatuh kembali ke tanggal selesai proyek.
   const now = new Date();
   now.setHours(0, 0, 0, 0); // Compare date only
   let hasUpdates = false;
 
   const processedData = data?.map(project => {
-    const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
-    if (ptw && ptw.status === 'PTW Aktif' && project.end_date) {
-      const endDate = new Date(project.end_date);
-      if (endDate < now) {
+    // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda) — cek expiry tiap baris.
+    const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+    for (const ptw of ptws) {
+      if (ptw.status !== PTW_STATUS.aktif) continue;
+      const batas = ptw.valid_to ?? project.end_date;
+      if (!batas) continue;
+      if (new Date(batas) < now) {
         // Mark as expired in memory for immediate UI update
-        ptw.status = 'Expired';
+        ptw.status = PTW_STATUS.expired;
         hasUpdates = true;
         // Fire-and-forget DB update
-        supabase.from('ptw').update({ status: 'Expired' }).eq('id', ptw.id).then();
+        supabase.from('ptw').update({ status: PTW_STATUS.expired }).eq('id', ptw.id).then();
       }
     }
     return project;
@@ -67,7 +73,7 @@ export async function getPendingProcedures() {
       id, status, created_at, content, project_id,
       projects ( name, vendor_profiles ( company_name ) )
     `)
-    .in('status', ['Draft', 'Menunggu Review PM'])
+    .in('status', [PROCEDURE_STATUS.draft, PROCEDURE_STATUS.menungguReviewPM])
     .order('created_at', { ascending: false });
   if (error) { console.error(error); return []; }
   return data || [];
@@ -155,13 +161,13 @@ export async function approveProcedure(procedureId: string) {
   if (!user) throw new Error("Unauthorized");
 
   const { data: current } = await supabase.from('procedures').select('status').eq('id', procedureId).single();
-  if (current?.status !== 'Menunggu Review PM') throw new Error("Prosedur tidak dalam tahap yang bisa disetujui.");
-  await requireRole(supabase, user.id, ['pm'], "Hanya PM yang dapat menyetujui Prosedur Kerja.");
+  if (current?.status !== PROCEDURE_STATUS.menungguReviewPM) throw new Error("Prosedur tidak dalam tahap yang bisa disetujui.");
+  await requireRole(supabase, user.id, PROCEDURE_STAGE_ROLES[PROCEDURE_STATUS.menungguReviewPM], "Hanya PM yang dapat menyetujui Prosedur Kerja.");
 
   const { data: profile } = await supabase.from('internal_profiles').select('id').eq('id', user.id).single();
   const { error } = await supabase
     .from('procedures')
-    .update({ status: 'Prosedur Disetujui', reviewed_by: profile?.id })
+    .update({ status: PROCEDURE_STATUS.approved, reviewed_by: profile?.id })
     .eq('id', procedureId);
   if (error) throw new Error(error.message);
 
@@ -186,8 +192,8 @@ export async function rejectProcedure(procedureId: string, note: string) {
   if (!user) throw new Error("Unauthorized");
 
   const { data: currentCheck } = await supabase.from('procedures').select('status').eq('id', procedureId).single();
-  if (currentCheck?.status !== 'Menunggu Review PM') throw new Error("Prosedur tidak dalam tahap yang bisa ditolak.");
-  await requireRole(supabase, user.id, ['pm'], "Hanya PM yang dapat menolak Prosedur Kerja.");
+  if (currentCheck?.status !== PROCEDURE_STATUS.menungguReviewPM) throw new Error("Prosedur tidak dalam tahap yang bisa ditolak.");
+  await requireRole(supabase, user.id, PROCEDURE_STAGE_ROLES[PROCEDURE_STATUS.menungguReviewPM], "Hanya PM yang dapat menolak Prosedur Kerja.");
 
   // Fetch current procedure to update its content JSON
   const { data: proc } = await supabase.from('procedures').select('content, project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
@@ -205,9 +211,9 @@ export async function rejectProcedure(procedureId: string, note: string) {
 
   const { error } = await supabase
     .from('procedures')
-    .update({ 
-      status: 'Draft',
-      content: updatedContent 
+    .update({
+      status: PROCEDURE_STATUS.draft,
+      content: updatedContent
     })
     .eq('id', procedureId);
 
@@ -353,19 +359,19 @@ export async function approvePtw(ptwId: string) {
 
   let updatePayload: any = {};
 
-  if (current?.status === 'Menunggu Approval PM') {
-    await requireRole(supabase, user.id, ['ptw_authority'], "Hanya PTW Authority yang dapat menyetujui tahap ini.");
-    updatePayload = { authority_id: user.id, authority_approved_at: new Date().toISOString(), status: 'Review PTW Issuer' };
-  } else if (current?.status === 'Review PTW Issuer') {
-    await requireRole(supabase, user.id, ['ptw_issuer'], "Hanya PTW Issuer yang dapat menyetujui tahap ini.");
-    updatePayload = { issuer_id: user.id, issuer_approved_at: new Date().toISOString(), status: 'Menunggu Penomoran HSSE' };
-  } else if (current?.status === 'Menunggu Penomoran HSSE') {
-    await requireRole(supabase, user.id, ['hse'], "Hanya HSE yang dapat menerbitkan nomor PTW.");
+  if (current?.status === PTW_STATUS.menungguApprovalPM) {
+    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.menungguApprovalPM], "Hanya PTW Authority yang dapat menyetujui tahap ini.");
+    updatePayload = { authority_id: user.id, authority_approved_at: new Date().toISOString(), status: PTW_STATUS.reviewPtwIssuer };
+  } else if (current?.status === PTW_STATUS.reviewPtwIssuer) {
+    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.reviewPtwIssuer], "Hanya PTW Issuer yang dapat menyetujui tahap ini.");
+    updatePayload = { issuer_id: user.id, issuer_approved_at: new Date().toISOString(), status: PTW_STATUS.menungguPenomoranHSSE };
+  } else if (current?.status === PTW_STATUS.menungguPenomoranHSSE) {
+    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.menungguPenomoranHSSE], "Hanya HSE yang dapat menerbitkan nomor PTW.");
     // Generate PTW number: PTW-YYYY-XXX
     const year = new Date().getFullYear();
     const { count } = await supabase.from('ptw').select('*', { count: 'exact', head: true }).like('ptw_number', `PTW-${year}-%`);
     const nextNum = String((count || 0) + 1).padStart(3, '0');
-    updatePayload = { hsse_id: user.id, ptw_number: `PTW-${year}-${nextNum}`, status: 'PTW Aktif' };
+    updatePayload = { hsse_id: user.id, ptw_number: `PTW-${year}-${nextNum}`, status: PTW_STATUS.aktif };
   } else {
     throw new Error("PTW tidak dalam tahap yang bisa disetujui.");
   }
@@ -377,7 +383,7 @@ export async function approvePtw(ptwId: string) {
   const { data: ptw } = await supabase.from('ptw').select('project_id, status, ptw_number, projects ( name, vendor_id )').eq('id', ptwId).single();
   const proj: any = Array.isArray(ptw?.projects) ? ptw?.projects[0] : ptw?.projects;
   if (proj?.vendor_id) {
-    const isPtwActive = ptw?.status === 'PTW Aktif';
+    const isPtwActive = ptw?.status === PTW_STATUS.aktif;
     await createNotification({
       userId: proj.vendor_id,
       type: isPtwActive ? 'approval' : 'info',
@@ -390,16 +396,16 @@ export async function approvePtw(ptwId: string) {
   }
 
   // If PTW is now active, also notify internal HSE team
-  if (updatePayload.status === 'PTW Aktif') {
+  if (updatePayload.status === PTW_STATUS.aktif) {
     
-    // Auto-assign PM (from JSA) as default inspector for the project
-    const { data: jsaData } = await supabase.from('jsa').select('pm_id').eq('project_id', ptw?.project_id).single();
-    if (jsaData?.pm_id) {
-       await supabase.from('projects').update({ assigned_inspector: jsaData.pm_id }).eq('id', ptw?.project_id);
-       
-       // Also notify the PM that they have a new monitoring task
+    // Auto-assign the JSA's PGSOL reviewer as default inspector for the project
+    const { data: jsaData } = await supabase.from('jsa').select('reviewer_id').eq('project_id', ptw?.project_id).single();
+    if (jsaData?.reviewer_id) {
+       await supabase.from('projects').update({ assigned_inspector: jsaData.reviewer_id }).eq('id', ptw?.project_id);
+
+       // Also notify the reviewer that they have a new monitoring task
        await createNotification({
-         userId: jsaData.pm_id,
+         userId: jsaData.reviewer_id,
          type: 'info',
          title: 'Tugas Pengawasan Baru',
          message: `PTW ${updatePayload.ptw_number} telah diterbitkan. Anda ditugaskan sebagai pengawas utama.`,
@@ -424,19 +430,19 @@ export async function rejectPtw(ptwId: string, note: string) {
   if (!user) throw new Error("Unauthorized");
 
   const { data: current } = await supabase.from('ptw').select('status').eq('id', ptwId).single();
-  if (current?.status === 'Menunggu Approval PM') {
-    await requireRole(supabase, user.id, ['ptw_authority'], "Hanya PTW Authority yang dapat menolak tahap ini.");
-  } else if (current?.status === 'Review PTW Issuer') {
-    await requireRole(supabase, user.id, ['ptw_issuer'], "Hanya PTW Issuer yang dapat menolak tahap ini.");
-  } else if (current?.status === 'Menunggu Penomoran HSSE') {
-    await requireRole(supabase, user.id, ['hse'], "Hanya HSE yang dapat menolak tahap ini.");
+  if (current?.status === PTW_STATUS.menungguApprovalPM) {
+    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.menungguApprovalPM], "Hanya PTW Authority yang dapat menolak tahap ini.");
+  } else if (current?.status === PTW_STATUS.reviewPtwIssuer) {
+    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.reviewPtwIssuer], "Hanya PTW Issuer yang dapat menolak tahap ini.");
+  } else if (current?.status === PTW_STATUS.menungguPenomoranHSSE) {
+    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.menungguPenomoranHSSE], "Hanya HSE yang dapat menolak tahap ini.");
   } else {
     throw new Error("PTW tidak dalam tahap yang bisa ditolak.");
   }
 
   const { error } = await supabase
     .from('ptw')
-    .update({ status: 'Draft', rejection_note: note, authority_id: null, authority_approved_at: null, issuer_id: null, issuer_approved_at: null })
+    .update({ status: PTW_STATUS.draft, rejection_note: note, authority_id: null, authority_approved_at: null, issuer_id: null, issuer_approved_at: null })
     .eq('id', ptwId);
   if (error) throw new Error(error.message);
 

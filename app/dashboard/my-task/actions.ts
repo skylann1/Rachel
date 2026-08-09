@@ -1,8 +1,9 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { getEffectivePtwStatus } from "@/lib/ptw-status";
+import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from "@/lib/ptw-status";
 import { JSA_STATUS, JSA_STAGE_ROLES, JSA_PENDING_STATUSES } from "@/lib/jsa-status";
+import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 
 export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan';
 export type UrgencyType = 'High' | 'Medium' | 'Low';
@@ -56,7 +57,7 @@ export async function getMyTasks(): Promise<TaskItem[]> {
         id, status, created_at, project_id,
         projects ( name, vendor_profiles ( company_name ) )
       `)
-      .in('status', ['Submitted', 'Menunggu Review PM', 'Draft']); 
+      .in('status', ['Submitted', PROCEDURE_STATUS.menungguReviewPM, PROCEDURE_STATUS.draft]);
     
     if (procedures) {
       procedures.forEach((proc: any) => {
@@ -133,14 +134,14 @@ export async function getMyTasks(): Promise<TaskItem[]> {
         id, status, created_at, project_id,
         projects ( name, vendor_profiles ( company_name ) )
       `)
-      .in('status', ['Menunggu Approval PM', 'Review PTW Issuer', 'Menunggu Penomoran HSSE']);
+      .in('status', PTW_PENDING_STATUSES);
 
     if (ptws) {
       ptws.forEach((ptw: any) => {
         let isMyTask = false;
         if (role === 'admin') isMyTask = true;
-        if (role === 'pm' && ptw.status === 'Menunggu Approval PM') isMyTask = true;
-        if (role === 'hse' && (ptw.status === 'Review PTW Issuer' || ptw.status === 'Menunggu Penomoran HSSE')) isMyTask = true;
+        if (role === 'pm' && ptw.status === PTW_STATUS.menungguApprovalPM) isMyTask = true;
+        if (role === 'hse' && (ptw.status === PTW_STATUS.reviewPtwIssuer || ptw.status === PTW_STATUS.menungguPenomoranHSSE)) isMyTask = true;
 
         if (isMyTask) {
            const proj = Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects;
@@ -203,7 +204,7 @@ export async function getMyTasks(): Promise<TaskItem[]> {
       .select(`
         id, name, start_date, end_date, status, assigned_inspector,
         vendor_profiles ( company_name ),
-        ptw ( status )
+        ptw ( status, valid_to )
       `)
       .eq('assigned_inspector', user.id);
 
@@ -212,8 +213,10 @@ export async function getMyTasks(): Promise<TaskItem[]> {
     } else if (monitoring) {
       monitoring
         .filter((proj: any) => {
-          const ptw = Array.isArray(proj.ptw) ? proj.ptw[0] : proj.ptw;
-          return getEffectivePtwStatus(ptw?.status, proj.end_date) === 'PTW Aktif';
+          // Satu proyek bisa punya beberapa PTW sekaligus — dianggap sedang
+          // berjalan di lapangan selama ADA salah satu tipe yang aktif.
+          const ptws: any[] = Array.isArray(proj.ptw) ? proj.ptw : (proj.ptw ? [proj.ptw] : []);
+          return ptws.some(p => getEffectivePtwStatus(p.status, p.valid_to ?? proj.end_date) === PTW_STATUS.aktif);
         })
         .forEach((proj: any) => {
         const companyName = Array.isArray(proj.vendor_profiles) 

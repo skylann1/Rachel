@@ -212,7 +212,7 @@ export default function JSACreatePage() {
       router.push(`/vendor/dashboard/projects/${encodeURIComponent(projectId)}`);
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan saat menyimpan JSA.");
+      alert(err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan JSA.");
     } finally {
       setIsSaving(false);
     }

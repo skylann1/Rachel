@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Font, Image } from '@react-pdf/renderer';
 
 // Register fonts
 Font.register({
@@ -11,8 +11,11 @@ Font.register({
 });
 
 const B = '#000';
-const HEADER_BG = '#E8D5B7'; // warm beige/tan matching Excel template
-const HEADER_BG_LIGHT = '#F0E6D2'; // lighter beige for sub-headers
+// Colors extracted directly from docs/templates/JSA EXAMPLE.xlsx (theme + dxf fills)
+const HEADER_BG = '#DCE6F2';   // theme "Accent1, Lighter 80%" - table header / approval title band
+const DESC_BG = '#C3D69B';     // theme "Accent3, Lighter 40%" - italic instruction row
+const STATIC_GRAY = '#D9D9D9'; // theme "Background 1, Darker 15%" - computed Total/Probability columns
+const TITLE_BG = '#C0C0C0';    // indexed color 22 - company name band
 const fs = 4.5; // base font size
 
 const styles = StyleSheet.create({
@@ -42,11 +45,21 @@ const styles = StyleSheet.create({
   },
   titleCenter: {
     width: '72%',
-    padding: 3,
     borderRightWidth: 1,
     borderColor: B,
-    justifyContent: 'center',
+    flexDirection: 'column',
+  },
+  companyNameRow: {
+    backgroundColor: TITLE_BG,
+    paddingVertical: 4,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleRow: {
+    paddingVertical: 4,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   titleRight: {
     width: '20%',
@@ -68,7 +81,6 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 2
   },
   // Header info section
   infoSection: {
@@ -106,19 +118,87 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderWidth: 1,
     borderColor: B,
-    backgroundColor: '#f9f9f9'
   },
   approvalCol: {
     width: '33.33%',
-    padding: 3,
     borderRightWidth: 1,
     borderColor: B
   },
   approvalTitle: {
     fontWeight: 'bold',
-    marginBottom: 2,
     textAlign: 'center',
-    fontSize: 5.5
+    fontSize: 5.5,
+    backgroundColor: HEADER_BG,
+    paddingVertical: 2,
+  },
+  approvalBody: {
+    padding: 3
+  },
+  signatureBox: {
+    borderTopWidth: 1,
+    borderColor: B,
+    padding: 3,
+    alignItems: 'center',
+  },
+  signatureLabel: {
+    fontSize: 4.5,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  signatureArea: {
+    height: 26,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: '#94a3b8',
+    borderStyle: 'dashed',
+  },
+  signatureStamp: {
+    fontSize: 7,
+    fontWeight: 'bold',
+    fontStyle: 'italic',
+    color: '#16a34a',
+  },
+  // Team Penyusun JSA
+  teamSection: {
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: B,
+  },
+  teamTitle: {
+    fontWeight: 'bold',
+    textAlign: 'center',
+    fontSize: 5.5,
+    backgroundColor: HEADER_BG,
+    paddingVertical: 2,
+    borderBottomWidth: 1,
+    borderColor: B,
+  },
+  teamHeaderRow: {
+    flexDirection: 'row',
+    backgroundColor: HEADER_BG,
+  },
+  teamRow: {
+    flexDirection: 'row',
+  },
+  teamCellHeader: {
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: B,
+    padding: 2,
+    fontWeight: 'bold',
+    fontSize: 5,
+    textAlign: 'center',
+  },
+  teamCell: {
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: B,
+    padding: 2,
+    fontSize: 5,
+    minHeight: 14,
+    justifyContent: 'center',
   },
   // Main Table
   table: {
@@ -160,7 +240,7 @@ const styles = StyleSheet.create({
   colFaktor:      { width: '10%' },
   colRiskBlock:   { width: '20%' },
   colMitigasi:    { width: '12%' },
-  colParaf:       { width: '5%' },
+  colParaf:       { width: '7%' },
   // Risk sub-columns: 7 sub-cols inside 20%
   // Severity=1, Int=1, Kap=1, His=1, Tot=1, Prob=1, RPN=1 => 7 equal
   colRiskSub:     { width: '14.28%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', alignItems: 'center', padding: 1 },
@@ -175,25 +255,34 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     fontSize: 3.5
   },
-  rpnLow: {
-    backgroundColor: '#a7f3d0'
+  staticGray: {
+    backgroundColor: STATIC_GRAY
   },
-  rpnMod: {
-    backgroundColor: '#34d399'
+  // RPN conditional-formatting colors, thresholds taken verbatim from the template's cfRules
+  rpnGreen: {
+    backgroundColor: '#00B050'
   },
-  rpnModHigh: {
-    backgroundColor: '#facc15'
+  rpnLightGreen: {
+    backgroundColor: '#92D050'
   },
-  rpnHigh: {
-    backgroundColor: '#ef4444'
+  rpnYellow: {
+    backgroundColor: '#FFFF00'
+  },
+  rpnOrange: {
+    backgroundColor: '#FFC000'
+  },
+  rpnRed: {
+    backgroundColor: '#FF0000'
   }
 });
 
 const getRpnStyle = (rpn: number) => {
-  if (rpn >= 15) return styles.rpnHigh;
-  if (rpn >= 8) return styles.rpnModHigh;
-  if (rpn >= 4) return styles.rpnMod;
-  return styles.rpnLow;
+  if (rpn >= 15) return styles.rpnRed;
+  if (rpn >= 10) return styles.rpnOrange;
+  if (rpn >= 5) return styles.rpnYellow;
+  if (rpn === 4) return styles.rpnLightGreen;
+  if (rpn >= 1) return styles.rpnGreen;
+  return {};
 };
 
 /* ---- helper: renders one risk-block header (Inherent or Residual) ---- */
@@ -264,19 +353,24 @@ const RiskBlockDesc = ({ descs }: { descs: string[] }) => (
 );
 
 /* ---- helper: risk block data row ---- */
-const RiskBlockData = ({ risk, rpnStyle }: { risk: any; rpnStyle: any }) => (
-  <View style={[styles.tCell, styles.colRiskBlock, { padding: 0, flexDirection: 'row' }]}>
-    <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={styles.textCenter}>{risk?.severity || ''}</Text></View>
-    <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={styles.textCenter}>{risk?.intensitas || ''}</Text></View>
-    <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={styles.textCenter}>{risk?.kapabilitas || ''}</Text></View>
-    <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={styles.textCenter}>{risk?.history || ''}</Text></View>
-    <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={[styles.bold, styles.textCenter]}>{risk?.total || ''}</Text></View>
-    <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={[styles.bold, styles.textCenter]}>{risk?.probability || ''}</Text></View>
-    <View style={[{ width: '14.28%', justifyContent: 'center', alignItems: 'center', padding: 1 }, rpnStyle]}>
-      <Text style={[styles.bold, styles.textCenter]}>{risk?.rpn || ''}</Text>
+// Template statically shades the "computed" columns gray: Total + Nilai Probability
+// for Inherent Risk, and History + Total + Nilai Probability for Residual Risk.
+const RiskBlockData = ({ risk, rpnStyle, variant }: { risk: any; rpnStyle: any; variant: 'inherent' | 'residual' }) => {
+  const historyGray = variant === 'residual' ? styles.staticGray : {};
+  return (
+    <View style={[styles.tCell, styles.colRiskBlock, { padding: 0, flexDirection: 'row' }]}>
+      <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={styles.textCenter}>{risk?.severity || ''}</Text></View>
+      <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={styles.textCenter}>{risk?.intensitas || ''}</Text></View>
+      <View style={[styles.colRiskSub, { width: '14.28%' }]}><Text style={styles.textCenter}>{risk?.kapabilitas || ''}</Text></View>
+      <View style={[styles.colRiskSub, { width: '14.28%' }, historyGray]}><Text style={styles.textCenter}>{risk?.history || ''}</Text></View>
+      <View style={[styles.colRiskSub, { width: '14.28%' }, styles.staticGray]}><Text style={[styles.bold, styles.textCenter]}>{risk?.total || ''}</Text></View>
+      <View style={[styles.colRiskSub, { width: '14.28%' }, styles.staticGray]}><Text style={[styles.bold, styles.textCenter]}>{risk?.probability || ''}</Text></View>
+      <View style={[{ width: '14.28%', justifyContent: 'center', alignItems: 'center', padding: 1 }, rpnStyle]}>
+        <Text style={[styles.bold, styles.textCenter]}>{risk?.rpn || ''}</Text>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 
 const renderControlCell = (control: any) => {
@@ -323,10 +417,11 @@ const renderControlCell = (control: any) => {
   );
 };
 
-export default function JsaPDF({ projectId, steps, signatories, preparer }: any) {
+export default function JsaPDF({ projectId, steps, signatories, preparer, team }: any) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const reviewer = signatories?.reviewer ?? null;
   const approver = signatories?.approver ?? null;
+  const teamRows = (team && team.length > 0) ? team : Array.from({ length: 4 }).map(() => ({ nama: '', jabatan: '' }));
 
   return (
     <Document>
@@ -336,11 +431,15 @@ export default function JsaPDF({ projectId, steps, signatories, preparer }: any)
           {/* Title Box - 3 columns: Logo | Company+Title | Revisi */}
           <View style={styles.titleBox}>
             <View style={styles.titleLeft}>
-              <Text style={{ fontSize: 5, textAlign: 'center' }}>Logo</Text>
+              <Image src="/assets/logo/main-logo.png" style={{ width: '90%', objectFit: 'contain' }} />
             </View>
             <View style={styles.titleCenter}>
-              <Text style={styles.companyName}>CV. JAYA PUTRA BAHARI</Text>
-              <Text style={styles.title}>FORMULIR ANALISA KESELAMATAN KERJA / JOB SAFETY ANALYSIS FORM</Text>
+              <View style={styles.companyNameRow}>
+                <Text style={styles.companyName}>CV. JAYA PUTRA BAHARI</Text>
+              </View>
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>FORMULIR ANALISA KESELAMATAN KERJA / JOB SAFETY ANALYSIS FORM</Text>
+              </View>
             </View>
             <View style={styles.titleRight}>
               <View style={styles.infoRow}><Text style={{ fontSize: 4.5 }}>No</Text></View>
@@ -365,25 +464,49 @@ export default function JsaPDF({ projectId, steps, signatories, preparer }: any)
         <View style={styles.approvalSection}>
           <View style={styles.approvalCol}>
             <Text style={styles.approvalTitle}>Disiapkan Oleh</Text>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {preparer?.nama || 'Vendor Representative'}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {preparer?.jabatan || 'Site Supervisor'}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Perusahaan / Satker</Text><Text style={styles.infoValue}>: {preparer?.satker || '-'}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal</Text><Text style={styles.infoValue}>: {preparer?.tanggal || currentDate}</Text></View>
+            <View style={styles.approvalBody}>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {preparer?.nama || 'Vendor Representative'}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {preparer?.jabatan || 'Site Supervisor'}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Perusahaan / Satker</Text><Text style={styles.infoValue}>: {preparer?.satker || '-'}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal</Text><Text style={styles.infoValue}>: {preparer?.tanggal || currentDate}</Text></View>
+            </View>
+            <View style={styles.signatureBox}>
+              <Text style={styles.signatureLabel}>Tanda Tangan</Text>
+              <View style={styles.signatureArea}>
+                <Text style={styles.signatureStamp}>Already Sign</Text>
+              </View>
+            </View>
           </View>
           <View style={styles.approvalCol}>
             <Text style={styles.approvalTitle}>Direview Oleh</Text>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {reviewer?.nama || ''}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {reviewer?.jabatan || ''}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Pemberi Kerja</Text><Text style={styles.infoValue}>: {reviewer?.satker || ''}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Review</Text><Text style={styles.infoValue}>: {reviewer?.tanggal || ''}</Text></View>
+            <View style={styles.approvalBody}>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {reviewer?.nama || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {reviewer?.jabatan || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Pemberi Kerja</Text><Text style={styles.infoValue}>: {reviewer?.satker || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Review</Text><Text style={styles.infoValue}>: {reviewer?.tanggal || ''}</Text></View>
+            </View>
+            <View style={styles.signatureBox}>
+              <Text style={styles.signatureLabel}>Tanda Tangan</Text>
+              <View style={styles.signatureArea}>
+                <Text style={styles.signatureStamp}>Already Sign</Text>
+              </View>
+            </View>
           </View>
           <View style={[styles.approvalCol, { borderRightWidth: 0 }]}>
             <Text style={styles.approvalTitle}>Disetujui Oleh</Text>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver?.satker || ''}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {approver?.nama || ''}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {approver?.jabatan || ''}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver?.satker || ''}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Persetujuan</Text><Text style={styles.infoValue}>: {approver?.tanggal || ''}</Text></View>
+            <View style={styles.approvalBody}>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver?.satker || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {approver?.nama || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {approver?.jabatan || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver?.satker || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Persetujuan</Text><Text style={styles.infoValue}>: {approver?.tanggal || ''}</Text></View>
+            </View>
+            <View style={[styles.signatureBox, { borderLeftWidth: 0 }]}>
+              <Text style={styles.signatureLabel}>Tanda Tangan</Text>
+              <View style={styles.signatureArea}>
+                <Text style={styles.signatureStamp}>Already Sign</Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -411,7 +534,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer }: any)
           </View>
 
           {/* ===== HEADER ROW 2: Column numbers (1) - (21) ===== */}
-          <View style={[styles.tHeaderRow, { backgroundColor: HEADER_BG_LIGHT }]}>
+          <View style={styles.tRow}>
             <View style={[styles.tCell, styles.colNo, styles.textCenter]}><Text>(1)</Text></View>
             <View style={[styles.tCell, styles.colLangkah, styles.textCenter]}><Text>(2)</Text></View>
             <View style={[styles.tCell, styles.colJenisBahaya, styles.textCenter]}><Text>(3)</Text></View>
@@ -425,7 +548,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer }: any)
           </View>
 
           {/* ===== HEADER ROW 3: Italic descriptions ===== */}
-          <View style={[styles.tRow, { backgroundColor: '#fdf8f0' }]}>
+          <View style={[styles.tRow, { backgroundColor: DESC_BG }]}>
             <View style={[styles.tCell, styles.colNo]}><Text style={styles.italic}> </Text></View>
             <View style={[styles.tCell, styles.colLangkah]}><Text style={styles.italic}>Kolom diisi dengan langkah-langkah pekerjaan yang di lakukan</Text></View>
             <View style={[styles.tCell, styles.colJenisBahaya]}><Text style={styles.italic}>Kolom diisi dengan jenis bahaya: Fisika, Kimia, Biologi, Ergonomi, Psikologi</Text></View>
@@ -467,11 +590,11 @@ export default function JsaPDF({ projectId, steps, signatories, preparer }: any)
               <View style={[styles.tCell, styles.colPotensi]}><Text>{step.potensiBahaya || ''}</Text></View>
               <View style={[styles.tCell, styles.colFaktor, { padding: 0 }]}>{renderControlCell(step.faktorPositif)}</View>
 
-              <RiskBlockData risk={step.inherentRisk} rpnStyle={getRpnStyle(step.inherentRisk?.rpn || 0)} />
+              <RiskBlockData risk={step.inherentRisk} rpnStyle={getRpnStyle(step.inherentRisk?.rpn || 0)} variant="inherent" />
 
               <View style={[styles.tCell, styles.colMitigasi, { padding: 0 }]}>{renderControlCell(step.mitigasi)}</View>
 
-              <RiskBlockData risk={step.residualRisk} rpnStyle={getRpnStyle(step.residualRisk?.rpn || 0)} />
+              <RiskBlockData risk={step.residualRisk} rpnStyle={getRpnStyle(step.residualRisk?.rpn || 0)} variant="residual" />
 
               <View style={[styles.tCell, styles.colParaf]}><Text></Text></View>
             </View>
@@ -482,6 +605,27 @@ export default function JsaPDF({ projectId, steps, signatories, preparer }: any)
         {/* ttd note */}
         <View style={{ alignItems: 'flex-end', marginTop: 3 }}>
           <Text style={{ fontSize: 4, fontStyle: 'italic' }}>ttd</Text>
+        </View>
+
+        {/* Team Penyusun JSA */}
+        <View style={[styles.teamSection, { marginTop: 6 }]} wrap={false}>
+          <Text style={styles.teamTitle}>Team Penyusun JSA</Text>
+          <View style={styles.teamHeaderRow}>
+            <View style={[styles.teamCellHeader, { width: '6%' }]}><Text>No</Text></View>
+            <View style={[styles.teamCellHeader, { width: '32%' }]}><Text>Nama</Text></View>
+            <View style={[styles.teamCellHeader, { width: '32%' }]}><Text>Jabatan</Text></View>
+            <View style={[styles.teamCellHeader, { width: '30%', borderRightWidth: 0 }]}><Text>Tanda Tangan</Text></View>
+          </View>
+          {teamRows.map((member: any, i: number) => (
+            <View key={i} style={styles.teamRow}>
+              <View style={[styles.teamCell, { width: '6%' }]}><Text style={styles.textCenter}>{i + 1}</Text></View>
+              <View style={[styles.teamCell, { width: '32%' }]}><Text>{member?.nama || ''}</Text></View>
+              <View style={[styles.teamCell, { width: '32%' }]}><Text>{member?.jabatan || ''}</Text></View>
+              <View style={[styles.teamCell, { width: '30%', borderRightWidth: 0, alignItems: 'center' }]}>
+                {member?.nama ? <Text style={styles.signatureStamp}>Already Sign</Text> : null}
+              </View>
+            </View>
+          ))}
         </View>
 
       </Page>

@@ -3,10 +3,21 @@
 import { createClient } from "@/utils/supabase/server";
 import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 import { JSA_STATUS } from "@/lib/jsa-status";
+import { APPROVED_PROCEDURE } from "@/lib/project-stage";
 
 export async function saveJsa(projectId: string, jsaData: any) {
   const supabase = await createClient();
-  
+
+  const { data: procedure } = await supabase
+    .from('procedures')
+    .select('status')
+    .eq('project_id', projectId)
+    .single();
+
+  if (procedure?.status !== APPROVED_PROCEDURE) {
+    throw new Error('Prosedur Kerja untuk proyek ini belum disetujui. JSA tidak dapat diajukan.');
+  }
+
   // check if JSA already exists
   const { data: existing } = await supabase
     .from('jsa')

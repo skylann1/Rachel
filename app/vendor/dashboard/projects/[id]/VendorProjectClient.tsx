@@ -12,8 +12,10 @@ import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
-import { getEffectivePtwStatus } from '@/lib/ptw-status';
-import { isJsaPending } from '@/lib/jsa-status';
+import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
+import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
+import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { PTW_TYPES } from '@/lib/ptw-types';
 
 const BlobProvider = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.BlobProvider),
@@ -50,11 +52,12 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
   );
 }
 
-export function VendorProjectClient({ project, currentUserId, jsaSignatories }: { project: any; currentUserId: string; jsaSignatories?: any }) {
+export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories }: { project: any; currentUserId: string; jsaSignatories?: any; ptwSignatories?: Record<string, any> }) {
   const [activeTab, setActiveTab] = useState('ringkasan');
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
-  const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
+  // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda) — lihat lib/project-stage.ts
+  const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
   const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
   const vendorProfile = Array.isArray(project.vendor_profiles) ? project.vendor_profiles[0] : project.vendor_profiles;
 
@@ -62,16 +65,22 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories }: 
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
   // Normalize statuses for UI logic
-  const prosedurStatus = prosedur?.status === 'Prosedur Disetujui' ? 'Approved' : prosedur?.status === 'Menunggu Review PM' ? 'Pending' : (prosedur?.status === 'Draft' && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
+  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : prosedur?.status === PROCEDURE_STATUS.menungguReviewPM ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
   const jsaStatus = jsa?.rejection_note ? 'Rejected'
-    : jsa?.status === 'JSA Disetujui' ? 'Approved'
+    : jsa?.status === JSA_STATUS.approved ? 'Approved'
     : isJsaPending(jsa?.status) ? 'Pending'
     : jsa ? 'Draft' : 'Draft';
-  const effectivePtwStatus = getEffectivePtwStatus(ptw?.status, project.end_date);
-  const ptwStatus = effectivePtwStatus === 'PTW Aktif' ? 'Approved'
-    : effectivePtwStatus === 'Expired' ? 'Expired'
-    : effectivePtwStatus === 'Draft' ? 'Rejected'
-    : ptw ? 'Pending' : 'Draft';
+
+  // PTW tahap proyek: hijau hanya kalau SEMUA tipe PTW yang diajukan sudah Aktif.
+  const ptwEffectiveStatuses = ptws.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date));
+  const ptwAnyExpired = ptwEffectiveStatuses.some(s => s === PTW_STATUS.expired);
+  const ptwAllAktif = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.aktif);
+  const ptwAnyRejected = ptws.some(p => p.status === PTW_STATUS.draft && p.rejection_note);
+  const ptwStatus = ptwAnyExpired ? 'Expired'
+    : ptwAllAktif ? 'Approved'
+    : ptwAnyRejected ? 'Rejected'
+    : ptws.length > 0 ? 'Pending' : 'Draft';
+  const ptwAktifCount = ptwEffectiveStatuses.filter(s => s === PTW_STATUS.aktif).length;
 
   const getStepStyle = (status: string) => {
     switch (status) {
@@ -194,8 +203,10 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories }: 
                 </div>
                 <div>
                   <div className="font-bold text-slate-800">Permit to Work</div>
-                  <div className="mt-1">{getStatusBadge(ptwStatus, ptw?.status)}</div>
-                  {ptw?.ptw_number && <div className="text-xs font-black text-emerald-600 mt-1">{ptw.ptw_number}</div>}
+                  <div className="mt-1">{getStatusBadge(ptwStatus, ptws.length > 0 ? `${ptwAktifCount}/${ptws.length} Aktif` : undefined)}</div>
+                  {ptws.filter(p => p.ptw_number).map(p => (
+                    <div key={p.id} className="text-xs font-black text-emerald-600 mt-1">{p.ptw_number}</div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -351,67 +362,112 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories }: 
             </AccordionItem>
 
             {/* PTW Accordion */}
-            <AccordionItem 
-              title="3. Permit to Work (PTW)" 
+            <AccordionItem
+              title="3. Permit to Work (PTW)"
               icon={<Stamp className="w-6 h-6" />}
               defaultOpen={jsaStatus === 'Approved' && ptwStatus !== 'Approved'}
-              badge={getStatusBadge(ptwStatus, ptw?.status)}
+              badge={getStatusBadge(ptwStatus, ptws.length > 0 ? `${ptwAktifCount}/${ptws.length} Aktif` : undefined)}
             >
               <div className="space-y-4">
-                {ptw?.rejection_note && (
-                  <div className="p-4 bg-rose-50 rounded-xl text-sm text-rose-700 font-medium border border-rose-100">
-                    <AlertTriangle className="w-4 h-4 inline mr-2 -mt-0.5" />
-                    <span className="font-bold">Catatan Revisi:</span> {ptw.rejection_note}
+                <p className="text-xs text-slate-500">
+                  Satu pekerjaan bisa membutuhkan lebih dari satu jenis izin kerja sekaligus (mis. Kerja Dingin + Kerja di Ketinggian + Kerja Panas).
+                </p>
+
+                {ptws.length === 0 ? (
+                  jsaStatus !== 'Approved' ? (
+                    <div className="p-4 bg-slate-50 rounded-xl text-center text-sm font-medium text-slate-500 border border-slate-200 border-dashed">
+                      Selesaikan dan tunggu JSA disetujui terlebih dahulu.
+                    </div>
+                  ) : (
+                    <Link href={`/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}`} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm transition-colors shadow-sm shadow-primary/30">
+                      Ajukan PTW <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  )
+                ) : (
+                  <div className="space-y-3">
+                    {ptws.map((row) => {
+                      const rowEffective = getEffectivePtwStatus(row.status, row.valid_to ?? project.end_date);
+                      const rowStatus = rowEffective === PTW_STATUS.aktif ? 'Approved'
+                        : rowEffective === PTW_STATUS.expired ? 'Expired'
+                        : (row.status === PTW_STATUS.draft && row.rejection_note) ? 'Rejected'
+                        : 'Pending';
+                      const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
+
+                      return (
+                        <div key={row.id} className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-sm text-slate-800">{rowTitle}</span>
+                            {getStatusBadge(rowStatus, row.status)}
+                          </div>
+
+                          {row.rejection_note && (
+                            <div className="p-3 bg-rose-50 rounded-lg text-sm text-rose-700 font-medium border border-rose-100">
+                              <AlertTriangle className="w-4 h-4 inline mr-2 -mt-0.5" />
+                              <span className="font-bold">Catatan Revisi:</span> {row.rejection_note}
+                            </div>
+                          )}
+
+                          <div className="flex gap-3">
+                            <div className="flex-1">
+                              <BlobProvider document={
+                                <PtwPDF
+                                  projectId={project.id}
+                                  ptwNumber={row.ptw_number}
+                                  projectName={project.name}
+                                  vendorName={vendorProfile?.company_name}
+                                  location={project.location}
+                                  startDate={project.start_date}
+                                  endDate={project.end_date}
+                                  description={project.description}
+                                  ptwType={row.ptw_type || 'dingin'}
+                                  hazards={row.hazards || []}
+                                  apd={row.apd || {}}
+                                  pekerja={row.workers || []}
+                                  peralatan={row.equipment || []}
+                                  gasTests={row.gas_tests || []}
+                                  validFrom={row.valid_from}
+                                  validTo={row.valid_to}
+                                  workStart={row.work_start}
+                                  workEnd={row.work_end}
+                                  hotWorkTypes={row.hot_work_types || []}
+                                  gasTestFrequency={row.gas_test_frequency || {}}
+                                  jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
+                                  siblings={ptws}
+                                  signatories={ptwSignatories?.[row.id]}
+                                />
+                              }>
+                                {({ url, loading }) => (
+                                  <button
+                                    disabled={loading}
+                                    onClick={() => { if (url) window.open(url, '_blank'); }}
+                                    className="w-full py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                                  >
+                                    {loading ? 'Membuat PDF...' : 'Buka & Print PTW'}
+                                  </button>
+                                )}
+                              </BlobProvider>
+                            </div>
+                            {(rowStatus === 'Rejected' || rowStatus === 'Expired') && (
+                              <Link
+                                href={`/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}/${row.ptw_type}`}
+                                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm transition-colors shadow-sm shadow-primary/30"
+                              >
+                                Revisi Dokumen <ArrowRight className="w-4 h-4" />
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <Link
+                      href={`/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}`}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-primary/40 text-primary hover:bg-primary/5 font-bold text-sm transition-colors"
+                    >
+                      + Ajukan PTW Tipe Lain
+                    </Link>
                   </div>
                 )}
-
-                <div className="flex gap-4">
-                  {(ptwStatus === 'Pending' || ptwStatus === 'Approved' || ptwStatus === 'Rejected' || ptwStatus === 'Expired') && (
-                    <div className="flex-1">
-                      <BlobProvider document={
-                        <PtwPDF
-                          projectId={project.id}
-                          ptwNumber={ptw.ptw_number}
-                          projectName={project.name}
-                          vendorName={vendorProfile?.company_name}
-                          location={project.location}
-                          startDate={project.start_date}
-                          endDate={project.end_date}
-                          description={project.description}
-                          ptwType={ptw.ptw_type || 'dingin'}
-                          hazards={ptw.hazards || []}
-                          apd={ptw.apd || {}}
-                          pekerja={ptw.workers || []}
-                          peralatan={ptw.equipment || []}
-                        />
-                      }>
-                        {({ url, loading }) => (
-                          <button
-                            disabled={loading}
-                            onClick={() => { if(url) window.open(url, '_blank'); }}
-                            className="w-full py-3 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-colors shadow-sm disabled:opacity-50"
-                          >
-                            {loading ? 'Membuat PDF...' : 'Buka & Print PTW'}
-                          </button>
-                        )}
-                      </BlobProvider>
-                    </div>
-                  )}
-
-                  {ptwStatus !== 'Approved' && ptwStatus !== 'Pending' && (
-                    <div className="flex-1">
-                      {jsaStatus !== 'Approved' ? (
-                        <div className="p-4 bg-slate-50 rounded-xl text-center text-sm font-medium text-slate-500 border border-slate-200 border-dashed">
-                          Selesaikan dan tunggu JSA disetujui terlebih dahulu.
-                        </div>
-                      ) : (
-                        <Link href={`/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}`} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm transition-colors shadow-sm shadow-primary/30">
-                          {ptw ? 'Revisi Dokumen' : 'Ajukan PTW'} <ArrowRight className="w-4 h-4" />
-                        </Link>
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
             </AccordionItem>
 

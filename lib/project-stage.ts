@@ -1,5 +1,6 @@
-import { isJsaPending } from './jsa-status';
-import { getEffectivePtwStatus } from './ptw-status';
+import { isJsaPending, JSA_STATUS } from './jsa-status';
+import { getEffectivePtwStatus, PTW_STATUS } from './ptw-status';
+import { PROCEDURE_STATUS } from './procedure-status';
 
 /**
  * Tahapan dokumen K3 sebuah proyek: Prosedur -> JSA -> PTW.
@@ -26,16 +27,21 @@ export interface ProjectStage {
 export interface ProjectDocs {
   procedureStatus?: string | null;
   jsaStatus?: string | null;
-  ptwStatus?: string | null;
+  /**
+   * Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda) — satu entri
+   * per baris. `valid_to` adalah masa berlaku izin itu sendiri; kalau kosong
+   * (baris lama) dipakai `endDate` proyek sebagai acuan kedaluwarsa.
+   */
+  ptws?: { status?: string | null; valid_to?: string | null }[];
   projectStatus?: string | null;
   endDate?: string | null;
 }
 
-const APPROVED_PROCEDURE = 'Prosedur Disetujui';
-const APPROVED_JSA = 'JSA Disetujui';
+export const APPROVED_PROCEDURE = PROCEDURE_STATUS.approved;
+export const APPROVED_JSA = JSA_STATUS.approved;
 
 export function getProjectStage(docs: ProjectDocs): ProjectStage {
-  const { procedureStatus, jsaStatus, ptwStatus, projectStatus, endDate } = docs;
+  const { procedureStatus, jsaStatus, ptws, projectStatus, endDate } = docs;
 
   if (projectStatus === 'Ditolak') {
     return { label: 'Ditolak', hint: 'Proyek ditolak dan tidak dilanjutkan.', tone: 'rejected', actor: null };
@@ -81,7 +87,12 @@ export function getProjectStage(docs: ProjectDocs): ProjectStage {
   }
 
   // --- Tahap 3: PTW
-  if (!ptwStatus) {
+  // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda, mis. Kerja
+  // Dingin + Kerja di Ketinggian + Kerja Panas). Tahap ini baru "selesai"
+  // (hijau) kalau SEMUA PTW yang sudah diajukan berstatus Aktif — proyek
+  // tidak pernah dianggap siap kalau ada satu izin pun yang masih tertahan.
+  const submitted = (ptws ?? []).filter(p => !!p?.status);
+  if (submitted.length === 0) {
     return {
       label: 'Menunggu PTW',
       hint: 'JSA disetujui. Vendor belum mengajukan Permit to Work.',
@@ -90,17 +101,25 @@ export function getProjectStage(docs: ProjectDocs): ProjectStage {
     };
   }
 
-  const effectivePtw = getEffectivePtwStatus(ptwStatus, endDate);
-  if (effectivePtw === 'Expired') {
-    return { label: 'PTW Kedaluwarsa', hint: 'Masa berlaku PTW telah lewat.', tone: 'rejected', actor: 'internal' };
+  const effectiveStatuses = submitted.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? endDate));
+  if (effectiveStatuses.some(s => s === PTW_STATUS.expired)) {
+    return { label: 'PTW Kedaluwarsa', hint: 'Salah satu PTW proyek ini telah lewat masa berlaku.', tone: 'rejected', actor: 'internal' };
   }
-  if (effectivePtw === 'PTW Aktif') {
-    return { label: 'PTW Aktif', hint: 'Izin kerja aktif — pekerjaan boleh berjalan.', tone: 'done', actor: null };
+  if (effectiveStatuses.every(s => s === PTW_STATUS.aktif)) {
+    return {
+      label: PTW_STATUS.aktif,
+      hint: effectiveStatuses.length > 1 ? `Semua ${effectiveStatuses.length} izin kerja aktif — pekerjaan boleh berjalan.` : 'Izin kerja aktif — pekerjaan boleh berjalan.',
+      tone: 'done',
+      actor: null,
+    };
   }
 
+  const pendingCount = effectiveStatuses.filter(s => s !== PTW_STATUS.aktif).length;
   return {
     label: 'Review PTW',
-    hint: `PTW menunggu tindak lanjut internal (${ptwStatus}).`,
+    hint: effectiveStatuses.length > 1
+      ? `${pendingCount} dari ${effectiveStatuses.length} PTW masih menunggu tindak lanjut internal.`
+      : `PTW menunggu tindak lanjut internal (${submitted[0].status}).`,
     tone: 'waiting-internal',
     actor: 'internal',
   };

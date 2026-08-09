@@ -174,7 +174,7 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
       <Page size="A4" style={styles.page}>
         <View style={styles.table}>
           <View style={styles.tableRow}>
-            <View style={[styles.cell, styles.row1Logo]}><Text style={styles.placeholderText}>[LOGO PGN]</Text></View>
+            <View style={[styles.cell, styles.row1Logo]}><Image src="/assets/logo/main-logo.png" style={{ width: '90%', objectFit: 'contain' }} /></View>
             <View style={[styles.cell, styles.row1Title]}><Text style={styles.textBigBoldCenter}>{data.projectName.toUpperCase()}</Text></View>
             <View style={[styles.cell, styles.row1Logo]}><Text style={styles.placeholderText}>[LOGO VENDOR]</Text></View>
           </View>

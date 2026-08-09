@@ -3,8 +3,9 @@ import { Briefcase, Building2, ShieldCheck, Clock, ArrowUpRight, ClipboardList }
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/server';
 import { InteractiveDashboard, DashboardData } from '@/components/internal/interactive-dashboard';
-import { getEffectivePtwStatus } from '@/lib/ptw-status';
-import { isJsaPending } from '@/lib/jsa-status';
+import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from '@/lib/ptw-status';
+import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
+import { PROCEDURE_STATUS } from '@/lib/procedure-status';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const MONTH_LONG = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -35,7 +36,7 @@ export default async function DashboardOverviewPage() {
      supabase.from('projects').select('status, start_date, end_date'),
      supabase.from('procedures').select('status'),
      supabase.from('jsa').select('status'),
-     supabase.from('ptw').select('status, workers, projects ( end_date )'),
+     supabase.from('ptw').select('status, workers, valid_to, projects ( end_date )'),
      supabase.from('inspections').select('status, finding_type, priority, created_at, target_vendor, vendor_profiles:target_vendor ( company_name )'),
      supabase.from('incidents').select('type, incident_date'),
    ]);
@@ -47,17 +48,17 @@ export default async function DashboardOverviewPage() {
    const terlambat = activeProjects.filter(p => new Date(p.end_date) < now).length;
 
    // ------------------------------------------------------------- pipeline
-   const procMenunggu = (procedures || []).filter(p => p.status === 'Draft' || p.status === 'Menunggu Review PM').length;
-   const procDisetujui = (procedures || []).filter(p => p.status === 'Prosedur Disetujui').length;
+   const procMenunggu = (procedures || []).filter(p => p.status === PROCEDURE_STATUS.draft || p.status === PROCEDURE_STATUS.menungguReviewPM).length;
+   const procDisetujui = (procedures || []).filter(p => p.status === PROCEDURE_STATUS.approved).length;
 
    const jsaMenunggu = (jsas || []).filter(j => isJsaPending(j.status)).length;
-   const jsaDisetujui = (jsas || []).filter(j => j.status === 'JSA Disetujui').length;
+   const jsaDisetujui = (jsas || []).filter(j => j.status === JSA_STATUS.approved).length;
 
-   const ptwPendingStatuses = ['Draft', 'Menunggu Approval PM', 'Review PTW Issuer', 'Menunggu Penomoran HSSE'];
+   const ptwPendingStatuses = [PTW_STATUS.draft, ...PTW_PENDING_STATUSES];
    const ptwMenunggu = (ptws || []).filter(p => ptwPendingStatuses.includes(p.status)).length;
    const ptwDisetujui = (ptws || []).filter(p => {
      const proj: any = Array.isArray(p.projects) ? p.projects[0] : p.projects;
-     return getEffectivePtwStatus(p.status, proj?.end_date) === 'PTW Aktif';
+     return getEffectivePtwStatus(p.status, p.valid_to ?? proj?.end_date) === PTW_STATUS.aktif;
    }).length;
 
    // Safe Man-Hours: 8 hours * 30 days * total workers across all PTWs
@@ -174,9 +175,9 @@ export default async function DashboardOverviewPage() {
 
    // PTW waiting for me, scoped to what this role actually approves
    const ptwWaitingCount = (ptws || []).filter(p => {
-     if (role === 'admin') return p.status === 'Menunggu Approval PM' || p.status === 'Review PTW Issuer' || p.status === 'Menunggu Penomoran HSSE';
-     if (role === 'pm') return p.status === 'Menunggu Approval PM';
-     if (role === 'hse') return p.status === 'Review PTW Issuer' || p.status === 'Menunggu Penomoran HSSE';
+     if (role === 'admin') return PTW_PENDING_STATUSES.includes(p.status);
+     if (role === 'pm') return p.status === PTW_STATUS.menungguApprovalPM;
+     if (role === 'hse') return p.status === PTW_STATUS.reviewPtwIssuer || p.status === PTW_STATUS.menungguPenomoranHSSE;
      return false;
    }).length;
 

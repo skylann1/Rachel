@@ -6,6 +6,7 @@ import { PDFViewer } from '@react-pdf/renderer';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import { ArrowLeft, CheckCircle2, XCircle, FileText, Loader2 } from 'lucide-react';
 import { approveProcedure, rejectProcedure } from '../../actions';
+import { PROCEDURE_STATUS } from '@/lib/procedure-status';
 
 function RejectionNote({ note }: { note: string }) {
   return (
@@ -27,7 +28,7 @@ export default function ProsedurDetailClient({ prosedur, userRole, permissions }
   const [isRejecting, setIsRejecting] = useState(false);
 
   const hasApprovePerm = permissions?.approval?.includes('approve') || false;
-  const canApprove = (userRole === 'pm' || userRole === 'admin' || hasApprovePerm) && prosedur.status === 'Menunggu Review PM';
+  const canApprove = (userRole === 'pm' || userRole === 'admin' || hasApprovePerm) && prosedur.status === PROCEDURE_STATUS.menungguReviewPM;
 
   const pdfData = prosedur.content ? {
     projectName: prosedur.projects?.name || 'Proyek',
@@ -102,8 +103,8 @@ export default function ProsedurDetailClient({ prosedur, userRole, permissions }
             </div>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-            prosedur.status === 'Draft' ? 'bg-slate-100 text-slate-600' :
-            prosedur.status === 'Menunggu Review PM' ? 'bg-orange-100 text-orange-600' :
+            prosedur.status === PROCEDURE_STATUS.draft ? 'bg-slate-100 text-slate-600' :
+            prosedur.status === PROCEDURE_STATUS.menungguReviewPM ? 'bg-orange-100 text-orange-600' :
             'bg-green-100 text-green-700'
           }`}>
             {prosedur.status}

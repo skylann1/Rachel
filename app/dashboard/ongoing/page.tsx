@@ -2,14 +2,17 @@ import { getCurrentUserProfile, getAllProjectsWithRelations } from '@/app/dashbo
 import React from 'react';
 import Link from 'next/link';
 import { Rocket, Briefcase, MapPin, Calendar, FileText } from 'lucide-react';
+import { PTW_STATUS } from '@/lib/ptw-status';
 
 export default async function OngoingProjectsPage() {
   const projects = await getAllProjectsWithRelations();
-  
-  // A project is ongoing if PTW is active and project status is not completed
+
+  // A project is ongoing if ANY of its PTWs is active (fieldwork can be under
+  // way with one permit type even while another type is still pending) and
+  // project status is not completed.
   const ongoingProjects = projects.filter(project => {
-    const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
-    return ptw?.status === 'PTW Aktif' && project.status !== 'Completed';
+    const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+    return ptws.some(p => p.status === PTW_STATUS.aktif) && project.status !== 'Completed';
   });
 
   return (
@@ -30,7 +33,8 @@ export default async function OngoingProjectsPage() {
           </div>
         ) : (
           ongoingProjects.map(project => {
-            const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
+            const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+            const activeNumbers = ptws.filter(p => p.status === PTW_STATUS.aktif).map(p => p.ptw_number).filter(Boolean);
             return (
               <div key={project.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col">
                 <div className="flex items-start justify-between mb-4">
@@ -38,7 +42,7 @@ export default async function OngoingProjectsPage() {
                     <Briefcase className="w-5 h-5" />
                   </div>
                   <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider">
-                    {ptw?.ptw_number || 'PTW Aktif'}
+                    {activeNumbers.length > 0 ? activeNumbers.join(', ') : 'PTW Aktif'}
                   </span>
                 </div>
                 

@@ -2,6 +2,8 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { EditableProfile } from "./EditableProfile";
 import { getRoleLabel } from "@/lib/roles";
+import { JSA_STATUS } from "@/lib/jsa-status";
+import { PTW_STATUS } from "@/lib/ptw-status";
 
 export const metadata = {
   title: 'Profil Pengguna | Smart System K3',
@@ -35,8 +37,8 @@ export default async function InternalProfilePage() {
     { count: incidentsCount },
   ] = await Promise.all([
     supabase.from('projects').select('*', { count: 'exact', head: true }).neq('status', 'Selesai').neq('status', 'Ditolak'),
-    supabase.from('jsa').select('*', { count: 'exact', head: true }).eq('status', 'JSA Disetujui'),
-    supabase.from('ptw').select('*', { count: 'exact', head: true }).eq('status', 'Menunggu Approval PM'),
+    supabase.from('jsa').select('*', { count: 'exact', head: true }).eq('status', JSA_STATUS.approved),
+    supabase.from('ptw').select('*', { count: 'exact', head: true }).eq('status', PTW_STATUS.menungguApprovalPM),
     supabase.from('incidents').select('*', { count: 'exact', head: true }),
   ]);
 

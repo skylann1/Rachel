@@ -197,11 +197,15 @@ CREATE POLICY "External users can insert their own projects" ON projects FOR INS
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
-  new_type user_type;
-  new_role user_role;
+  new_type public.user_type;
+  new_role public.user_role;
 BEGIN
-  new_type := COALESCE((new.raw_user_meta_data->>'type')::user_type, 'external');
-  new_role := COALESCE((new.raw_user_meta_data->>'role')::user_role, 'vendor');
+  -- Referensi tipe di-qualify dengan `public.` karena fungsi ini dipicu
+  -- oleh trigger pada auth.users, dieksekusi oleh proses Auth (GoTrue)
+  -- yang search_path-nya tidak otomatis menyertakan schema public — tanpa
+  -- qualifier ini gagal dengan "type does not exist" meski tipenya ada.
+  new_type := COALESCE((new.raw_user_meta_data->>'type')::public.user_type, 'external'::public.user_type);
+  new_role := COALESCE((new.raw_user_meta_data->>'role')::public.user_role, 'vendor'::public.user_role);
 
   -- 1. Insert Base Profile
   INSERT INTO public.profiles (id, full_name, role, type)
@@ -223,7 +227,7 @@ BEGIN
 
   RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users

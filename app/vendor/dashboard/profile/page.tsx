@@ -1,8 +1,9 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { EditableVendorProfile } from "./EditableVendorProfile";
-import { getEffectivePtwStatus } from "@/lib/ptw-status";
+import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from "@/lib/ptw-status";
 import { isJsaPending } from "@/lib/jsa-status";
+import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 
 export const metadata = {
   title: 'Profil Vendor | Portal Vendor K3',
@@ -51,18 +52,18 @@ export default async function VendorProfilePage() {
     const [{ data: procedures }, { data: jsas }, { data: ptws }, { count: incCount }] = await Promise.all([
       supabase.from('procedures').select('status').in('project_id', projectIds),
       supabase.from('jsa').select('status').in('project_id', projectIds),
-      supabase.from('ptw').select('status, projects ( end_date )').in('project_id', projectIds),
+      supabase.from('ptw').select('status, valid_to, projects ( end_date )').in('project_id', projectIds),
       supabase.from('incidents').select('*', { count: 'exact', head: true }).in('project_id', projectIds),
     ]);
     ptwApproved = (ptws || []).filter(p => {
       const proj: any = Array.isArray(p.projects) ? p.projects[0] : p.projects;
-      return getEffectivePtwStatus(p.status, proj?.end_date) === 'PTW Aktif';
+      return getEffectivePtwStatus(p.status, p.valid_to ?? proj?.end_date) === PTW_STATUS.aktif;
     }).length;
     incidentCount = incCount || 0;
     pendingReview =
-      (procedures || []).filter(p => p.status === 'Menunggu Review PM').length +
+      (procedures || []).filter(p => p.status === PROCEDURE_STATUS.menungguReviewPM).length +
       (jsas || []).filter(j => isJsaPending(j.status)).length +
-      (ptws || []).filter(p => p.status === 'Menunggu Approval PM' || p.status === 'Review PTW Issuer' || p.status === 'Menunggu Penomoran HSSE').length;
+      (ptws || []).filter(p => PTW_PENDING_STATUSES.includes(p.status)).length;
   }
 
   const stats = {

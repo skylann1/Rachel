@@ -29,7 +29,8 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
   const supabase = await createClient();
 
   // 4. Fetch Roles
-  const { data: roles } = await supabase.from('roles').select('name, is_system, type').order('name');
+  const { data: roles, error: rolesError } = await supabase.from('roles').select('name, is_system, type').order('name');
+  if (rolesError) console.error('Gagal memuat daftar role:', rolesError.message);
   const availableRoles = roles || [];
 
   let query = supabase.from('profiles').select(`

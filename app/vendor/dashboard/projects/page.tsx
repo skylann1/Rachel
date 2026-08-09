@@ -2,19 +2,21 @@ import React from 'react';
 import Link from 'next/link';
 import { Search, Briefcase, MapPin, Calendar, ArrowRight, FileSignature } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
-import { getEffectivePtwStatus } from '@/lib/ptw-status';
+import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
+import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { JSA_STATUS } from '@/lib/jsa-status';
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    'Menunggu Review':    'bg-amber-100 text-amber-700',
-    'Menunggu Review PM': 'bg-amber-100 text-amber-700',
-    'Revisi Prosedur':    'bg-rose-100 text-rose-700',
-    'Prosedur Disetujui': 'bg-sky-100 text-sky-700',
-    'JSA Disetujui':      'bg-violet-100 text-violet-700',
-    'PTW Aktif':          'bg-emerald-100 text-emerald-700',
-    'Expired':            'bg-slate-200 text-slate-600',
-    'Selesai':            'bg-slate-100 text-slate-600',
-    'Ditolak':            'bg-rose-100 text-rose-700',
+    'Menunggu Review':                  'bg-amber-100 text-amber-700',
+    [PROCEDURE_STATUS.menungguReviewPM]: 'bg-amber-100 text-amber-700',
+    'Revisi Prosedur':                  'bg-rose-100 text-rose-700',
+    [PROCEDURE_STATUS.approved]:        'bg-sky-100 text-sky-700',
+    [JSA_STATUS.approved]:              'bg-violet-100 text-violet-700',
+    [PTW_STATUS.aktif]:                 'bg-emerald-100 text-emerald-700',
+    [PTW_STATUS.expired]:               'bg-slate-200 text-slate-600',
+    'Selesai':                          'bg-slate-100 text-slate-600',
+    'Ditolak':                          'bg-rose-100 text-rose-700',
   };
   return (
     <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${map[status] ?? 'bg-slate-100 text-slate-600'}`}>
@@ -29,7 +31,7 @@ export default async function VendorProjectsPage() {
     .from('projects')
     .select(`
       id, name, description, location, start_date, end_date, status, progress, contract_number,
-      procedures(status), jsa(status), ptw(status)
+      procedures(status), jsa(status), ptw(status, valid_to)
     `)
     .order('created_at', { ascending: false });
 
@@ -37,24 +39,25 @@ export default async function VendorProjectsPage() {
 
   // Determine next action based on project status
   const getComputedStatus = (project: any) => {
-    const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
+    // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda).
+    const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
     const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
     const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
 
-    const effectivePtwStatus = getEffectivePtwStatus(ptw?.status, project.end_date);
-    if (effectivePtwStatus === 'PTW Aktif') return 'PTW Aktif';
-    if (effectivePtwStatus === 'Expired') return 'Expired';
-    if (jsa?.status === 'JSA Disetujui') return 'JSA Disetujui';
-    if (prosedur?.status === 'Prosedur Disetujui') return 'Prosedur Disetujui';
-    if (prosedur?.status === 'Menunggu Review PM') return 'Menunggu Review PM';
-    if (prosedur?.status === 'Draft') return 'Revisi Prosedur';
+    const effectivePtwStatuses = ptws.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date));
+    if (effectivePtwStatuses.some(s => s === PTW_STATUS.expired)) return PTW_STATUS.expired;
+    if (ptws.length > 0 && effectivePtwStatuses.every(s => s === PTW_STATUS.aktif)) return PTW_STATUS.aktif;
+    if (jsa?.status === JSA_STATUS.approved) return JSA_STATUS.approved;
+    if (prosedur?.status === PROCEDURE_STATUS.approved) return PROCEDURE_STATUS.approved;
+    if (prosedur?.status === PROCEDURE_STATUS.menungguReviewPM) return PROCEDURE_STATUS.menungguReviewPM;
+    if (prosedur?.status === PROCEDURE_STATUS.draft) return 'Revisi Prosedur';
     return project.status;
   };
 
   const getActionButton = (project: any) => {
     const computedStatus = getComputedStatus(project);
     switch (computedStatus) {
-      case 'Menunggu Review PM':
+      case PROCEDURE_STATUS.menungguReviewPM:
         return (
           <Link
             href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
@@ -81,7 +84,7 @@ export default async function VendorProjectsPage() {
             <FileSignature className="w-4 h-4" /> Lengkapi Prosedur
           </Link>
         );
-      case 'Prosedur Disetujui':
+      case PROCEDURE_STATUS.approved:
         return (
           <Link
             href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
@@ -90,7 +93,7 @@ export default async function VendorProjectsPage() {
             Buat JSA <ArrowRight className="w-4 h-4" />
           </Link>
         );
-      case 'JSA Disetujui':
+      case JSA_STATUS.approved:
         return (
           <Link
             href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
@@ -99,13 +102,13 @@ export default async function VendorProjectsPage() {
             Ajukan PTW <ArrowRight className="w-4 h-4" />
           </Link>
         );
-      case 'PTW Aktif':
+      case PTW_STATUS.aktif:
         return (
           <div className="flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 py-2.5 rounded-xl">
             ✅ PTW Aktif — Pekerjaan Berjalan
           </div>
         );
-      case 'Expired':
+      case PTW_STATUS.expired:
         return (
           <Link
             href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}

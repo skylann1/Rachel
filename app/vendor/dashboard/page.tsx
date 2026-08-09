@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   FolderOpen
 } from 'lucide-react';
-import { getVendorDashboardData, getVendorRecentActivity } from './actions';
+import { getVendorDashboardData, getVendorRecentActivity, getVendorChartsData } from './actions';
+import { VendorDashboardCharts } from '@/components/vendor/vendor-dashboard-charts';
 
 const JSA_BADGE: Record<string, { cls: string; icon: React.ElementType; label: string }> = {
   Approved: { cls: 'bg-emerald-50 text-emerald-600 border-emerald-200/50', icon: CheckCircle2, label: 'Disetujui' },
@@ -38,6 +39,7 @@ export default async function VendorDashboardPage() {
 
   const { projects, stats } = await getVendorDashboardData();
   const activity = await getVendorRecentActivity();
+  const chartsData = await getVendorChartsData();
   const userName = user?.email?.split('@')[0].toUpperCase() || 'MITRA';
 
   const statTiles = [
@@ -108,6 +110,11 @@ export default async function VendorDashboardPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* ── Charts ──────────────────────────────────────────────── */}
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '90ms' }}>
+        <VendorDashboardCharts data={chartsData} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

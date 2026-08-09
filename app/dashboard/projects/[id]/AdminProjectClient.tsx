@@ -14,8 +14,10 @@ import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
-import { getEffectivePtwStatus } from '@/lib/ptw-status';
+import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_ROLES } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_ROLES, isJsaPending } from '@/lib/jsa-status';
+import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { PTW_TYPES } from '@/lib/ptw-types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const PDFViewer = dynamic(
@@ -172,7 +174,7 @@ function ApproveModal({ labelKey, onConfirm, onCancel, isLoading }: {
   );
 }
 
-export default function AdminProjectClient({ project, userRole, currentUserId, jsaSignatories }: { project: any, userRole: string, currentUserId: string, jsaSignatories?: any }) {
+export default function AdminProjectClient({ project, userRole, currentUserId, jsaSignatories, ptwSignatories }: { project: any, userRole: string, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any> }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<{ type: 'prosedur' | 'jsa' | 'ptw'; id: string } | null>(null);
@@ -181,19 +183,26 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
   const [fullScreenPreview, setFullScreenPreview] = useState<'prosedur' | 'jsa' | 'ptw' | null>(null);
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
-  const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
+  // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda) — lihat lib/project-stage.ts
+  const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
   const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
 
   const prosedurRevisions = prosedur?.content?.revisions || [];
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
-  const prosedurStatus = prosedur?.status === 'Prosedur Disetujui' ? 'Approved' : prosedur?.status === 'Menunggu Review PM' ? 'Pending' : (prosedur?.status === 'Draft' && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
+  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : prosedur?.status === PROCEDURE_STATUS.menungguReviewPM ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
   const jsaStatus = jsa?.status === JSA_STATUS.approved ? 'Approved' : isJsaPending(jsa?.status) ? 'Pending' : jsa?.rejection_note ? 'Rejected' : jsa ? 'Draft' : 'Draft';
-  const effectivePtwStatus = getEffectivePtwStatus(ptw?.status, project.end_date);
-  const ptwStatus = effectivePtwStatus === 'PTW Aktif' ? 'Approved'
-    : effectivePtwStatus === 'Expired' ? 'Expired'
-    : effectivePtwStatus === 'Draft' ? 'Rejected'
-    : ptw ? 'Pending' : 'Draft';
+
+  // PTW tahap proyek: hijau hanya kalau SEMUA tipe PTW yang diajukan sudah Aktif.
+  const ptwEffectiveStatuses = ptws.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date));
+  const ptwAnyExpired = ptwEffectiveStatuses.some(s => s === PTW_STATUS.expired);
+  const ptwAllAktif = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.aktif);
+  const ptwAnyRejected = ptws.some(p => p.status === PTW_STATUS.draft && p.rejection_note);
+  const ptwStatus = ptwAnyExpired ? 'Expired'
+    : ptwAllAktif ? 'Approved'
+    : ptwAnyRejected ? 'Rejected'
+    : ptws.length > 0 ? 'Pending' : 'Draft';
+  const ptwAktifCount = ptwEffectiveStatuses.filter(s => s === PTW_STATUS.aktif).length;
 
   const getStepStyle = (status: string) => {
     switch (status) {
@@ -228,7 +237,13 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
     jsaStageRoles.length > 0 &&
     (jsaStageRoles.includes(userRole) || userRole === 'admin') &&
     !jsaSudahDireviewOlehSaya;
-  const canApprovePtw = (userRole === 'ptw_authority' && ptw?.status === 'Menunggu Approval PM') || (userRole === 'ptw_issuer' && ptw?.status === 'Review PTW Issuer') || (userRole === 'hse' && ptw?.status === 'Menunggu Penomoran HSSE') || userRole === 'admin';
+  // PTW: role tiap tahap dicek per baris karena bisa ada beberapa PTW tipe berbeda sekaligus.
+  const canApprovePtwRow = (row: any) => {
+    const roles = PTW_STAGE_ROLES[row.status] || [];
+    return roles.length > 0 && (roles.includes(userRole) || userRole === 'admin');
+  };
+  const ptwActionableRows = ptws.filter(canApprovePtwRow);
+  const canApprovePtw = ptwActionableRows.length > 0;
 
   const handleConfirmApprove = async () => {
     if (!approveTarget) return;
@@ -272,7 +287,10 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
   };
 
   // --- Dashboard Data Preparation ---
-  const workers = ptw?.workers || [];
+  // Union pekerja lintas PTW (satu orang bisa terdaftar di lebih dari satu tipe PTW).
+  const workers = Array.from(
+    new Map(ptws.flatMap(p => p.workers || []).map((w: any) => [w.id ?? w.worker_name, w])).values()
+  );
   
   // Hitung Sisa Waktu
   const endDate = new Date(project.end_date);
@@ -452,7 +470,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                         </div>
                         <div>
                           <div className="font-bold text-slate-800 text-sm">Permit to Work</div>
-                          <div className="mt-1">{getStatusBadge(ptwStatus, ptw?.status)}</div>
+                          <div className="mt-1">{getStatusBadge(ptwStatus, ptws.length > 0 ? `${ptwAktifCount}/${ptws.length} Aktif` : undefined)}</div>
                         </div>
                       </div>
                     </div>
@@ -611,59 +629,62 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                  </div>
                )}
 
-               {/* JIKA PTW PENDING */}
-               {ptwStatus === 'Pending' && canApprovePtw && (
-                 <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
-                    <div className="bg-amber-50 p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                       <div>
-                         <div className="flex items-center gap-2 mb-1">
-                           <Stamp className="w-5 h-5 text-amber-600" />
-                           <h3 className="text-lg font-bold text-amber-900">Permit to Work (PTW)</h3>
+               {/* JIKA ADA PTW PENDING (bisa lebih dari satu tipe sekaligus) */}
+               {ptwActionableRows.map(row => {
+                 const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
+                 return (
+                   <div key={row.id} className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50 mb-6">
+                      <div className="bg-amber-50 p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                         <div>
+                           <div className="flex items-center gap-2 mb-1">
+                             <Stamp className="w-5 h-5 text-amber-600" />
+                             <h3 className="text-lg font-bold text-amber-900">Permit to Work — {rowTitle}</h3>
+                           </div>
+                           <p className="text-amber-700 text-sm">Vendor telah melengkapi PTW. Silakan review pekerja & peralatan.</p>
                          </div>
-                         <p className="text-amber-700 text-sm">Vendor telah melengkapi PTW. Silakan review pekerja & peralatan.</p>
-                       </div>
-                       <div className="flex gap-2">
-                         <button onClick={() => setRejectTarget({ type: 'ptw', id: ptw.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
-                         <button onClick={() => setApproveTarget({ type: 'ptw', id: ptw.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
-                       </div>
-                    </div>
-                    <div className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                          <div className="bg-slate-50 px-5 py-4 border-b border-slate-200 font-bold text-sm text-slate-800 flex items-center gap-2">
-                            <Users className="w-4 h-4 text-slate-500" /> Pekerja Terdaftar
+                         <div className="flex gap-2">
+                           <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
+                           <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
+                         </div>
+                      </div>
+                      <div className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                            <div className="bg-slate-50 px-5 py-4 border-b border-slate-200 font-bold text-sm text-slate-800 flex items-center gap-2">
+                              <Users className="w-4 h-4 text-slate-500" /> Pekerja Terdaftar
+                            </div>
+                            <div className="p-5 space-y-4">
+                              {row.workers?.map((w: any, i: number) => (
+                                <div key={i} className="flex justify-between items-center text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                                  <span className="font-bold text-slate-800">{w.worker_name}</span>
+                                  <span className="text-slate-500 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold">{w.worker_role}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <div className="p-5 space-y-4">
-                            {ptw.workers?.map((w: any, i: number) => (
-                              <div key={i} className="flex justify-between items-center text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                                <span className="font-bold text-slate-800">{w.worker_name}</span>
-                                <span className="text-slate-500 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold">{w.worker_role}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                          <div className="bg-slate-50 px-5 py-4 border-b border-slate-200 font-bold text-sm text-slate-800 flex items-center gap-2">
-                            <Briefcase className="w-4 h-4 text-slate-500" /> Peralatan & Tools
-                          </div>
-                          <div className="p-5 space-y-4">
-                            {ptw.equipment?.map((e: any, i: number) => (
-                              <div key={i} className="flex justify-between items-center text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                                <span className="font-bold text-slate-800">{e.name}</span>
-                                <span className="text-slate-500 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold">{e.type}</span>
-                              </div>
-                            ))}
+                          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                            <div className="bg-slate-50 px-5 py-4 border-b border-slate-200 font-bold text-sm text-slate-800 flex items-center gap-2">
+                              <Briefcase className="w-4 h-4 text-slate-500" /> Peralatan & Tools
+                            </div>
+                            <div className="p-5 space-y-4">
+                              {row.equipment?.map((e: any, i: number) => (
+                                <div key={i} className="flex justify-between items-center text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                                  <span className="font-bold text-slate-800">{e.name}</span>
+                                  <span className="text-slate-500 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold">{e.type}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                 </div>
-               )}
+                   </div>
+                 );
+               })}
 
                {/* KALO TIDAK ADA YANG PENDING */}
-               {((!canApproveProsedur || prosedurStatus !== 'Pending') && 
-                 (!canApproveJsa || jsaStatus !== 'Pending') && 
-                 (!canApprovePtw || ptwStatus !== 'Pending')) && (
+               {((!canApproveProsedur || prosedurStatus !== 'Pending') &&
+                 (!canApproveJsa || jsaStatus !== 'Pending') &&
+                 !canApprovePtw) && (
                  <div className="bg-slate-50 border border-slate-200 border-dashed rounded-3xl p-12 text-center">
                     <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-slate-800">Tidak ada dokumen yang perlu di-review</h3>
@@ -683,7 +704,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                  <h2 className="text-xl font-bold text-slate-800">Dokumen Referensi (Disetujui)</h2>
                </div>
                
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* REFERENSI SOP */}
                   {prosedurStatus === 'Approved' ? (
                      <div className="bg-white border border-emerald-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -785,50 +806,82 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                      </div>
                   )}
 
-                  {/* REFERENSI PTW */}
-                  {(ptwStatus === 'Approved' || ptwStatus === 'Expired') ? (
-                     <div className="bg-white border border-emerald-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full -z-10 transition-transform group-hover:scale-110"></div>
-                        <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
-                           <Stamp className="w-6 h-6" />
-                        </div>
-                        <h3 className="font-bold text-slate-800 text-lg">Permit to Work</h3>
-                        <p className="text-sm text-slate-500 mt-1 mb-6">Surat Izin Kerja Aman (SIKA) yang telah aktif.</p>
-                        <BlobProvider document={
-                          <PtwPDF
-                            projectId={project.id}
-                            ptwNumber={ptw.ptw_number}
-                            projectName={project.name}
-                            vendorName={project.vendor_profiles?.company_name}
-                            location={project.location}
-                            startDate={project.start_date}
-                            endDate={project.end_date}
-                            description={project.description}
-                            ptwType={ptw.ptw_type || 'dingin'}
-                            hazards={ptw.hazards || []}
-                            apd={ptw.apd || {}}
-                            pekerja={ptw.workers || []}
-                            peralatan={ptw.equipment || []}
-                          />
-                        }>
-                          {({ url, loading }) => (
-                            <button
-                              disabled={loading}
-                              onClick={() => { if(url) window.open(url, '_blank'); }}
-                              className="w-full py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors disabled:opacity-50"
-                            >
-                              {loading ? 'Membuat PDF...' : 'Buka & Print PTW'}
-                            </button>
-                          )}
-                        </BlobProvider>
-                     </div>
-                  ) : (
-                     <div className="bg-slate-50 border border-slate-200 border-dashed rounded-2xl p-6 text-center opacity-70">
-                        <Stamp className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                        <h3 className="font-bold text-slate-500">Permit to Work</h3>
-                        <p className="text-xs text-slate-400 mt-1">Belum Aktif</p>
-                     </div>
-                  )}
+               </div>
+
+               {/* REFERENSI PTW — satu proyek bisa punya beberapa tipe PTW sekaligus */}
+               <div className="mt-6">
+                  <h3 className="font-bold text-slate-700 text-sm mb-4">Permit to Work</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {ptws.length === 0 ? (
+                       <div className="bg-slate-50 border border-slate-200 border-dashed rounded-2xl p-6 text-center opacity-70">
+                          <Stamp className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                          <h3 className="font-bold text-slate-500">Permit to Work</h3>
+                          <p className="text-xs text-slate-400 mt-1">Belum Aktif</p>
+                       </div>
+                    ) : (
+                      ptws.map(row => {
+                        const rowEffective = getEffectivePtwStatus(row.status, row.valid_to ?? project.end_date);
+                        const rowIsReference = rowEffective === PTW_STATUS.aktif || rowEffective === PTW_STATUS.expired;
+                        const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
+
+                        return rowIsReference ? (
+                          <div key={row.id} className="bg-white border border-emerald-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full -z-10 transition-transform group-hover:scale-110"></div>
+                             <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
+                                <Stamp className="w-6 h-6" />
+                             </div>
+                             <h3 className="font-bold text-slate-800 text-lg">{rowTitle}</h3>
+                             <p className="text-sm text-slate-500 mt-1 mb-6">
+                               {rowEffective === PTW_STATUS.expired ? 'Surat Izin Kerja Aman (SIKA) yang telah kedaluwarsa.' : 'Surat Izin Kerja Aman (SIKA) yang telah aktif.'}
+                             </p>
+                             <BlobProvider document={
+                               <PtwPDF
+                                 projectId={project.id}
+                                 ptwNumber={row.ptw_number}
+                                 projectName={project.name}
+                                 vendorName={project.vendor_profiles?.company_name}
+                                 location={project.location}
+                                 startDate={project.start_date}
+                                 endDate={project.end_date}
+                                 description={project.description}
+                                 ptwType={row.ptw_type || 'dingin'}
+                                 hazards={row.hazards || []}
+                                 apd={row.apd || {}}
+                                 pekerja={row.workers || []}
+                                 peralatan={row.equipment || []}
+                                 gasTests={row.gas_tests || []}
+                                 validFrom={row.valid_from}
+                                 validTo={row.valid_to}
+                                 workStart={row.work_start}
+                                 workEnd={row.work_end}
+                                 hotWorkTypes={row.hot_work_types || []}
+                                 gasTestFrequency={row.gas_test_frequency || {}}
+                                 jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
+                                 siblings={ptws}
+                                 signatories={ptwSignatories?.[row.id]}
+                               />
+                             }>
+                               {({ url, loading }) => (
+                                 <button
+                                   disabled={loading}
+                                   onClick={() => { if(url) window.open(url, '_blank'); }}
+                                   className="w-full py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors disabled:opacity-50"
+                                 >
+                                   {loading ? 'Membuat PDF...' : 'Buka & Print PTW'}
+                                 </button>
+                               )}
+                             </BlobProvider>
+                          </div>
+                        ) : (
+                          <div key={row.id} className="bg-slate-50 border border-slate-200 border-dashed rounded-2xl p-6 text-center opacity-70">
+                             <Stamp className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                             <h3 className="font-bold text-slate-500">{rowTitle}</h3>
+                             <p className="text-xs text-slate-400 mt-1">Belum Aktif</p>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                </div>
             </div>
          </div>

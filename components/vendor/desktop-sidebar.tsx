@@ -3,11 +3,12 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
 import { logout } from "@/app/vendor/login/actions";
 
 const menuUtama = [
   { name: 'Dashboard Vendor', href: '/vendor/dashboard', icon: LayoutDashboard },
+  { name: 'My Task', href: '/vendor/dashboard/my-task', icon: ClipboardList },
   { name: 'Proyek Aktif', href: '/vendor/dashboard/projects', icon: Briefcase },
   { name: 'Inbox Temuan K3', href: '/vendor/dashboard/inspection', icon: AlertTriangle },
   { name: 'Laporan Insiden', href: '/vendor/dashboard/incident', icon: AlertTriangle, danger: true },

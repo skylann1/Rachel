@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
+import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 
 export async function saveProsedur(projectId: string, payload: any) {
   const supabase = await createClient();
@@ -16,7 +17,7 @@ export async function saveProsedur(projectId: string, payload: any) {
   if (existing) {
     const { error } = await supabase
       .from('procedures')
-      .update({ content: payload, status: 'Menunggu Review PM' })
+      .update({ content: payload, status: PROCEDURE_STATUS.menungguReviewPM })
       .eq('id', existing.id);
 
     if (error) throw new Error(error.message);
@@ -26,7 +27,7 @@ export async function saveProsedur(projectId: string, payload: any) {
       .insert({
         project_id: projectId,
         content: payload,
-        status: 'Menunggu Review PM'
+        status: PROCEDURE_STATUS.menungguReviewPM
       });
 
     if (error) throw new Error(error.message);

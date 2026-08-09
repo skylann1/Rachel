@@ -178,6 +178,11 @@ export async function createNotification({
 /**
  * Send notification to ALL users with a specific role.
  * Used for broadcast notifications (e.g., "New PTW needs approval" → all PM users).
+ *
+ * Admin selalu ikut disertakan — admin bisa approve/lihat semua tahap
+ * (lihat requireRole di app/dashboard/approval/actions.ts dan bypass 'admin'
+ * di getMyTasks), jadi admin juga harus tahu setiap tugas yang di-broadcast
+ * ke role lain, bukan cuma role target-nya.
  */
 export async function notifyUsersByRole({
   role,
@@ -194,11 +199,12 @@ export async function notifyUsersByRole({
 }) {
   const supabase = await createClient();
 
-  // Get all users with this role
+  // Get all users with this role, plus all admins
+  const targetRoles = role === 'admin' ? [role] : [role, 'admin'];
   const { data: users } = await supabase
     .from('profiles')
     .select('id')
-    .eq('role', role);
+    .in('role', targetRoles);
 
   if (!users || users.length === 0) return;
 

@@ -3,6 +3,8 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { FileSignature, ShieldAlert, FileText, CheckCircle2 } from 'lucide-react';
+import { PTW_STATUS } from '@/lib/ptw-status';
+import { PROCEDURE_STATUS } from '@/lib/procedure-status';
 
 interface ApprovalPageClientProps {
   userRole: string;
@@ -13,10 +15,12 @@ export default function ApprovalPageClient({ userRole, projects }: ApprovalPageC
   const router = useRouter();
 
   const pendingProjects = projects.filter(project => {
-    const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
+    // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda) — tetap
+    // masuk antrean review selama ADA tipe yang belum Aktif semua.
+    const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
     const isCompleted = project.status === 'Completed' || project.status === 'Selesai';
-    const isActive = ptw?.status === 'PTW Aktif';
-    return !isCompleted && !isActive;
+    const allPtwAktif = ptws.length > 0 && ptws.every(p => p.status === PTW_STATUS.aktif);
+    return !isCompleted && !allPtwAktif;
   });
 
   return (
@@ -51,13 +55,25 @@ export default function ApprovalPageClient({ userRole, projects }: ApprovalPageC
             ) : pendingProjects.map(project => {
               const proc = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
               const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
-              const ptw = Array.isArray(project.ptw) ? project.ptw[0] : project.ptw;
+              const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
 
               const getStatus = (doc: any) => {
                 if (!doc) return <span className="text-xs text-slate-400">Belum Ada</span>;
-                if (doc.status.includes('Disetujui') || doc.status === 'PTW Aktif') return <span className="text-xs font-bold text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Disetujui</span>;
-                if (doc.status === 'Draft' || doc.rejection_note) return <span className="text-xs text-rose-500 font-bold">Revisi</span>;
+                if (doc.status.includes('Disetujui') || doc.status === PTW_STATUS.aktif) return <span className="text-xs font-bold text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Disetujui</span>;
+                if (doc.status === PROCEDURE_STATUS.draft || doc.rejection_note) return <span className="text-xs text-rose-500 font-bold">Revisi</span>;
                 return <span className="text-xs font-bold text-amber-500">{doc.status}</span>;
+              };
+
+              const getPtwStatus = (rows: any[]) => {
+                if (rows.length === 0) return <span className="text-xs text-slate-400">Belum Ada</span>;
+                if (rows.every(r => r.status === PTW_STATUS.aktif)) {
+                  return <span className="text-xs font-bold text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Disetujui{rows.length > 1 ? ` (${rows.length})` : ''}</span>;
+                }
+                if (rows.some(r => r.status === PROCEDURE_STATUS.draft && r.rejection_note)) {
+                  return <span className="text-xs text-rose-500 font-bold">Revisi</span>;
+                }
+                const pending = rows.filter(r => r.status !== PTW_STATUS.aktif).length;
+                return <span className="text-xs font-bold text-amber-500">{pending}/{rows.length} Pending</span>;
               };
 
               return (
@@ -68,7 +84,7 @@ export default function ApprovalPageClient({ userRole, projects }: ApprovalPageC
                   </td>
                   <td className="px-6 py-4">{getStatus(proc)}</td>
                   <td className="px-6 py-4">{getStatus(jsa)}</td>
-                  <td className="px-6 py-4">{getStatus(ptw)}</td>
+                  <td className="px-6 py-4">{getPtwStatus(ptws)}</td>
                   <td className="px-6 py-4 text-right">
                     <button
                       onClick={() => router.push(`/dashboard/projects/${project.id}`)}
