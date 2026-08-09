@@ -17,6 +17,10 @@ export async function getInspections() {
       image_url,
       created_at,
       is_project_activity,
+      reported_by,
+      target_vendor,
+      vendor_response,
+      vendor_evidence_url,
       vendor_profiles:target_vendor (
         company_name
       ),
@@ -144,6 +148,44 @@ export async function delegateInspection(inspectionId: string, assigneeId: strin
     message: notes || 'Sebuah tugas inspeksi telah dilimpahkan kepada Anda.',
     link: `/dashboard/inspection`,
   });
+}
+
+export async function validateInspection(inspectionId: string, approved: boolean, notes: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: inspection } = await supabase
+    .from('inspections')
+    .select('title, location, reported_by, target_vendor')
+    .eq('id', inspectionId)
+    .single();
+
+  const { error } = await supabase
+    .from('inspections')
+    .update({ status: approved ? 'Closed' : 'Open' })
+    .eq('id', inspectionId);
+
+  if (error) throw new Error(error.message);
+
+  await supabase.from('inspection_logs').insert({
+    inspection_id: inspectionId,
+    actor_id: user?.id,
+    action: approved ? 'Perbaikan Divalidasi / Temuan Ditutup' : 'Perbaikan Ditolak / Dikembalikan',
+    notes: notes || (approved ? 'Bukti perbaikan sesuai dan disetujui.' : 'Bukti perbaikan belum sesuai, perlu diperbaiki ulang.')
+  });
+
+  const notifyUserId = inspection?.target_vendor || inspection?.reported_by;
+  if (notifyUserId) {
+    await createNotification({
+      userId: notifyUserId,
+      type: approved ? 'approval' : 'warning',
+      title: approved ? 'Temuan K3 Ditutup' : 'Perbaikan Ditolak — Perlu Ditindaklanjuti Ulang',
+      message: approved
+        ? `Perbaikan untuk temuan "${inspection?.title}" di lokasi "${inspection?.location}" telah divalidasi dan ditutup.`
+        : `Bukti perbaikan untuk temuan "${inspection?.title}" di lokasi "${inspection?.location}" ditolak. ${notes ? `Catatan: ${notes}` : 'Mohon lengkapi ulang perbaikan.'}`,
+      link: `/vendor/dashboard/inspection`,
+    });
+  }
 }
 
 export async function getInspectionLogs(inspectionId: string) {

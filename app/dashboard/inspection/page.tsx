@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2, Download, History, UserPlus } from 'lucide-react';
-import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs } from './actions';
+import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs, validateInspection } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
 
 export default function InspectionPage() {
@@ -17,6 +17,7 @@ export default function InspectionPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDisposisiModalOpen, setIsDisposisiModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isValidasiModalOpen, setIsValidasiModalOpen] = useState(false);
   
   // Data
   const [inspections, setInspections] = useState<any[]>([]);
@@ -24,6 +25,7 @@ export default function InspectionPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [internalUsers, setInternalUsers] = useState<any[]>([]);
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
+  const [validasiNotes, setValidasiNotes] = useState('');
   
   // States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,7 +60,9 @@ export default function InspectionPage() {
       priority: d.priority,
       image: d.image_url || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
       assigned_to: d.internal_profiles?.profiles?.full_name || 'Belum di-assign',
-      is_project_activity: d.is_project_activity
+      is_project_activity: d.is_project_activity,
+      vendor_response: d.vendor_response,
+      vendor_evidence_url: d.vendor_evidence_url
     }));
     setInspections(formatted);
   }
@@ -116,6 +120,23 @@ export default function InspectionPage() {
     } catch (err) {
       console.error(err);
       alert('Gagal mendisposisikan tugas.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleValidasi = async (approved: boolean, notes: string) => {
+    if (!selectedInspection) return;
+    setIsSubmitting(true);
+    try {
+      await validateInspection(selectedInspection.id, approved, notes);
+      alert(approved ? 'Temuan berhasil divalidasi dan ditutup!' : 'Perbaikan dikembalikan ke vendor.');
+      setIsValidasiModalOpen(false);
+      setValidasiNotes('');
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Gagal memproses validasi.');
     } finally {
       setIsSubmitting(false);
     }
@@ -291,7 +312,7 @@ export default function InspectionPage() {
                      <UserPlus className="w-4 h-4" /> Disposisi Tugas
                   </button>
                ) : item.status === 'In Progress' ? (
-                  <button className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-lg shadow-sm transition-colors">
+                  <button onClick={() => { setSelectedInspection(item); setIsValidasiModalOpen(true); }} className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-lg shadow-sm transition-colors">
                      <CheckCircle className="w-4 h-4" /> Validasi Perbaikan
                   </button>
                ) : (
@@ -479,6 +500,77 @@ export default function InspectionPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal Validasi Perbaikan */}
+      {isValidasiModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh]">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CheckCircle className="w-5 h-5 text-primary" /> Validasi Perbaikan</h2>
+              <button type="button" onClick={() => { setIsValidasiModalOpen(false); setValidasiNotes(''); }} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                <span className="text-xs font-bold text-primary block mb-1">ID: {selectedInspection?.id}</span>
+                <p className="text-sm font-medium text-slate-700 line-clamp-2">"{selectedInspection?.description}"</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Bukti Perbaikan dari Vendor</label>
+                {selectedInspection?.vendor_evidence_url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={selectedInspection.vendor_evidence_url} alt="Bukti Perbaikan" className="w-full h-48 object-cover rounded-xl border border-slate-200" />
+                ) : (
+                  <div className="w-full h-24 flex items-center justify-center rounded-xl border border-dashed border-slate-300 text-sm text-slate-400">
+                    Vendor belum melampirkan foto bukti.
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Keterangan Perbaikan dari Vendor</label>
+                <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                  {selectedInspection?.vendor_response || 'Vendor belum memberikan keterangan.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Catatan Validasi (Opsional)</label>
+                <textarea
+                  value={validasiNotes}
+                  onChange={(e) => setValidasiNotes(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm resize-none"
+                  rows={3}
+                  placeholder="Misal: Perbaikan sudah sesuai standar / masih perlu dilengkapi APD tambahan."
+                ></textarea>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleValidasi(false, validasiNotes)}
+                className="px-4 py-2 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 disabled:opacity-50 rounded-xl transition-colors"
+              >
+                Tolak, Belum Sesuai
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleValidasi(true, validasiNotes)}
+                className="px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-xl transition-colors flex items-center gap-2"
+              >
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                Setujui & Tutup
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
