@@ -4,9 +4,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, AlertTriangle, FileText, CheckCircle2, ShieldCheck, FileSignature, Loader2 } from 'lucide-react';
-import { PDFViewer } from '@react-pdf/renderer';
+import dynamic from 'next/dynamic';
 import IncidentPDF from './IncidentPDF';
 import { getIncidentDetail, updateIncidentInvestigation } from '../actions';
+
+const PDFViewer = dynamic(
+  () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
+  { ssr: false, loading: () => <div className="h-full w-full bg-slate-100 flex items-center justify-center animate-pulse text-slate-400 font-medium">Memuat Pratinjau Dokumen...</div> }
+);
 
 export default function IncidentInvestigationPage() {
   const params = useParams();

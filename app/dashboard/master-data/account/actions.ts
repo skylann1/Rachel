@@ -3,6 +3,7 @@
 import { randomInt } from 'crypto';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
+import { sendEmail, passwordResetEmailHtml } from '@/lib/email';
 
 export async function addAccount(formData: FormData) {
   try {
@@ -148,9 +149,10 @@ export async function suspendAccount(id: string, isSuspended: boolean) {
 
 /**
  * Forgot-password recovery for users who can't reset it themselves: an admin
- * generates a random one-time password and relays it to the user directly
- * (no email flow exists), who then logs in with it and should change it via
- * their own profile's "Ubah Kata Sandi" form.
+ * generates a random one-time password, which is emailed to the account
+ * holder (and also shown to the admin as a fallback in case delivery
+ * fails). The user then logs in with it and should change it via their own
+ * profile's "Ubah Kata Sandi" form.
  */
 export async function resetAccountPassword(id: string) {
   try {
@@ -158,7 +160,7 @@ export async function resetAccountPassword(id: string) {
     // 8-digit random number — easy to read out/type, generated with a CSPRNG.
     const randomPassword = randomInt(10_000_000, 100_000_000).toString();
 
-    const { error } = await adminAuthClient.auth.admin.updateUserById(id, {
+    const { data, error } = await adminAuthClient.auth.admin.updateUserById(id, {
       password: randomPassword,
     });
 
@@ -166,7 +168,26 @@ export async function resetAccountPassword(id: string) {
       return { error: error.message || 'Gagal mereset kata sandi' };
     }
 
-    return { success: true, password: randomPassword };
+    let emailSent = false;
+    if (data.user?.email) {
+      const { data: profile } = await adminAuthClient
+        .from('profiles')
+        .select('full_name')
+        .eq('id', id)
+        .single();
+
+      const { error: emailError } = await sendEmail({
+        to: data.user.email,
+        subject: 'Kata Sandi RACHEL K3 Anda Telah Direset',
+        html: passwordResetEmailHtml({
+          name: profile?.full_name || data.user.email,
+          password: randomPassword,
+        }),
+      });
+      emailSent = !emailError;
+    }
+
+    return { success: true, password: randomPassword, emailSent };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mereset kata sandi' };
   }

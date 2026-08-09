@@ -141,7 +141,7 @@ export default function IncidentPDF({ incidentId, investigation }: IncidentPDFPr
         {/* Header Document */}
         <View style={styles.headerBox}>
           <View style={styles.logoBox}>
-            <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#0ea5e9' }}>SIPERMIT</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#0ea5e9' }}>RACHEL</Text>
           </View>
           <View style={styles.titleBox}>
             <Text style={styles.title}>LAPORAN INVESTIGASI INSIDEN K3</Text>

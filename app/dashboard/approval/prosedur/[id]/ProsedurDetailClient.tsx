@@ -2,11 +2,16 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PDFViewer } from '@react-pdf/renderer';
+import dynamic from 'next/dynamic';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import { ArrowLeft, CheckCircle2, XCircle, FileText, Loader2 } from 'lucide-react';
 import { approveProcedure, rejectProcedure } from '../../actions';
 import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+
+const PDFViewer = dynamic(
+  () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
+  { ssr: false, loading: () => <div className="h-full w-full bg-slate-100 flex items-center justify-center animate-pulse text-slate-400 font-medium">Memuat Pratinjau Dokumen...</div> }
+);
 
 function RejectionNote({ note }: { note: string }) {
   return (

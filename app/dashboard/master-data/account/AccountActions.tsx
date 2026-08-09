@@ -22,6 +22,7 @@ export default function AccountActions({ account, roles }: { account: Account, r
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false);
   const [resetPassword, setResetPassword] = useState<string | null>(null);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -50,6 +51,7 @@ export default function AccountActions({ account, roles }: { account: Account, r
     setIsConfirmResetOpen(false);
     if (result.success) {
       setResetPassword(result.password!);
+      setResetEmailSent(!!result.emailSent);
     } else {
       setResetError(result.error || 'Gagal mereset kata sandi');
     }
@@ -213,7 +215,11 @@ export default function AccountActions({ account, roles }: { account: Account, r
                 </div>
                 <h3 className="text-lg font-bold text-slate-800 mb-2">Kata Sandi Baru Dibuat</h3>
                 <p className="text-sm text-slate-500 mb-4">
-                  Sampaikan kata sandi ini langsung ke <strong>{account.name}</strong>. Kata sandi ini tidak akan ditampilkan lagi setelah jendela ini ditutup.
+                  {resetEmailSent ? (
+                    <>Email berisi kata sandi baru telah dikirim ke <strong>{account.email}</strong>. Kata sandi ini tidak akan ditampilkan lagi setelah jendela ini ditutup.</>
+                  ) : (
+                    <>Email gagal terkirim — sampaikan kata sandi ini langsung ke <strong>{account.name}</strong>. Kata sandi ini tidak akan ditampilkan lagi setelah jendela ini ditutup.</>
+                  )}
                 </p>
                 <button
                   onClick={handleCopyPassword}

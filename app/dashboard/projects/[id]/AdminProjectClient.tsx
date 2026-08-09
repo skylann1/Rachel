@@ -374,17 +374,17 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
 
       {/* TABS NAVIGATION */}
       <div className="flex space-x-1 bg-white border border-slate-200 p-1 rounded-xl shadow-sm overflow-x-auto hide-scrollbar">
-        <button onClick={() => setActiveTab('ringkasan')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'ringkasan' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-           <Activity className="w-4 h-4" /> Ringkasan
+        <button onClick={() => setActiveTab('ringkasan')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'ringkasan' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <Activity className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Ringkasan</span>
         </button>
-        <button onClick={() => setActiveTab('approval')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'approval' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-           <FileSignature className="w-4 h-4" /> Approval K3
+        <button onClick={() => setActiveTab('approval')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'approval' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <FileSignature className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Approval K3</span>
         </button>
-        <button onClick={() => setActiveTab('tim')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'tim' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-           <Users className="w-4 h-4" /> Tim Lapangan
+        <button onClick={() => setActiveTab('tim')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'tim' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <Users className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Tim Lapangan</span>
         </button>
-        <button onClick={() => setActiveTab('diskusi')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'diskusi' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-           <MessageSquare className="w-4 h-4" /> Diskusi
+        <button onClick={() => setActiveTab('diskusi')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'diskusi' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <MessageSquare className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Diskusi</span>
         </button>
       </div>
 
@@ -434,7 +434,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
                  {/* The Stepper / Pipeline */}
-                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm h-full">
+                 <div className="bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm h-full">
                     <h2 className="text-lg font-bold text-slate-800 mb-8 flex items-center gap-2">
                        <CheckCircle2 className="w-5 h-5 text-primary" /> Status Progress Keseluruhan
                     </h2>
@@ -533,7 +533,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                {/* JIKA PROSEDUR PENDING */}
                {prosedurStatus === 'Pending' && canApproveProsedur && (
                  <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
-                    <div className="bg-amber-50 p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                        <div>
                          <div className="flex items-center gap-2 mb-1">
                            <FileSignature className="w-5 h-5 text-amber-600" />
@@ -541,9 +541,9 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                          </div>
                          <p className="text-amber-700 text-sm">Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.</p>
                        </div>
-                       <div className="flex gap-2">
-                         <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
-                         <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui SOP</button>
+                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                         <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
+                         <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui SOP</button>
                        </div>
                     </div>
                     <div className="bg-slate-100 p-2">
@@ -589,9 +589,9 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                {/* JIKA JSA PENDING */}
                {jsaStatus === 'Pending' && canApproveJsa && (
                  <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
-                    <div className="bg-amber-50 p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                        <div>
-                         <div className="flex items-center gap-2 mb-1">
+                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                            <ShieldAlert className="w-5 h-5 text-amber-600" />
                            <h3 className="text-lg font-bold text-amber-900">Job Safety Analysis (JSA)</h3>
                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
@@ -604,9 +604,9 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                              : 'Otorisasi akhir: JSA sudah direview PGSOL. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
                          </p>
                        </div>
-                       <div className="flex gap-2">
-                         <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
-                         <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
+                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                         <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
+                         <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
                            {isTahapReviewPgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
                          </button>
                        </div>
@@ -634,7 +634,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                  const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
                  return (
                    <div key={row.id} className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50 mb-6">
-                      <div className="bg-amber-50 p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                          <div>
                            <div className="flex items-center gap-2 mb-1">
                              <Stamp className="w-5 h-5 text-amber-600" />
@@ -642,13 +642,13 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                            </div>
                            <p className="text-amber-700 text-sm">Vendor telah melengkapi PTW. Silakan review pekerja & peralatan.</p>
                          </div>
-                         <div className="flex gap-2">
-                           <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
-                           <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
+                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                           <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
+                           <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
                          </div>
                       </div>
                       <div className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                             <div className="bg-slate-50 px-5 py-4 border-b border-slate-200 font-bold text-sm text-slate-800 flex items-center gap-2">
                               <Users className="w-4 h-4 text-slate-500" /> Pekerja Terdaftar
@@ -675,6 +675,35 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                               ))}
                             </div>
                           </div>
+                        </div>
+                        <div className="bg-slate-100 p-2 rounded-2xl">
+                          <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
+                            <PtwPDF
+                              projectId={project.id}
+                              ptwNumber={row.ptw_number}
+                              projectName={project.name}
+                              vendorName={project.vendor_profiles?.company_name}
+                              location={project.location}
+                              startDate={project.start_date}
+                              endDate={project.end_date}
+                              description={project.description}
+                              ptwType={row.ptw_type || 'dingin'}
+                              hazards={row.hazards || []}
+                              apd={row.apd || {}}
+                              pekerja={row.workers || []}
+                              peralatan={row.equipment || []}
+                              gasTests={row.gas_tests || []}
+                              validFrom={row.valid_from}
+                              validTo={row.valid_to}
+                              workStart={row.work_start}
+                              workEnd={row.work_end}
+                              hotWorkTypes={row.hot_work_types || []}
+                              gasTestFrequency={row.gas_test_frequency || {}}
+                              jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
+                              siblings={ptws}
+                              signatories={ptwSignatories?.[row.id]}
+                            />
+                          </PDFViewer>
                         </div>
                       </div>
                    </div>
@@ -890,7 +919,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
       {/* --- TAB CONTENT: TIM LAPANGAN --- */}
       {activeTab === 'tim' && (
          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm min-h-[400px]">
+            <div className="bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm min-h-[400px]">
               <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
                 <Users className="w-6 h-6 text-primary" /> Personil Lapangan Aktif
               </h2>
@@ -923,7 +952,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
 
       {/* --- TAB CONTENT: DISKUSI --- */}
       {activeTab === 'diskusi' && (
-         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 p-8 min-h-[600px]">
+         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 p-4 sm:p-8 min-h-[600px]">
             <ProjectDiscussion projectId={project.id} currentUserId={currentUserId} />
          </div>
       )}

@@ -4,9 +4,14 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Users, Truck, Stamp, ShieldAlert, FileText, HardHat, FlaskConical, Plus, Trash2, CalendarClock, Flame, AlertTriangle } from 'lucide-react';
-import { PDFViewer } from '@react-pdf/renderer';
+import dynamic from 'next/dynamic';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import { savePtw, getPtw, getPtwList, getProjectPeriod } from '../actions';
+
+const PDFViewer = dynamic(
+  () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
+  { ssr: false, loading: () => <div className="h-full w-full bg-slate-100 flex items-center justify-center animate-pulse text-slate-400 font-medium">Memuat Pratinjau Dokumen...</div> }
+);
 import {
   PTW_TYPES, APD_ITEMS, PtwType, PTW_GAS_TEST_TYPES, PtwGasTestEntry,
   HOT_WORK_JOB_TYPES, PTW_MAX_VALID_DAYS, PtwGasTestFrequency,

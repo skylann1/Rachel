@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 import VendorPageClient from './VendorPageClient';
 
 export const metadata = {
-  title: 'Data Vendor - SIPERMIT K3',
+  title: 'Data Vendor - RACHEL K3',
 };
 
 export default async function VendorManagementPage() {
