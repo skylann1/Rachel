@@ -1,6 +1,7 @@
-import { login } from "./actions";
-
+import Link from "next/link";
 import Image from "next/image";
+import { Mail, Lock, ArrowRight, HardHat, FileCheck, Zap } from "lucide-react";
+import { login } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 
 export default async function VendorLoginPage({
@@ -11,112 +12,108 @@ export default async function VendorLoginPage({
   const resolvedSearchParams = await searchParams;
 
   return (
-    <div className="flex min-h-screen w-full font-sans">
-      {/* Left Side - Hero / Illustration */}
-      <div 
-        className="hidden lg:flex w-1/2 relative overflow-hidden flex-col text-white p-10 bg-cover bg-center"
-        style={{ backgroundImage: "url('/assets/banner/banner5.jpeg')" }}
-      >
-        {/* Dark Overlay */}
-        <div className="absolute inset-0 bg-slate-900/80 z-0"></div>
-        
-        {/* Abstract Circles */}
-        <div className="absolute top-20 right-20 w-16 h-16 rounded-full border-4 border-white/30 flex items-center justify-center z-0">
-          <div className="w-8 h-8 bg-white/40 rounded-full blur-sm" />
-        </div>
-        <div className="absolute bottom-40 right-40 w-24 h-24 rounded-full border-4 border-white/20 flex items-center justify-center z-0">
-          <div className="w-12 h-12 bg-white/30 rounded-full blur-md" />
-        </div>
+    <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-slate-950 px-4 py-16">
 
-        {/* Content */}
-        <div className="relative z-10 w-full max-w-lg text-center flex flex-col items-center mb-auto mt-12 self-center">
-          <p className="text-sm font-medium tracking-wide mb-2 opacity-90">Nice to see you again</p>
-          <h1 className="text-5xl font-extrabold tracking-widest mb-6">WELCOME BACK</h1>
-          
-          <div className="w-12 h-1 bg-white mb-6 rounded-full" />
+      {/* Caution-stripe accent bar — vendor/field-work signature */}
+      <div
+        className="absolute top-0 left-0 right-0 h-2 z-20"
+        style={{ backgroundImage: 'repeating-linear-gradient(135deg, #f59e0b 0 14px, #0f172a 14px 28px)' }}
+      />
 
-          <p className="text-xs leading-relaxed opacity-80 max-w-sm">
-            Portal Vendor SIPERMIT K3 adalah platform tata kelola digital terintegrasi untuk menyederhanakan, mendigitalisasi, dan mempercepat alur birokrasi dokumen keselamatan kerja.
-          </p>
-        </div>
+      {/* Background photo */}
+      <Image
+        src="/assets/banner/banner5.jpeg"
+        alt="Vendor Industrial Background"
+        fill
+        priority
+        className="object-cover opacity-25"
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/95 via-slate-950/90 to-slate-950" />
+      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-3xl" />
 
-        {/* Logos at bottom */}
-        <div className="relative z-20 mt-auto flex flex-col items-center gap-2 self-center pb-8">
-          <span className="text-[10px] uppercase tracking-widest text-slate-300 font-semibold">Powered by</span>
-          <div className="flex items-center gap-3">
-            <div className="relative h-10 w-32">
-              <Image 
-                src="/assets/logo/main-logo.png" 
-                alt="Main Logo" 
-                fill
-                className="object-contain object-center"
-              />
+      {/* Card */}
+      <div className="relative z-10 w-full max-w-md">
+        <div className="bg-white/[0.06] backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-8 sm:p-10">
+
+          <div className="flex flex-col items-center text-center mb-8">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500 flex items-center justify-center text-slate-900 shadow-lg shadow-amber-500/30 mb-4">
+              <HardHat className="w-7 h-7" />
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Right Side - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white text-slate-900">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl font-bold text-primary mb-3">Login Account</h2>
-            <p className="text-xs text-slate-400">
-              Silakan masuk menggunakan kredensial vendor Anda untuk mengakses dashboard dan mengirimkan form Digital JSA.
-            </p>
+            <h1 className="text-2xl font-black text-white tracking-tight">RACHEL</h1>
+            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-widest mt-1">Portal Vendor</span>
           </div>
 
-          <form className="space-y-6">
-            {/* Input Email */}
-            <div className="relative flex items-center">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-md" />
-              <input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Email ID"
-                required
-                className="w-full h-12 pl-4 pr-4 bg-slate-50 border-none rounded-md outline-none focus:ring-1 focus:ring-primary text-sm placeholder:text-slate-300"
-              />
+          <div className="mb-8 text-center">
+            <h2 className="text-lg font-bold text-white mb-1.5">Masuk sebagai Vendor</h2>
+            <p className="text-sm text-slate-400 leading-relaxed">Akses khusus untuk mitra vendor dan kontraktor terdaftar.</p>
+          </div>
+
+          <form className="space-y-5">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Email Vendor</label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="nama@perusahaan.com"
+                  required
+                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:bg-white/10 focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50 outline-none transition-all text-sm font-medium"
+                />
+              </div>
             </div>
 
-            {/* Input Password */}
-            <div className="relative flex items-center">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-md" />
-              <input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Password"
-                required
-                className="w-full h-12 pl-4 pr-4 bg-slate-50 border-none rounded-md outline-none focus:ring-1 focus:ring-primary text-sm placeholder:text-slate-300"
-              />
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Kata Sandi</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="••••••••"
+                  required
+                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:bg-white/10 focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50 outline-none transition-all text-sm font-medium"
+                />
+              </div>
             </div>
 
-            {/* Checkbox and links */}
-            <div className="flex items-center text-xs">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-500">
-                <input type="checkbox" className="rounded text-primary border-slate-300 focus:ring-primary" />
-                <span>Keep me signed in</span>
-              </label>
-            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-400 font-medium cursor-pointer select-none">
+              <input type="checkbox" className="w-4 h-4 rounded border-white/20 bg-white/5 text-amber-500 focus:ring-amber-500/40" />
+              Ingat saya
+            </label>
 
             {resolvedSearchParams?.error && (
-              <div className="text-sm font-medium text-red-500 text-center">
+              <div className="text-xs font-medium text-rose-300 text-center bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-lg">
                 {resolvedSearchParams.error}
               </div>
             )}
 
-            {/* Submit Button */}
             <SubmitButton
               formAction={login}
               pendingText="Memproses..."
-              className="w-full h-12 mt-4 bg-primary text-white font-bold rounded-full shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-amber-500/20 group disabled:opacity-70"
             >
-              Login
+              Masuk sebagai Vendor
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </SubmitButton>
           </form>
+
+          <div className="mt-7 pt-6 border-t border-white/10 flex items-center justify-center gap-5">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+              <FileCheck className="w-3.5 h-3.5 text-emerald-400" /> 100% Digital
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+              <Zap className="w-3.5 h-3.5 text-amber-400" /> Proses Cepat
+            </div>
+          </div>
         </div>
+
+        <p className="text-center text-xs text-slate-500 font-medium mt-6">
+          Staf Internal? <Link href="/auth/login" className="font-bold text-amber-400 hover:underline">Masuk via Portal Internal</Link>
+        </p>
       </div>
     </div>
   );

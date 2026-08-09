@@ -66,11 +66,34 @@ export default async function VendorProfilePage() {
       (ptws || []).filter(p => PTW_PENDING_STATUSES.includes(p.status)).length;
   }
 
+  // K3 compliance ratio — same anomaly/positive split used by the internal
+  // vendor safety scorecard (see app/dashboard/page.tsx), but scoped to this
+  // vendor's own inspection findings and framed positively for the vendor.
+  const ANOMALI_TYPES = ['Unsafe Act', 'Unsafe Condition'];
+  const POSITIF_TYPES = ['Safe Act', 'Safe Condition'];
+  const { data: inspections } = await supabase
+    .from('inspections')
+    .select('status, finding_type')
+    .eq('target_vendor', user.id);
+
+  const anomaliCount = (inspections || []).filter(i => ANOMALI_TYPES.includes(i.finding_type)).length;
+  const positifCount = (inspections || []).filter(i => POSITIF_TYPES.includes(i.finding_type)).length;
+  const openAnomali = (inspections || []).filter(i => ANOMALI_TYPES.includes(i.finding_type) && i.status !== 'Closed').length;
+  const totalFindings = anomaliCount + positifCount;
+
   const stats = {
     activeProjects: activeProjects || 0,
     ptwApproved,
     pendingReview,
     incidents: incidentCount,
+  };
+
+  const compliance = {
+    rate: totalFindings > 0 ? Math.round((positifCount / totalFindings) * 100) : null,
+    anomaliCount,
+    positifCount,
+    openAnomali,
+    totalFindings,
   };
 
   // Data relevant to Vendor in K3 System
@@ -87,5 +110,5 @@ export default async function VendorProfilePage() {
     })
   };
 
-  return <EditableVendorProfile user={user} initialVendorData={vendorData} stats={stats} />;
+  return <EditableVendorProfile user={user} initialVendorData={vendorData} stats={stats} compliance={compliance} />;
 }

@@ -6,6 +6,7 @@ import {
   Building2, Edit2, X, Save, Loader2, Fingerprint, ScanLine, IdCard,
 } from "lucide-react";
 import { updateInternalProfile } from "@/app/actions/profile";
+import { ChangePasswordCard } from "@/components/profile/change-password-card";
 
 type ProfileStats = {
   activeProjects: number;
@@ -239,6 +240,8 @@ export function EditableProfile({ user, initialUserData, stats }: { user: any, i
               </div>
             </div>
           </div>
+
+          <ChangePasswordCard />
 
           {/* Ringkasan Aktivitas */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200">

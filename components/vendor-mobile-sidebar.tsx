@@ -59,7 +59,7 @@ export function VendorMobileSidebar() {
             </div>
             <div>
               <p className="font-black text-sm text-white tracking-tight leading-none">Portal Vendor</p>
-              <p className="text-[10px] text-slate-400 font-bold mt-1.5 tracking-widest uppercase">SIPERMIT K3</p>
+              <p className="text-[10px] text-slate-400 font-bold mt-1.5 tracking-widest uppercase">RACHEL K3</p>
             </div>
           </div>
           <button

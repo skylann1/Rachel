@@ -29,6 +29,40 @@ export async function updateUserMetadata(metadata: Record<string, any>) {
   return { success: true };
 }
 
+export async function changePassword(data: {
+  currentPassword: string;
+  newPassword: string;
+}) {
+  const supabase = await createClient();
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user || !user.email) {
+    return { error: 'Unauthorized' };
+  }
+
+  if (data.newPassword.length < 6) {
+    return { error: 'Kata sandi baru minimal 6 karakter.' };
+  }
+
+  // Supabase doesn't expose a "verify current password" call, so we
+  // re-authenticate with it — wrong password fails here before anything changes.
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: data.currentPassword,
+  });
+  if (verifyError) {
+    return { error: 'Kata sandi saat ini salah.' };
+  }
+
+  const { error: updateError } = await supabase.auth.updateUser({ password: data.newPassword });
+  if (updateError) {
+    console.error("Error updating password:", updateError);
+    return { error: updateError.message };
+  }
+
+  return { success: true };
+}
+
 export async function updateInternalProfile(data: {
   fullName: string;
   nip: string;

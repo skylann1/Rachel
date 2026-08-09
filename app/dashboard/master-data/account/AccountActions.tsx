@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit2, ShieldOff, Shield, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { Edit2, ShieldOff, Shield, Trash2, Loader2, AlertTriangle, KeyRound, Copy, Check } from 'lucide-react';
 import EditAccountModal from './EditAccountModal';
-import { suspendAccount, deleteAccount } from './actions';
+import { suspendAccount, deleteAccount, resetAccountPassword } from './actions';
 
 interface Account {
   id: string;
@@ -20,8 +20,12 @@ export default function AccountActions({ account, roles }: { account: Account, r
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isConfirmSuspendOpen, setIsConfirmSuspendOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false);
+  const [resetPassword, setResetPassword] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   const isSuspended = account.status === 'Inactive';
 
   async function handleSuspend() {
@@ -38,6 +42,26 @@ export default function AccountActions({ account, roles }: { account: Account, r
     setIsConfirmDeleteOpen(false);
   }
 
+  async function handleResetPassword() {
+    setLoading(true);
+    setResetError(null);
+    const result = await resetAccountPassword(account.id);
+    setLoading(false);
+    setIsConfirmResetOpen(false);
+    if (result.success) {
+      setResetPassword(result.password!);
+    } else {
+      setResetError(result.error || 'Gagal mereset kata sandi');
+    }
+  }
+
+  function handleCopyPassword() {
+    if (!resetPassword) return;
+    navigator.clipboard.writeText(resetPassword);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <>
       <div className="flex justify-end gap-2">
@@ -49,15 +73,23 @@ export default function AccountActions({ account, roles }: { account: Account, r
           <Edit2 className="w-4 h-4" />
         </button>
         
-        <button 
+        <button
           onClick={() => setIsConfirmSuspendOpen(true)}
           className={`transition-colors p-1 ${isSuspended ? 'text-amber-500 hover:text-amber-600' : 'text-slate-400 hover:text-rose-500'}`}
           title={isSuspended ? "Aktifkan Akun" : "Nonaktifkan Akun"}
         >
           {isSuspended ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
         </button>
-        
-        <button 
+
+        <button
+          onClick={() => setIsConfirmResetOpen(true)}
+          className="text-slate-400 hover:text-amber-600 transition-colors p-1"
+          title="Reset Kata Sandi"
+        >
+          <KeyRound className="w-4 h-4" />
+        </button>
+
+        <button
           onClick={() => setIsConfirmDeleteOpen(true)}
           className="text-slate-400 hover:text-rose-600 transition-colors p-1" 
           title="Hapus Akun"
@@ -127,7 +159,7 @@ export default function AccountActions({ account, roles }: { account: Account, r
               >
                 Batal
               </button>
-              <button 
+              <button
                 onClick={handleDelete}
                 disabled={loading}
                 className="flex-1 py-2.5 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors flex items-center justify-center"
@@ -135,6 +167,84 @@ export default function AccountActions({ account, roles }: { account: Account, r
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ya, Hapus'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Confirmation Modal */}
+      {isConfirmResetOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal text-left">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+              <KeyRound className="w-6 h-6 text-amber-600" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Reset Kata Sandi?</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Kata sandi baru akan digenerate secara acak untuk <strong>{account.name}</strong>. Kata sandi lama tidak akan berlaku lagi — sampaikan kata sandi baru ini langsung ke pengguna.
+            </p>
+            <div className="flex w-full gap-3">
+              <button
+                onClick={() => setIsConfirmResetOpen(false)}
+                disabled={loading}
+                className="flex-1 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={loading}
+                className="flex-1 py-2.5 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors flex items-center justify-center"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ya, Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Result Modal */}
+      {(resetPassword || resetError) && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal text-left">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col items-center text-center">
+            {resetPassword ? (
+              <>
+                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
+                  <KeyRound className="w-6 h-6 text-emerald-600" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-2">Kata Sandi Baru Dibuat</h3>
+                <p className="text-sm text-slate-500 mb-4">
+                  Sampaikan kata sandi ini langsung ke <strong>{account.name}</strong>. Kata sandi ini tidak akan ditampilkan lagi setelah jendela ini ditutup.
+                </p>
+                <button
+                  onClick={handleCopyPassword}
+                  className="w-full flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-6 hover:bg-slate-100 transition-colors"
+                  title="Salin kata sandi"
+                >
+                  <span className="font-mono text-xl font-bold text-slate-800 tracking-wider">{resetPassword}</span>
+                  {copied ? <Check className="w-4 h-4 text-emerald-600 shrink-0" /> : <Copy className="w-4 h-4 text-slate-400 shrink-0" />}
+                </button>
+                <button
+                  onClick={() => setResetPassword(null)}
+                  className="w-full py-2.5 text-sm font-semibold text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors"
+                >
+                  Selesai
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center mb-4">
+                  <AlertTriangle className="w-6 h-6 text-rose-600" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-2">Gagal Mereset Kata Sandi</h3>
+                <p className="text-sm text-slate-500 mb-6">{resetError}</p>
+                <button
+                  onClick={() => setResetError(null)}
+                  className="w-full py-2.5 text-sm font-semibold text-white bg-slate-800 hover:bg-slate-900 rounded-xl transition-colors"
+                >
+                  Tutup
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

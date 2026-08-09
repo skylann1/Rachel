@@ -1,5 +1,6 @@
 'use server';
 
+import { randomInt } from 'crypto';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
@@ -142,6 +143,32 @@ export async function suspendAccount(id: string, isSuspended: boolean) {
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mengubah status' };
+  }
+}
+
+/**
+ * Forgot-password recovery for users who can't reset it themselves: an admin
+ * generates a random one-time password and relays it to the user directly
+ * (no email flow exists), who then logs in with it and should change it via
+ * their own profile's "Ubah Kata Sandi" form.
+ */
+export async function resetAccountPassword(id: string) {
+  try {
+    const adminAuthClient = createAdminClient();
+    // 8-digit random number — easy to read out/type, generated with a CSPRNG.
+    const randomPassword = randomInt(10_000_000, 100_000_000).toString();
+
+    const { error } = await adminAuthClient.auth.admin.updateUserById(id, {
+      password: randomPassword,
+    });
+
+    if (error) {
+      return { error: error.message || 'Gagal mereset kata sandi' };
+    }
+
+    return { success: true, password: randomPassword };
+  } catch (error: any) {
+    return { error: 'Terjadi kesalahan pada server saat mereset kata sandi' };
   }
 }
 
