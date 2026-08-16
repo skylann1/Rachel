@@ -202,8 +202,11 @@ export async function getMyTasks(): Promise<TaskItem[]> {
     }
   }
 
-  // 5. Fetch Monitoring Tasks (Pengawasan)
-  if (role === 'admin' || role === 'hse' || role === 'pengawas') {
+  // 5. Fetch Monitoring Tasks (Pengawasan) — sudah discope lewat assigned_inspector
+  // di query, jadi tidak perlu gerbang role/permission tambahan di sini. Role
+  // apa pun bisa jadi assigned_inspector (di-set otomatis saat PTW aktif, lihat
+  // approvePtw di app/dashboard/approval/actions.ts).
+  {
     const { data: monitoring, error } = await supabase
       .from('projects')
       .select(`

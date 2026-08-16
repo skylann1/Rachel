@@ -2,11 +2,25 @@
 
 import { randomInt } from 'crypto';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { createClient } from '@/utils/supabase/server';
+import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 import { sendEmail, passwordResetEmailHtml } from '@/lib/email';
 
+async function requireManageAccount() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 'Unauthorized';
+  const allowed = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_account');
+  if (!allowed) return 'Anda tidak memiliki izin untuk mengelola akun pengguna.';
+  return null;
+}
+
 export async function addAccount(formData: FormData) {
   try {
+    const permError = await requireManageAccount();
+    if (permError) return { error: permError };
+
     const fullName = formData.get('fullName') as string;
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
@@ -67,6 +81,9 @@ export async function addAccount(formData: FormData) {
 
 export async function updateAccount(id: string, formData: FormData) {
   try {
+    const permError = await requireManageAccount();
+    if (permError) return { error: permError };
+
     const fullName = formData.get('fullName') as string;
     const role = formData.get('role') as string;
     const type = formData.get('type') as string;
@@ -126,8 +143,11 @@ export async function updateAccount(id: string, formData: FormData) {
 
 export async function suspendAccount(id: string, isSuspended: boolean) {
   try {
+    const permError = await requireManageAccount();
+    if (permError) return { error: permError };
+
     const adminAuthClient = createAdminClient();
-    
+
     // Ban user in Auth
     const { error: banError } = await adminAuthClient.auth.admin.updateUserById(id, {
       ban_duration: isSuspended ? '876000h' : 'none' // Ban for 100 years or unban
@@ -156,6 +176,9 @@ export async function suspendAccount(id: string, isSuspended: boolean) {
  */
 export async function resetAccountPassword(id: string) {
   try {
+    const permError = await requireManageAccount();
+    if (permError) return { error: permError };
+
     const adminAuthClient = createAdminClient();
     // 8-digit random number — easy to read out/type, generated with a CSPRNG.
     const randomPassword = randomInt(10_000_000, 100_000_000).toString();
@@ -195,8 +218,11 @@ export async function resetAccountPassword(id: string) {
 
 export async function deleteAccount(id: string) {
   try {
+    const permError = await requireManageAccount();
+    if (permError) return { error: permError };
+
     const adminAuthClient = createAdminClient();
-    
+
     // Delete from auth.users (Cascades to profiles)
     const { error } = await adminAuthClient.auth.admin.deleteUser(id);
 

@@ -1,11 +1,25 @@
 'use server';
 
 import { createAdminClient } from '@/utils/supabase/admin';
+import { createClient } from '@/utils/supabase/server';
+import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
+
+async function requireManageVendor() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 'Unauthorized';
+  const allowed = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_vendor');
+  if (!allowed) return 'Anda tidak memiliki izin untuk mengelola data vendor.';
+  return null;
+}
 
 // Update Vendor Data
 export async function updateVendor(id: string, formData: FormData) {
   try {
+    const permError = await requireManageVendor();
+    if (permError) return { error: permError };
+
     const companyName = formData.get('companyName') as string;
     const phone = formData.get('phone') as string;
     const companyEmail = formData.get('companyEmail') as string;
@@ -57,6 +71,9 @@ export async function updateVendor(id: string, formData: FormData) {
 // Add Vendor (Essentially creating an account of type 'external')
 export async function addVendor(formData: FormData) {
   try {
+    const permError = await requireManageVendor();
+    if (permError) return { error: permError };
+
     const companyName = formData.get('companyName') as string;
     const pic = formData.get('pic') as string; // full_name
     const loginEmail = formData.get('loginEmail') as string; // auth email

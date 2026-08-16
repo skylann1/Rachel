@@ -3,9 +3,15 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createNotification } from "@/app/dashboard/inbox/actions";
+import { hasPermissionForUser } from "@/utils/permissions";
 
 export async function createProject(formData: FormData) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!(await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_project'))) {
+    throw new Error("Anda tidak memiliki izin untuk membuat proyek baru.");
+  }
 
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;

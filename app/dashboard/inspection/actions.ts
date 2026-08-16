@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { createNotification } from "@/app/dashboard/inbox/actions";
+import { hasPermissionForUser } from "@/utils/permissions";
 
 export async function getInspections() {
   const supabase = await createClient();
@@ -52,8 +53,12 @@ export async function createInspection(formData: FormData) {
   const assigned_to = formData.get("assigned_to") as string;
   
   const image_url = formData.get("image_url") as string;
-  
+
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!(await hasPermissionForUser(supabase, user.id, 'inspection', 'create'))) {
+    throw new Error("Anda tidak memiliki izin untuk membuat laporan inspeksi.");
+  }
 
   const { data, error } = await supabase
     .from('inspections')
@@ -126,6 +131,10 @@ export async function getVendorsAndProjects() {
 export async function delegateInspection(inspectionId: string, assigneeId: string, notes: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!(await hasPermissionForUser(supabase, user.id, 'inspection', 'manage'))) {
+    throw new Error("Anda tidak memiliki izin untuk mendisposisikan inspeksi.");
+  }
 
   const { error } = await supabase
     .from('inspections')
@@ -153,6 +162,10 @@ export async function delegateInspection(inspectionId: string, assigneeId: strin
 export async function validateInspection(inspectionId: string, approved: boolean, notes: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!(await hasPermissionForUser(supabase, user.id, 'inspection', 'manage'))) {
+    throw new Error("Anda tidak memiliki izin untuk memvalidasi perbaikan temuan.");
+  }
 
   const { data: inspection } = await supabase
     .from('inspections')

@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createNotification } from "@/app/dashboard/inbox/actions";
+import { hasPermissionForUser } from "@/utils/permissions";
 
 export async function getInternalIncidents() {
   const supabase = await createClient();
@@ -60,6 +61,9 @@ export async function updateIncidentInvestigation(id: string, payload: {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) throw new Error("Unauthorized");
+  if (!(await hasPermissionForUser(supabase, user.id, 'incident', 'investigate'))) {
+    throw new Error("Anda tidak memiliki izin untuk menginvestigasi insiden.");
+  }
 
   const { error } = await supabase
     .from('incidents')

@@ -30,10 +30,9 @@ export const allPermissionModules = [
   {
     id: 'approval',
     title: 'Verifikasi Dokumen',
-    description: 'Persetujuan dan verifikasi berbagai dokumen administratif K3.',
+    description: 'Akses ke halaman daftar proyek yang butuh tindakan K3 (Kelola Proyek / Proyek Berjalan / Arsip Proyek). Approve/reject sebenarnya dikontrol per-tahap lewat modul Prosedur Kerja, JSA, dan PTW di bawah.',
     items: [
       { key: 'view', label: 'Melihat Dokumen Masuk' },
-      { key: 'approve', label: 'Menyetujui / Menolak Dokumen' },
     ]
   },
   {
