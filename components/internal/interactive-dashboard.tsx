@@ -7,7 +7,8 @@ import {
 } from 'recharts';
 import {
   Rocket, ClipboardCheck, AlertTriangle, Archive, ListChecks, ArrowRight,
-  ShieldCheck, Inbox, CalendarClock, Flame,
+  ShieldCheck, Inbox, CalendarClock, Flame, Timer, Hourglass, MapPin,
+  FileWarning, Activity, Layers, BadgeCheck, TrendingUp,
 } from 'lucide-react';
 import { DashboardDetailModal, DetailModalConfig } from './dashboard-detail-modal';
 import {
@@ -26,6 +27,27 @@ export interface DashboardData {
   streakLabel: string;
   totalIncidents: number;
   safeManHours: number;
+  safetyRates: {
+    trir: number | null;
+    ltifr: number | null;
+    recordable: number;
+    lostTime: number;
+    nearMissRatio: number | null;
+    manHours: number;
+  };
+  pyramid: { tipe: string; value: number; tone: 'crit' | 'warn' | 'info' | 'base' }[];
+  investigasi: { selesai: number; menunggu: number; rcaLengkap: number };
+  ptwByType: { id: string; label: string; color: string; total: number; aktif: number }[];
+  ptwExpiring: { nomor: string; proyek: string; tipe: string; validTo: string; sisaHari: number }[];
+  cycleTime: { stage: string; avgDays: number | null; count: number }[];
+  aging: { bucket: string; value: number; tone: 'ok' | 'warn' | 'crit' }[];
+  oldestOpenDays: number | null;
+  topHazards: { nama: string; value: number }[];
+  hotspots: { lokasi: string; anomali: number; insiden: number; total: number }[];
+  csms: { status: string; value: number }[];
+  progresMix: { unggul: number; sesuai: number; tertinggal: number; rataProgres: number | null };
+  periodLabel: string;
+  isFiltered: boolean;
 }
 
 /**
@@ -62,18 +84,32 @@ const QUICK_LINKS = [
 /* ------------------------------------------------------------------ pieces */
 
 function Card({
-  title, subtitle, onClick, className = '', children,
+  title, subtitle, onClick, className = '', live = false, children,
 }: {
-  title: string; subtitle?: string; onClick?: () => void; className?: string; children: React.ReactNode;
+  title: string; subtitle?: string; onClick?: () => void; className?: string;
+  /** Marks a card whose figures always reflect today, ignoring the period filter. */
+  live?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <div
       onClick={onClick}
       className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''} ${className}`}
     >
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-slate-800">{title}</h3>
-        {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+          {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+        </div>
+        {live && (
+          <span
+            title="Kartu ini selalu menampilkan kondisi terkini, tidak mengikuti filter periode."
+            className="shrink-0 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-full"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Terkini
+          </span>
+        )}
       </div>
       <div className="flex-1 flex flex-col">{children}</div>
     </div>
@@ -131,12 +167,111 @@ function StackedRow({
   );
 }
 
+/** Section divider so a long dashboard still reads as grouped chapters. */
+function SectionHeading({ icon: Icon, title, desc }: { icon: any; title: string; desc: string }) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <div className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="min-w-0">
+        <h2 className="text-sm font-black text-slate-800 tracking-tight">{title}</h2>
+        <p className="text-xs text-slate-400 truncate">{desc}</p>
+      </div>
+      <div className="flex-1 h-px bg-slate-200 ml-2" />
+    </div>
+  );
+}
+
+/** Labelled horizontal bar sized against the largest value in its set. */
+function BarRow({
+  label, value, max, color, suffix, hint,
+}: {
+  label: string; value: number; max: number; color: string; suffix?: string; hint?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-xs font-semibold text-slate-600 truncate" title={label}>{label}</span>
+        <span className="text-xs font-black text-slate-800 tabular-nums shrink-0">
+          {value}{suffix}
+          {hint && <span className="ml-1 font-medium text-slate-400">{hint}</span>}
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${max > 0 ? Math.max(2, (value / max) * 100) : 0}%`,
+            background: color,
+            // Permit colours include near-white swatches; an inset ring keeps
+            // those bars visible against the white card.
+            boxShadow: 'inset 0 0 0 1px rgba(15,23,42,0.12)',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Big single figure with a caption — used for the rate tiles. */
+function RateTile({
+  label, value, unit, caption, tone,
+}: {
+  label: string; value: string; unit?: string; caption: string; tone: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</p>
+      <p className={`text-2xl font-black leading-none mt-1.5 tabular-nums ${tone}`}>
+        {value}{unit && <span className="text-xs font-bold ml-1 text-slate-400">{unit}</span>}
+      </p>
+      <p className="text-[10px] text-slate-400 mt-1.5 leading-snug">{caption}</p>
+    </div>
+  );
+}
+
+const AGING_TONE: Record<string, string> = { ok: C.good, warn: C.warning, crit: C.critical };
+const PYRAMID_TONE: Record<string, string> = {
+  crit: C.critical, warn: C.warning, info: C.positif, base: PRIORITY_RAMP[0],
+};
+
+/**
+ * Permit titles are stored as the shouty official form headings
+ * ("IJIN KERJA DINGIN (COLD WORK PERMIT)"). Drop the English gloss and the
+ * "IJIN/IZIN" prefix, then title-case what is left so a chart row reads
+ * "Kerja Dingin" rather than a bare "DINGIN".
+ */
+function shortPermitLabel(title: string) {
+  return title
+    .replace(/\s*\(.*?\)\s*/g, ' ')
+    .replace(/^\s*I[JZ]IN\s+/i, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\b\p{L}/gu, ch => ch.toUpperCase());
+}
+
+/** CSMS is free text in the DB; map the known states and fall back to neutral. */
+function csmsTone(status: string) {
+  const s = status.toLowerCase();
+  if (s.includes('approved') || s.includes('lulus') || s.includes('aktif')) return C.good;
+  if (s.includes('pending') || s.includes('review')) return C.warning;
+  if (s.includes('reject') || s.includes('tolak') || s.includes('expired')) return C.critical;
+  return C.muted;
+}
+
 /* ------------------------------------------------------------------- main */
 
 export function InteractiveDashboard({ data }: { data: DashboardData }) {
   const [detailConfig, setDetailConfig] = useState<DetailModalConfig | null>(null);
 
-  const { trend, pipeline, prioritas, anomali, jadwal, insidenTipe, daysWithoutIncident, streakLabel, totalIncidents, vendorScorecard } = data;
+  const {
+    trend, pipeline, prioritas, anomali, jadwal, insidenTipe, daysWithoutIncident,
+    streakLabel, totalIncidents, vendorScorecard,
+    safetyRates, pyramid, investigasi, ptwByType, ptwExpiring, cycleTime,
+    aging, oldestOpenDays, topHazards, hotspots, csms, progresMix,
+    periodLabel, isFiltered,
+  } = data;
 
   const trendTotal = trend.reduce((s, t) => s + t.positif + t.anomali, 0);
   const anomaliTotal = anomali.open + anomali.progres + anomali.closed;
@@ -144,6 +279,18 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
   const prioritasMax = Math.max(1, ...prioritas.map(p => p.value));
   const jadwalTotal = jadwal.onSchedule + jadwal.terlambat;
   const closedPct = anomaliTotal > 0 ? Math.round((anomali.closed / anomaliTotal) * 100) : null;
+
+  const pyramidMax = Math.max(1, ...pyramid.map(p => p.value));
+  const ptwTypeMax = Math.max(1, ...ptwByType.map(p => p.total));
+  const hazardMax = Math.max(1, ...topHazards.map(h => h.value));
+  const hotspotMax = Math.max(1, ...hotspots.map(h => h.total));
+  const cycleMax = Math.max(1, ...cycleTime.map(c => c.avgDays ?? 0));
+  const agingTotal = aging.reduce((s, a) => s + a.value, 0);
+  const csmsTotal = csms.reduce((s, c) => s + c.value, 0);
+  const investigasiTotal = investigasi.selesai + investigasi.menunggu;
+  const progresTotal = progresMix.unggul + progresMix.sesuai + progresMix.tertinggal;
+
+  const fmtRate = (v: number | null) => (v === null ? '—' : v.toFixed(2));
 
   return (
     <div className="space-y-4">
@@ -153,7 +300,7 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
 
         <Card
           title="Tren Temuan K3"
-          subtitle="Hasil inspeksi 6 bulan terakhir"
+          subtitle={isFiltered ? `Hasil inspeksi 6 bulan sampai ${periodLabel}` : 'Hasil inspeksi 6 bulan terakhir'}
           className="lg:col-span-2 animate-fade-up"
           onClick={() => setDetailConfig({
             title: 'Hasil Inspeksi',
@@ -214,6 +361,12 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <h3 className="text-sm font-bold">Rekor Keselamatan</h3>
+              <span
+                title="Rekor dihitung sepanjang waktu, tidak mengikuti filter periode."
+                className="ml-auto text-[9px] font-bold uppercase tracking-wider text-emerald-300 bg-emerald-500/10 border border-emerald-400/20 px-2 py-0.5 rounded-full"
+              >
+                Sepanjang Waktu
+              </span>
             </div>
 
             <div className="flex-1 flex flex-col justify-center">
@@ -255,13 +408,125 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
         </div>
       </div>
 
+      {/* ------------------------------ Section: lagging safety performance */}
+      <SectionHeading
+        icon={Activity}
+        title="Performa Keselamatan"
+        desc="Indikator standar industri — dihitung dari insiden terlapor dan estimasi man-hours"
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card title="Angka Kecelakaan" subtitle="TRIR & LTIFR — makin rendah makin baik" className="animate-fade-up">
+          <div className="grid grid-cols-2 gap-3">
+            <RateTile
+              label="TRIR"
+              value={fmtRate(safetyRates.trir)}
+              caption="Recordable × 200.000 ÷ man-hours"
+              tone={safetyRates.trir === null ? 'text-slate-300' : safetyRates.trir > 0 ? 'text-rose-600' : 'text-emerald-600'}
+            />
+            <RateTile
+              label="LTIFR"
+              value={fmtRate(safetyRates.ltifr)}
+              caption="Lost-time × 1.000.000 ÷ man-hours"
+              tone={safetyRates.ltifr === null ? 'text-slate-300' : safetyRates.ltifr > 0 ? 'text-rose-600' : 'text-emerald-600'}
+            />
+            <RateTile
+              label="Recordable"
+              value={String(safetyRates.recordable)}
+              unit="kasus"
+              caption="Medical Treatment, LTI, Fatality"
+              tone={safetyRates.recordable > 0 ? 'text-amber-600' : 'text-emerald-600'}
+            />
+            <RateTile
+              label="Rasio Near Miss"
+              value={safetyRates.nearMissRatio === null ? '—' : String(safetyRates.nearMissRatio)}
+              unit={safetyRates.nearMissRatio === null ? undefined : '%'}
+              caption="Porsi laporan berupa nyaris celaka"
+              tone="text-slate-700"
+            />
+          </div>
+          <p className="text-[10px] text-slate-400 mt-3 leading-snug">
+            Basis {safetyRates.manHours.toLocaleString('id-ID')} man-hours (estimasi dari jumlah pekerja PTW × 8 jam × 30 hari), bukan angka absensi tervalidasi.
+          </p>
+        </Card>
+
+        <Card title="Piramida Keselamatan" subtitle="Sebaran keparahan — dasar lebar menandakan pelaporan dini yang sehat" className="animate-fade-up">
+          {pyramid.every(p => p.value === 0) ? (
+            <EmptyHint label="Belum ada insiden maupun temuan tercatat." />
+          ) : (
+            <div className="space-y-1.5 flex-1 flex flex-col justify-center">
+              {pyramid.map(p => (
+                <div key={p.tipe} className="flex items-center gap-2">
+                  <div className="flex-1 flex justify-center">
+                    <div
+                      className="h-7 rounded flex items-center justify-center min-w-[36px] transition-all"
+                      style={{
+                        width: `${Math.max(14, (p.value / pyramidMax) * 100)}%`,
+                        background: PYRAMID_TONE[p.tone],
+                        boxShadow: 'inset 0 0 0 1px rgba(15,23,42,0.10)',
+                      }}
+                    >
+                      <span className="text-[11px] font-black text-white tabular-nums drop-shadow-sm">{p.value}</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-500 w-[104px] shrink-0 leading-tight">{p.tipe}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card title="Status Investigasi Insiden" subtitle="Kelengkapan RCA atas insiden terlapor" className="animate-fade-up">
+          {investigasiTotal === 0 ? (
+            <EmptyHint label="Belum ada insiden yang dilaporkan." />
+          ) : (
+            <div className="space-y-5">
+              <StackedRow
+                label="Progres Investigasi"
+                total={investigasiTotal}
+                segments={[
+                  { name: 'Selesai', value: investigasi.selesai, color: C.positif },
+                  { name: 'Menunggu', value: investigasi.menunggu, color: C.warning },
+                ]}
+              />
+              <div className="pt-4 border-t border-slate-100">
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <span className="text-xs font-bold text-slate-600">Akar Masalah (RCA) Terisi</span>
+                  <span className="text-lg font-black text-slate-800 tabular-nums">
+                    {Math.round((investigasi.rcaLengkap / investigasiTotal) * 100)}%
+                  </span>
+                </div>
+                <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${(investigasi.rcaLengkap / investigasiTotal) * 100}%`,
+                      background: investigasi.rcaLengkap === investigasiTotal ? C.good : C.warning,
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2">
+                  {investigasi.rcaLengkap} dari {investigasiTotal} insiden sudah punya analisis akar masalah.
+                </p>
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+
       {/* --------------------------- Row 2: pipeline / prioritas / anomali */}
+      <SectionHeading
+        icon={ClipboardCheck}
+        title="Alur Kerja & Tindak Lanjut"
+        desc="Posisi dokumen, prioritas temuan, dan ketepatan jadwal"
+      />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         <Card
           title="Pipeline Persetujuan"
           subtitle="Posisi dokumen di tiap tahap"
           className="animate-fade-up"
+          live
           onClick={() => setDetailConfig({
             title: 'Dokumen Menunggu Persetujuan',
             fetchFn: getPtwDetails,
@@ -361,6 +626,9 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
               <div className="flex items-center gap-2 mb-2">
                 <CalendarClock className="w-3.5 h-3.5 text-slate-400" />
                 <span className="text-xs font-bold text-slate-600">Jadwal Proyek Aktif</span>
+                <span className="ml-auto text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full">
+                  Terkini
+                </span>
               </div>
               {jadwalTotal === 0 ? (
                 <p className="text-[11px] text-slate-400">Belum ada proyek berjalan.</p>
@@ -378,7 +646,243 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
         </Card>
       </div>
 
+      {/* -------------------- Section: responsiveness / permit operations */}
+      <SectionHeading
+        icon={Timer}
+        title="Kecepatan Respons & Operasi Izin"
+        desc="Lama persetujuan, umur temuan yang menganggur, dan izin kerja yang segera berakhir"
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card title="Waktu Siklus Persetujuan" subtitle="Rata-rata hari dari pengajuan sampai tahap selesai" className="animate-fade-up">
+          {cycleTime.every(c => c.avgDays === null) ? (
+            <EmptyHint label="Belum ada dokumen yang menyelesaikan tahap persetujuan." />
+          ) : (
+            <div className="space-y-3.5">
+              {cycleTime.map(c => (
+                <div key={c.stage}>
+                  {c.avgDays === null ? (
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-xs font-semibold text-slate-600 truncate">{c.stage}</span>
+                      <span className="text-[10px] font-medium text-slate-400 shrink-0">Belum ada data</span>
+                    </div>
+                  ) : (
+                    <BarRow
+                      label={c.stage}
+                      value={Number(c.avgDays.toFixed(1))}
+                      max={cycleMax}
+                      suffix=" hari"
+                      hint={`(${c.count})`}
+                      color={c.avgDays <= 3 ? C.good : c.avgDays <= 7 ? C.warning : C.critical}
+                    />
+                  )}
+                </div>
+              ))}
+              <p className="text-[10px] text-slate-400 pt-1 leading-snug">
+                Angka dalam kurung = jumlah dokumen yang sudah melewati tahap tersebut. Dokumen yang masih berjalan tidak dihitung.
+              </p>
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="Umur Anomali Terbuka"
+          subtitle="Makin lama menganggur, makin besar risikonya"
+          className="animate-fade-up"
+          onClick={() => setDetailConfig({
+            title: 'Tindak Lanjut Anomali',
+            fetchFn: getAnomaliDetails,
+            viewAllHref: '/dashboard/inspection',
+            viewAllLabel: 'Lihat Semua Inspeksi',
+          })}
+        >
+          {agingTotal === 0 ? (
+            <EmptyHint label="Tidak ada anomali terbuka. Semua temuan sudah ditutup." />
+          ) : (
+            <div className="space-y-3.5">
+              {aging.map(a => (
+                <BarRow
+                  key={a.bucket}
+                  label={a.bucket}
+                  value={a.value}
+                  max={Math.max(1, ...aging.map(x => x.value))}
+                  color={AGING_TONE[a.tone]}
+                />
+              ))}
+              {oldestOpenDays !== null && (
+                <div className={`flex items-center gap-2 text-[11px] font-semibold rounded-lg px-3 py-2 mt-1 ${
+                  oldestOpenDays > 30 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-600'
+                }`}>
+                  <Hourglass className="w-3.5 h-3.5 shrink-0" />
+                  Temuan terlama menganggur {oldestOpenDays} hari.
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="Izin Kerja Segera Berakhir"
+          subtitle="PTW terbit yang habis masa berlaku ≤ 7 hari"
+          className="animate-fade-up"
+          live
+          onClick={() => setDetailConfig({
+            title: 'Dokumen Menunggu Persetujuan',
+            fetchFn: getPtwDetails,
+            viewAllHref: '/dashboard/approval',
+            viewAllLabel: 'Lihat Semua Persetujuan',
+          })}
+        >
+          {ptwExpiring.length === 0 ? (
+            <EmptyHint label="Tidak ada izin kerja yang mendekati masa berakhir." />
+          ) : (
+            <div className="space-y-2">
+              {ptwExpiring.map((p, i) => {
+                const expired = p.sisaHari < 0;
+                const urgent = p.sisaHari >= 0 && p.sisaHari <= 2;
+                return (
+                  <div
+                    key={`${p.nomor}-${i}`}
+                    className={`rounded-xl border p-2.5 ${
+                      expired ? 'border-rose-100 bg-rose-50/60'
+                        : urgent ? 'border-amber-100 bg-amber-50/60'
+                        : 'border-slate-100 bg-slate-50/60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-700 truncate" title={p.proyek}>{p.proyek}</p>
+                        <p className="text-[10px] text-slate-500 truncate" title={p.tipe}>{shortPermitLabel(p.tipe)}</p>
+                      </div>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                        expired ? 'bg-rose-600 text-white'
+                          : urgent ? 'bg-amber-500 text-white'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {expired ? `Lewat ${Math.abs(p.sisaHari)} hari` : p.sisaHari === 0 ? 'Hari ini' : `${p.sisaHari} hari lagi`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-slate-400 font-medium">
+                      <FileWarning className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{p.nomor}</span>
+                      <span className="ml-auto tabular-nums shrink-0">s/d {p.validTo}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ------------------- Section: risk intelligence (hazards, hotspots) */}
+      <SectionHeading
+        icon={AlertTriangle}
+        title="Peta Risiko"
+        desc="Sumber bahaya yang paling sering muncul, lokasi rawan, dan sebaran jenis izin kerja"
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card title="Sumber Bahaya Terbanyak" subtitle="Dari deklarasi bahaya pada seluruh PTW" className="animate-fade-up">
+          {topHazards.length === 0 ? (
+            <EmptyHint label="Belum ada sumber bahaya yang dideklarasikan di PTW." />
+          ) : (
+            <div className="space-y-3">
+              {topHazards.map((h, i) => (
+                <BarRow
+                  key={h.nama}
+                  label={h.nama}
+                  value={h.value}
+                  max={hazardMax}
+                  suffix=" PTW"
+                  color={PRIORITY_RAMP[Math.min(3, Math.floor((i / Math.max(1, topHazards.length - 1)) * 3))]}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="Lokasi Rawan"
+          subtitle="Akumulasi anomali dan insiden per lokasi"
+          className="animate-fade-up"
+          onClick={() => setDetailConfig({
+            title: 'Hasil Inspeksi',
+            fetchFn: getInspectionDetails,
+            viewAllHref: '/dashboard/inspection',
+            viewAllLabel: 'Lihat Semua Inspeksi',
+          })}
+        >
+          {hotspots.length === 0 ? (
+            <EmptyHint label="Belum ada temuan atau insiden dengan data lokasi." />
+          ) : (
+            <div className="space-y-3">
+              {hotspots.map(h => (
+                <div key={h.lokasi} className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-600 truncate flex items-center gap-1.5" title={h.lokasi}>
+                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                      {h.lokasi}
+                    </span>
+                    <span className="text-xs font-black text-slate-800 tabular-nums shrink-0">{h.total}</span>
+                  </div>
+                  <div className="flex gap-[2px] h-2">
+                    <div
+                      className="h-full rounded-l-full"
+                      style={{ width: `${(h.anomali / hotspotMax) * 100}%`, background: C.anomali }}
+                      title={`Anomali: ${h.anomali}`}
+                    />
+                    <div
+                      className="h-full rounded-r-full"
+                      style={{ width: `${(h.insiden / hotspotMax) * 100}%`, background: C.critical }}
+                      title={`Insiden: ${h.insiden}`}
+                    />
+                  </div>
+                  <div className="flex gap-3 text-[10px] font-medium text-slate-500">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full" style={{ background: C.anomali }} />
+                      Anomali <span className="font-bold text-slate-700">{h.anomali}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full" style={{ background: C.critical }} />
+                      Insiden <span className="font-bold text-slate-700">{h.insiden}</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card title="Jenis Izin Kerja" subtitle="Sebaran PTW menurut tipe izin" className="animate-fade-up">
+          {ptwByType.length === 0 ? (
+            <EmptyHint label="Belum ada PTW yang diajukan." />
+          ) : (
+            <div className="space-y-3">
+              {ptwByType.map(t => (
+                <BarRow
+                  key={t.id}
+                  label={shortPermitLabel(t.label)}
+                  value={t.total}
+                  max={ptwTypeMax}
+                  color={t.color}
+                  hint={t.aktif > 0 ? `${t.aktif} aktif` : undefined}
+                />
+              ))}
+              <p className="text-[10px] text-slate-400 pt-1">
+                Warna mengikuti kode warna resmi tiap formulir izin kerja.
+              </p>
+            </div>
+          )}
+        </Card>
+      </div>
+
       {/* --------------------------------- Row 3: vendor safety scorecard */}
+      <SectionHeading
+        icon={Layers}
+        title="Kinerja Vendor & Proyek"
+        desc="Rapor keselamatan mitra kerja, kepatuhan CSMS, dan progres lapangan"
+      />
       <Card
         title="Rapor Keselamatan Vendor"
         subtitle="Temuan K3 per vendor — diurutkan dari yang paling perlu perhatian"
@@ -444,6 +948,83 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
           </div>
         )}
       </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card title="Kepatuhan CSMS Vendor" subtitle="Status prakualifikasi keselamatan mitra kerja" className="animate-fade-up" live>
+          {csmsTotal === 0 ? (
+            <EmptyHint label="Belum ada vendor terdaftar." />
+          ) : (
+            <div className="space-y-4">
+              <StackedRow
+                total={csmsTotal}
+                segments={csms.map(c => ({ name: c.status, value: c.value, color: csmsTone(c.status) }))}
+              />
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                {csms.map(c => (
+                  <div key={c.status} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 truncate">
+                      <BadgeCheck className="w-3.5 h-3.5 shrink-0" style={{ color: csmsTone(c.status) }} />
+                      <span className="truncate" title={c.status}>{c.status}</span>
+                    </span>
+                    <span className="text-xs font-black text-slate-800 tabular-nums shrink-0 ml-2">{c.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="Progres Proyek vs Jadwal"
+          subtitle="Membandingkan progres dilaporkan dengan waktu yang sudah terpakai"
+          className="animate-fade-up"
+          live
+          onClick={() => setDetailConfig({
+            title: 'Progres Proyek',
+            fetchFn: getProjectScheduleDetails,
+            viewAllHref: '/dashboard/ongoing',
+            viewAllLabel: 'Lihat Semua Proyek',
+          })}
+        >
+          {progresTotal === 0 ? (
+            <EmptyHint label="Belum ada proyek aktif dengan rentang jadwal yang valid." />
+          ) : (
+            <div className="space-y-5">
+              {progresMix.rataProgres !== null && (
+                <div>
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <span className="text-xs font-bold text-slate-600 inline-flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                      Rata-rata Progres Proyek Aktif
+                    </span>
+                    <span className="text-lg font-black text-slate-800 tabular-nums">{progresMix.rataProgres}%</span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${progresMix.rataProgres}%`, background: C.positif }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="pt-4 border-t border-slate-100">
+                <StackedRow
+                  label="Posisi terhadap Jadwal"
+                  total={progresTotal}
+                  segments={[
+                    { name: 'Lebih Cepat', value: progresMix.unggul, color: C.good },
+                    { name: 'Sesuai', value: progresMix.sesuai, color: C.positif },
+                    { name: 'Tertinggal', value: progresMix.tertinggal, color: C.critical },
+                  ]}
+                />
+                <p className="text-[10px] text-slate-400 mt-2 leading-snug">
+                  Sebuah proyek dihitung tertinggal bila progresnya ≥5% di bawah porsi waktu yang sudah berjalan.
+                </p>
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
 
       {/* ------------------------------------------------ Row 4: quick nav */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 animate-fade-up">
