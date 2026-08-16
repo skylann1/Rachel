@@ -5,6 +5,7 @@ import { getUserPermissions } from '@/utils/permissions';
 import AdminProjectClient from './AdminProjectClient';
 import { getJsaSignatories } from '@/lib/jsa-signatories';
 import { getPtwSignatories } from '@/lib/ptw-signatories';
+import { worstExpiry } from '@/lib/document-expiry';
 
 export default async function AdminProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -66,6 +67,36 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
     await Promise.all(ptws.map(async (p) => [p.id, await getPtwSignatories(supabase, p, vendorPic)] as const))
   );
 
+  // Safety gate: cross-check the workers/equipment snapshotted onto each PTW
+  // against their *current* master-data expiry, so an approver sees when
+  // someone they're about to authorize has a lapsed competency or
+  // certificate — the snapshot itself only carries a name and role, not a
+  // validity date, so this can't be read off the PTW row alone.
+  const workerIds = Array.from(new Set(
+    ptws.flatMap((p: any) => (p.workers || []).map((w: any) => w.id).filter(Boolean)),
+  ));
+  const equipmentIds = Array.from(new Set(
+    ptws.flatMap((p: any) => (p.equipment || []).map((e: any) => e.id).filter(Boolean)),
+  ));
+
+  const [{ data: competencies }, { data: equipmentDocs }] = await Promise.all([
+    workerIds.length > 0
+      ? supabase.from('vendor_worker_competencies').select('worker_id, valid_to').in('worker_id', workerIds)
+      : Promise.resolve({ data: [] as { worker_id: string; valid_to: string | null }[] }),
+    equipmentIds.length > 0
+      ? supabase.from('vendor_equipment_documents').select('equipment_id, valid_to').in('equipment_id', equipmentIds)
+      : Promise.resolve({ data: [] as { equipment_id: string; valid_to: string | null }[] }),
+  ]);
+
+  const workerExpiry: Record<string, string> = {};
+  for (const id of workerIds) {
+    workerExpiry[id] = worstExpiry((competencies || []).filter(c => c.worker_id === id).map(c => c.valid_to));
+  }
+  const equipmentExpiry: Record<string, string> = {};
+  for (const id of equipmentIds) {
+    equipmentExpiry[id] = worstExpiry((equipmentDocs || []).filter(d => d.equipment_id === id).map(d => d.valid_to));
+  }
+
   return (
     <div className="p-8 pb-20 bg-slate-50 min-h-screen">
       <AdminProjectClient
@@ -74,6 +105,8 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
         currentUserId={user.id}
         jsaSignatories={jsaSignatories}
         ptwSignatories={ptwSignatories}
+        workerExpiry={workerExpiry}
+        equipmentExpiry={equipmentExpiry}
       />
     </div>
   );

@@ -18,6 +18,7 @@ import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_ROLES } from '@/lib/ptw-st
 import { JSA_STATUS, JSA_STAGE_ROLES, isJsaPending } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
+import { EXPIRY_TONE } from '@/lib/document-expiry';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const PDFViewer = dynamic(
@@ -137,8 +138,10 @@ const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
 };
 
 // Reuse ApproveModal
-function ApproveModal({ labelKey, onConfirm, onCancel, isLoading }: {
+function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
   labelKey: string;
+  /** Safety-gate notice — set when the PTW being approved has an expired worker/equipment. */
+  warning?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
   isLoading: boolean;
@@ -156,6 +159,12 @@ function ApproveModal({ labelKey, onConfirm, onCancel, isLoading }: {
             <p className="text-xs text-slate-500">{desc}</p>
           </div>
         </div>
+        {warning && (
+          <div className="flex items-start gap-2.5 bg-rose-50 border border-rose-200 rounded-xl p-3 mb-4">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <p className="text-xs font-semibold text-rose-800 leading-relaxed">{warning}</p>
+          </div>
+        )}
         <div className="flex justify-end gap-2 mt-2">
           <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-xl transition-colors">
             Batal
@@ -163,10 +172,12 @@ function ApproveModal({ labelKey, onConfirm, onCancel, isLoading }: {
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition-colors shadow-sm shadow-emerald-200"
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 rounded-xl transition-colors shadow-sm ${
+              warning ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
+            }`}
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            Ya, Setujui
+            {warning ? 'Tetap Setujui' : 'Ya, Setujui'}
           </button>
         </div>
       </div>
@@ -174,7 +185,14 @@ function ApproveModal({ labelKey, onConfirm, onCancel, isLoading }: {
   );
 }
 
-export default function AdminProjectClient({ project, userRole, currentUserId, jsaSignatories, ptwSignatories }: { project: any, userRole: string, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any> }) {
+export default function AdminProjectClient({
+  project, userRole, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry,
+}: {
+  project: any, userRole: string, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
+  /** worker_id / equipment_id -> 'expired' | 'expiring' | 'valid' | 'unknown', computed server-side against live master data. */
+  workerExpiry?: Record<string, string>,
+  equipmentExpiry?: Record<string, string>,
+}) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<{ type: 'prosedur' | 'jsa' | 'ptw'; id: string } | null>(null);
@@ -244,6 +262,28 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
   };
   const ptwActionableRows = ptws.filter(canApprovePtwRow);
   const canApprovePtw = ptwActionableRows.length > 0;
+
+  /**
+   * Safety gate: workers/equipment on this PTW whose competency or
+   * certificate has expired since the vendor submitted it. The PTW's own
+   * JSONB snapshot only carries a name and role — the expiry lives in the
+   * live master-data tables, so it's cross-checked server-side and handed
+   * down as workerExpiry/equipmentExpiry.
+   */
+  const getPtwSafetyIssues = (row: any) => {
+    const workers = (row.workers || []).filter((w: any) => w.id && workerExpiry?.[w.id] === 'expired');
+    const equipment = (row.equipment || []).filter((e: any) => e.id && equipmentExpiry?.[e.id] === 'expired');
+    return { workers, equipment, hasIssues: workers.length > 0 || equipment.length > 0 };
+  };
+  const approveTargetPtwWarning = (() => {
+    if (approveTarget?.type !== 'ptw') return null;
+    const row = ptws.find(p => p.id === approveTarget.id);
+    if (!row) return null;
+    const { workers, equipment, hasIssues } = getPtwSafetyIssues(row);
+    if (!hasIssues) return null;
+    const names = [...workers.map((w: any) => w.worker_name), ...equipment.map((e: any) => e.name)];
+    return `${names.join(', ')} memiliki kompetensi/dokumen yang sudah kedaluwarsa. Menyetujui PTW ini tetap mengizinkan mereka bekerja di lapangan.`;
+  })();
 
   const handleConfirmApprove = async () => {
     if (!approveTarget) return;
@@ -326,6 +366,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
               ? (isTahapReviewPgsol ? 'jsa-review' : 'jsa-approve')
               : approveTarget.type
           }
+          warning={approveTargetPtwWarning}
           onConfirm={handleConfirmApprove}
           onCancel={() => setApproveTarget(null)}
           isLoading={isLoading}
@@ -632,6 +673,7 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                {/* JIKA ADA PTW PENDING (bisa lebih dari satu tipe sekaligus) */}
                {ptwActionableRows.map(row => {
                  const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
+                 const safety = getPtwSafetyIssues(row);
                  return (
                    <div key={row.id} className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50 mb-6">
                       <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -647,6 +689,18 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                            <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
                          </div>
                       </div>
+                      {safety.hasIssues && (
+                        <div className="flex items-start gap-3 bg-rose-50 border-b border-rose-100 px-4 sm:px-6 py-4">
+                          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-rose-900">Ada kompetensi/dokumen yang sudah kedaluwarsa</p>
+                            <p className="text-xs text-rose-700 mt-0.5">
+                              {[...safety.workers.map((w: any) => w.worker_name), ...safety.equipment.map((e: any) => e.name)].join(', ')}
+                              {' '}— cek ulang di master data sebelum menyetujui.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       <div className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
@@ -654,12 +708,20 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                               <Users className="w-4 h-4 text-slate-500" /> Pekerja Terdaftar
                             </div>
                             <div className="p-5 space-y-4">
-                              {row.workers?.map((w: any, i: number) => (
-                                <div key={i} className="flex justify-between items-center text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                                  <span className="font-bold text-slate-800">{w.worker_name}</span>
-                                  <span className="text-slate-500 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold">{w.worker_role}</span>
-                                </div>
-                              ))}
+                              {row.workers?.map((w: any, i: number) => {
+                                const status = w.id ? workerExpiry?.[w.id] : undefined;
+                                return (
+                                  <div key={i} className="flex justify-between items-center gap-2 text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                                    <span className="font-bold text-slate-800">{w.worker_name}</span>
+                                    <span className="flex items-center gap-1.5 shrink-0">
+                                      {status === 'expired' && (
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${EXPIRY_TONE.expired}`}>Kedaluwarsa</span>
+                                      )}
+                                      <span className="text-slate-500 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold">{w.worker_role}</span>
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
@@ -667,12 +729,20 @@ export default function AdminProjectClient({ project, userRole, currentUserId, j
                               <Briefcase className="w-4 h-4 text-slate-500" /> Peralatan & Tools
                             </div>
                             <div className="p-5 space-y-4">
-                              {row.equipment?.map((e: any, i: number) => (
-                                <div key={i} className="flex justify-between items-center text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                                  <span className="font-bold text-slate-800">{e.name}</span>
-                                  <span className="text-slate-500 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold">{e.type}</span>
-                                </div>
-                              ))}
+                              {row.equipment?.map((e: any, i: number) => {
+                                const status = e.id ? equipmentExpiry?.[e.id] : undefined;
+                                return (
+                                  <div key={i} className="flex justify-between items-center gap-2 text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                                    <span className="font-bold text-slate-800">{e.name}</span>
+                                    <span className="flex items-center gap-1.5 shrink-0">
+                                      {status === 'expired' && (
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${EXPIRY_TONE.expired}`}>Kedaluwarsa</span>
+                                      )}
+                                      <span className="text-slate-500 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold">{e.type}</span>
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
