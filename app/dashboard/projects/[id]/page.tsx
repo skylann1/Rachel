@@ -1,7 +1,7 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
-import { getUserPermissions } from '@/utils/permissions';
+import { getUserPermissionsForUser } from '@/utils/permissions';
 import AdminProjectClient from './AdminProjectClient';
 import { getJsaSignatories } from '@/lib/jsa-signatories';
 import { getPtwSignatories } from '@/lib/ptw-signatories';
@@ -16,13 +16,9 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
 
   if (!user) return notFound();
 
-  // Get user role
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  const userRole = profile?.role || '';
+  // roles.permissions milik user saat ini — dipakai AdminProjectClient untuk
+  // gerbang approve/reject Prosedur/JSA/PTW, lihat utils/permissions.ts.
+  const permissions = await getUserPermissionsForUser(supabase, user.id);
 
   // Fetch project + its JSA (including steps) + its PTW (including relations) + its procedure
   const { data: project, error } = await supabase
@@ -104,13 +100,13 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
     <div className="p-8 pb-20 bg-slate-50 min-h-screen">
       <AdminProjectClient
         project={project}
-        userRole={userRole}
         currentUserId={user.id}
         jsaSignatories={jsaSignatories}
         ptwSignatories={ptwSignatories}
         workerExpiry={workerExpiry}
         equipmentExpiry={equipmentExpiry}
         documentLogs={documentLogs}
+        permissions={permissions}
       />
     </div>
   );

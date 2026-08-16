@@ -25,15 +25,14 @@ function RejectionNote({ note }: { note: string }) {
   );
 }
 
-export default function ProsedurDetailClient({ prosedur, userRole, permissions }: { prosedur: any, userRole: string, permissions: Record<string, string[]> | null }) {
+export default function ProsedurDetailClient({ prosedur, permissions }: { prosedur: any, permissions: Record<string, string[]> | null }) {
   const router = useRouter();
   const [isApproving, setIsApproving] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
 
-  const hasApprovePerm = permissions?.approval?.includes('approve') || false;
-  const canApprove = (userRole === 'pm' || userRole === 'admin' || hasApprovePerm) && prosedur.status === PROCEDURE_STATUS.menungguReviewPM;
+  const canApprove = (permissions?.procedure?.includes('review') || false) && prosedur.status === PROCEDURE_STATUS.menungguReviewPM;
 
   const pdfData = prosedur.content ? {
     projectName: prosedur.projects?.name || 'Proyek',

@@ -1,9 +1,10 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from "@/lib/ptw-status";
-import { JSA_STATUS, JSA_STAGE_ROLES, JSA_PENDING_STATUSES } from "@/lib/jsa-status";
-import { PROCEDURE_STATUS } from "@/lib/procedure-status";
+import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
+import { JSA_STATUS, JSA_STAGE_PERMISSION, JSA_PENDING_STATUSES } from "@/lib/jsa-status";
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from "@/lib/procedure-status";
+import { getUserPermissionsForUser } from "@/utils/permissions";
 
 export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan';
 export type UrgencyType = 'High' | 'Medium' | 'Low';
@@ -49,8 +50,17 @@ export async function getMyTasks(): Promise<TaskItem[]> {
   const role = profile?.role || 'vendor';
   const tasks: TaskItem[] = [];
 
+  // roles.permissions milik user saat ini — dipakai untuk menentukan tugas
+  // Prosedur/JSA/PTW mana yang jadi tanggung jawabnya, bukan role slug yang
+  // di-hardcode. Lihat lib/procedure-status.ts, jsa-status.ts, ptw-status.ts.
+  const permissions = await getUserPermissionsForUser(supabase, user.id);
+  const can = (module: string, action: string) => {
+    const modulePerms = permissions?.[module];
+    return Array.isArray(modulePerms) && modulePerms.includes(action);
+  };
+
   // 1. Fetch Procedures
-  if (role === 'admin' || role === 'pm' || role === 'hse') {
+  if (can(PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM].module, PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM].action)) {
     const { data: procedures } = await supabase
       .from('procedures')
       .select(`
@@ -58,10 +68,9 @@ export async function getMyTasks(): Promise<TaskItem[]> {
         projects ( name, vendor_profiles ( company_name ) )
       `)
       .in('status', ['Submitted', PROCEDURE_STATUS.menungguReviewPM, PROCEDURE_STATUS.draft]);
-    
+
     if (procedures) {
       procedures.forEach((proc: any) => {
-        if (role === 'admin' || role === 'pm' || role === 'hse') {
            const proj = Array.isArray(proc.projects) ? proc.projects[0] : proc.projects;
            const vendor = proj?.vendor_profiles;
            const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
@@ -78,13 +87,12 @@ export async function getMyTasks(): Promise<TaskItem[]> {
              urgency: getUrgency(proc.created_at),
              timeInQueue: formatTimeInQueue(proc.created_at)
            });
-        }
       });
     }
   }
 
   // 2. Fetch JSA — dua tahap: Review PGSOL, lalu Persetujuan PGN (orang berbeda)
-  if (role === 'admin' || role === 'pgsol_reviewer' || role === 'pgn_approver') {
+  if (can('jsa', 'review_pgsol') || can('jsa', 'approve_pgn')) {
     const { data: jsas } = await supabase
       .from('jsa')
       .select(`
@@ -95,12 +103,11 @@ export async function getMyTasks(): Promise<TaskItem[]> {
 
     if (jsas) {
       jsas.forEach((jsa: any) => {
-        const stageRoles = JSA_STAGE_ROLES[jsa.status] || [];
+        const perm = JSA_STAGE_PERMISSION[jsa.status];
         // Pemisahan wewenang: yang sudah mereview tidak boleh muncul lagi sebagai approver.
         const sudahDireviewOlehSaya =
           jsa.status === JSA_STATUS.approvalPgn && jsa.reviewer_id === user.id;
-        const isMyTask =
-          (stageRoles.includes(role) || role === 'admin') && !sudahDireviewOlehSaya;
+        const isMyTask = !!perm && can(perm.module, perm.action) && !sudahDireviewOlehSaya;
 
         if (isMyTask) {
            const proj = Array.isArray(jsa.projects) ? jsa.projects[0] : jsa.projects;
@@ -127,7 +134,7 @@ export async function getMyTasks(): Promise<TaskItem[]> {
   }
 
   // 3. Fetch PTW
-  if (role === 'admin' || role === 'pm' || role === 'hse') {
+  if (can('ptw', 'approve_pm') || can('ptw', 'review_issuer') || can('ptw', 'numbering_hsse')) {
     const { data: ptws } = await supabase
       .from('ptw')
       .select(`
@@ -138,10 +145,8 @@ export async function getMyTasks(): Promise<TaskItem[]> {
 
     if (ptws) {
       ptws.forEach((ptw: any) => {
-        let isMyTask = false;
-        if (role === 'admin') isMyTask = true;
-        if (role === 'pm' && ptw.status === PTW_STATUS.menungguApprovalPM) isMyTask = true;
-        if (role === 'hse' && (ptw.status === PTW_STATUS.reviewPtwIssuer || ptw.status === PTW_STATUS.menungguPenomoranHSSE)) isMyTask = true;
+        const perm = PTW_STAGE_PERMISSION[ptw.status];
+        const isMyTask = !!perm && can(perm.module, perm.action);
 
         if (isMyTask) {
            const proj = Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects;

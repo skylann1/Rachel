@@ -22,7 +22,12 @@ export function isProcedurePending(status: string | null | undefined): boolean {
   return !!status && PROCEDURE_PENDING_STATUSES.includes(status);
 }
 
-/** Role yang berhak bertindak pada tiap tahap. */
-export const PROCEDURE_STAGE_ROLES: Record<string, string[]> = {
-  [PROCEDURE_STATUS.menungguReviewPM]: ['pm'],
+/**
+ * Permission yang berhak bertindak pada tiap tahap — dicocokkan lewat
+ * roles.permissions (lihat utils/permissions.ts), bukan role slug yang
+ * di-hardcode. Siapa pun boleh dikasih permission 'procedure.review' dari
+ * halaman Role & Permission, tidak harus role bernama persis 'pm'.
+ */
+export const PROCEDURE_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
+  [PROCEDURE_STATUS.menungguReviewPM]: { module: 'procedure', action: 'review' },
 };

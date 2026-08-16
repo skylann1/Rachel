@@ -219,3 +219,53 @@ export async function notifyUsersByRole({
 
   await supabase.from('notifications').insert(notifications);
 }
+
+/**
+ * Send notification to ALL users whose role carries a specific permission
+ * (module + action pada roles.permissions), bukan nama role yang di-hardcode.
+ * Dipakai untuk tahap approval Prosedur/JSA/PTW: siapa pun yang admin kasih
+ * permission itu lewat halaman Role & Permission otomatis kebagian notifikasi,
+ * tanpa perlu ubah kode.
+ */
+export async function notifyUsersByPermission({
+  module,
+  action,
+  type,
+  title,
+  message,
+  link,
+}: {
+  module: string;
+  action: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  link?: string;
+}) {
+  const supabase = await createClient();
+
+  const { data: roles } = await supabase.from('roles').select('name, permissions');
+  const targetRoleNames = (roles || [])
+    .filter((r: any) => Array.isArray(r.permissions?.[module]) && r.permissions[module].includes(action))
+    .map((r: any) => r.name as string);
+
+  // Admin selalu ikut disertakan, sama seperti notifyUsersByRole.
+  const targetRoles = targetRoleNames.includes('admin') ? targetRoleNames : [...targetRoleNames, 'admin'];
+
+  const { data: users } = await supabase
+    .from('profiles')
+    .select('id')
+    .in('role', targetRoles);
+
+  if (!users || users.length === 0) return;
+
+  const notifications = users.map(u => ({
+    user_id: u.id,
+    type,
+    title,
+    message,
+    link: link || null,
+  }));
+
+  await supabase.from('notifications').insert(notifications);
+}

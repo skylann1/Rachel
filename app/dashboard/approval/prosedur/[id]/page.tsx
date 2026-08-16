@@ -1,13 +1,12 @@
-import { getProcedureById, getCurrentUserProfile } from '../../actions';
+import { getProcedureById } from '../../actions';
 import { getUserPermissions } from '@/utils/permissions';
 import { notFound } from 'next/navigation';
 import ProsedurDetailClient from './ProsedurDetailClient';
 
 export default async function ProsedurDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const [prosedur, profile, permissions] = await Promise.all([
+  const [prosedur, permissions] = await Promise.all([
     getProcedureById(params.id),
-    getCurrentUserProfile(),
     getUserPermissions()
   ]);
 
@@ -15,13 +14,10 @@ export default async function ProsedurDetailPage(props: { params: Promise<{ id: 
     notFound();
   }
 
-  const userRole = profile?.role || '';
-
   return (
-    <ProsedurDetailClient 
-      prosedur={prosedur} 
-      userRole={userRole} 
-      permissions={permissions} 
+    <ProsedurDetailClient
+      prosedur={prosedur}
+      permissions={permissions}
     />
   );
 }

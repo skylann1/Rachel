@@ -1,8 +1,8 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
-import { PROCEDURE_STATUS } from "@/lib/procedure-status";
+import { notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from "@/lib/procedure-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 
 export async function saveProsedur(projectId: string, payload: any) {
@@ -48,8 +48,8 @@ export async function saveProsedur(projectId: string, payload: any) {
   }
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
-  await notifyUsersByRole({
-    role: 'pm',
+  await notifyUsersByPermission({
+    ...PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM],
     type: 'action_required',
     title: 'Prosedur Kerja Menunggu Review',
     message: `Prosedur kerja untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,

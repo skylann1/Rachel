@@ -14,9 +14,9 @@ import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
-import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_ROLES } from '@/lib/ptw-status';
-import { JSA_STATUS, JSA_STAGE_ROLES, isJsaPending } from '@/lib/jsa-status';
-import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
+import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending } from '@/lib/jsa-status';
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { EXPIRY_TONE } from '@/lib/document-expiry';
 import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
@@ -200,14 +200,16 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
 }
 
 export default function AdminProjectClient({
-  project, userRole, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs,
+  project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, permissions,
 }: {
-  project: any, userRole: string, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
+  project: any, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
   /** worker_id / equipment_id -> 'expired' | 'expiring' | 'valid' | 'unknown', computed server-side against live master data. */
   workerExpiry?: Record<string, string>,
   equipmentExpiry?: Record<string, string>,
   /** Full Prosedur/JSA/PTW audit trail for this project, newest first — see document_logs. */
   documentLogs?: any[],
+  /** roles.permissions milik user saat ini — sumber kebenaran gerbang approve/reject, lihat utils/permissions.ts. */
+  permissions?: Record<string, string[]> | null,
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -261,23 +263,27 @@ export default function AdminProjectClient({
     return <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Belum Dibuat</span>;
   };
 
-  // Check if current user can approve specific docs
-  const canApproveProsedur = userRole === 'pm' && prosedurStatus === 'Pending';
+  // Check if current user can approve specific docs — dibaca dari
+  // roles.permissions (lihat utils/permissions.ts), bukan role slug yang
+  // di-hardcode, supaya admin bisa atur ulang siapa yang berhak lewat
+  // halaman Role & Permission tanpa perlu ubah kode.
+  const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur?.status];
+  const canApproveProsedur = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action) && prosedurStatus === 'Pending';
 
   // JSA: dua tahap, dua orang berbeda.
-  //   Review PGSOL    -> hanya pgsol_reviewer (atau admin)
-  //   Persetujuan PGN -> hanya pgn_approver (atau admin), DAN bukan orang yang mereview
+  //   Review PGSOL    -> permission jsa.review_pgsol
+  //   Persetujuan PGN -> permission jsa.approve_pgn, DAN bukan orang yang mereview
   const isTahapReviewPgsol = jsa?.status === JSA_STATUS.reviewPgsol;
-  const jsaStageRoles = JSA_STAGE_ROLES[jsa?.status] || [];
+  const jsaPerm = JSA_STAGE_PERMISSION[jsa?.status];
   const jsaSudahDireviewOlehSaya = jsa?.status === JSA_STATUS.approvalPgn && jsa?.reviewer_id === currentUserId;
   const canApproveJsa =
-    jsaStageRoles.length > 0 &&
-    (jsaStageRoles.includes(userRole) || userRole === 'admin') &&
+    !!jsaPerm &&
+    !!permissions?.[jsaPerm.module]?.includes(jsaPerm.action) &&
     !jsaSudahDireviewOlehSaya;
-  // PTW: role tiap tahap dicek per baris karena bisa ada beberapa PTW tipe berbeda sekaligus.
+  // PTW: permission tiap tahap dicek per baris karena bisa ada beberapa PTW tipe berbeda sekaligus.
   const canApprovePtwRow = (row: any) => {
-    const roles = PTW_STAGE_ROLES[row.status] || [];
-    return roles.length > 0 && (roles.includes(userRole) || userRole === 'admin');
+    const perm = PTW_STAGE_PERMISSION[row.status];
+    return !!perm && !!permissions?.[perm.module]?.includes(perm.action);
   };
   const ptwActionableRows = ptws.filter(canApprovePtwRow);
   const canApprovePtw = ptwActionableRows.length > 0;

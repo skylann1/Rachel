@@ -2,11 +2,12 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { createNotification, notifyUsersByRole } from "@/app/dashboard/inbox/actions";
-import { JSA_STATUS } from "@/lib/jsa-status";
-import { PROCEDURE_STATUS, PROCEDURE_STAGE_ROLES } from "@/lib/procedure-status";
-import { PTW_STATUS, PTW_STAGE_ROLES } from "@/lib/ptw-status";
+import { createNotification, notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
+import { JSA_STATUS, JSA_STAGE_PERMISSION } from "@/lib/jsa-status";
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from "@/lib/procedure-status";
+import { PTW_STATUS, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
+import { hasPermissionForUser } from "@/utils/permissions";
 
 // =====================================================================
 // FETCH FUNCTIONS
@@ -156,19 +157,21 @@ export async function getDocumentLogs(projectId: string) {
 // =====================================================================
 
 /**
- * Every approve/reject action below re-derives the caller's role from
- * `profiles` server-side and checks it against the record's *current*
- * status. Never trust a role string passed in from the client — it's
- * fully attacker-controlled since these are server actions callable
- * directly over the wire.
+ * Every approve/reject action below re-derives the caller's permission from
+ * `profiles` + `roles.permissions` server-side and checks it against the
+ * record's *current* status. Never trust a role string passed in from the
+ * client — it's fully attacker-controlled since these are server actions
+ * callable directly over the wire.
+ *
+ * Gerbang tiap tahap dibaca dari roles.permissions (lihat utils/permissions.ts
+ * dan halaman Role & Permission), bukan role slug yang di-hardcode — admin
+ * bisa mengganti siapa yang berhak di tiap tahap tanpa ubah kode.
  */
-async function requireRole(supabase: any, userId: string, allowed: string[], errorMessage: string) {
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
-  const role = profile?.role;
-  if (!role || (!allowed.includes(role) && role !== 'admin')) {
+async function requirePermission(supabase: any, userId: string, permission: { module: string; action: string }, errorMessage: string) {
+  const allowed = await hasPermissionForUser(supabase, userId, permission.module, permission.action);
+  if (!allowed) {
     throw new Error(errorMessage);
   }
-  return role;
 }
 
 export async function approveProcedure(procedureId: string) {
@@ -178,7 +181,7 @@ export async function approveProcedure(procedureId: string) {
 
   const { data: current } = await supabase.from('procedures').select('status').eq('id', procedureId).single();
   if (current?.status !== PROCEDURE_STATUS.menungguReviewPM) throw new Error("Prosedur tidak dalam tahap yang bisa disetujui.");
-  await requireRole(supabase, user.id, PROCEDURE_STAGE_ROLES[PROCEDURE_STATUS.menungguReviewPM], "Hanya PM yang dapat menyetujui Prosedur Kerja.");
+  await requirePermission(supabase, user.id, PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM], "Anda tidak memiliki izin untuk menyetujui Prosedur Kerja.");
 
   const { data: profile } = await supabase.from('internal_profiles').select('id').eq('id', user.id).single();
   const { error } = await supabase
@@ -215,7 +218,7 @@ export async function rejectProcedure(procedureId: string, note: string) {
 
   const { data: currentCheck } = await supabase.from('procedures').select('status').eq('id', procedureId).single();
   if (currentCheck?.status !== PROCEDURE_STATUS.menungguReviewPM) throw new Error("Prosedur tidak dalam tahap yang bisa ditolak.");
-  await requireRole(supabase, user.id, PROCEDURE_STAGE_ROLES[PROCEDURE_STATUS.menungguReviewPM], "Hanya PM yang dapat menolak Prosedur Kerja.");
+  await requirePermission(supabase, user.id, PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM], "Anda tidak memiliki izin untuk menolak Prosedur Kerja.");
 
   // Fetch current procedure to update its content JSON
   const { data: proc } = await supabase.from('procedures').select('content, project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
@@ -278,7 +281,7 @@ export async function approveJsa(jsaId: string) {
 
   if (current?.status === JSA_STATUS.reviewPgsol) {
     // Tahap 1 — verifikasi teknis oleh Satker Pemberi Kerja (PGSOL).
-    await requireRole(supabase, user.id, ['pgsol_reviewer'], "Hanya Reviewer PGSOL yang dapat mereview JSA pada tahap ini.");
+    await requirePermission(supabase, user.id, JSA_STAGE_PERMISSION[JSA_STATUS.reviewPgsol], "Anda tidak memiliki izin untuk mereview JSA pada tahap ini.");
     updatePayload = {
       reviewer_id: user.id,
       reviewed_at: new Date().toISOString(),
@@ -287,7 +290,7 @@ export async function approveJsa(jsaId: string) {
     nextStatus = JSA_STATUS.approvalPgn;
   } else if (current?.status === JSA_STATUS.approvalPgn) {
     // Tahap 2 — otorisasi formal oleh Satker Penanggung Jawab (PGN).
-    await requireRole(supabase, user.id, ['pgn_approver'], "Hanya Approver PGN yang dapat menyetujui JSA pada tahap ini.");
+    await requirePermission(supabase, user.id, JSA_STAGE_PERMISSION[JSA_STATUS.approvalPgn], "Anda tidak memiliki izin untuk menyetujui JSA pada tahap ini.");
     // Pemisahan wewenang: reviewer dan approver wajib dua orang berbeda.
     if (current.reviewer_id && current.reviewer_id === user.id) {
       throw new Error("JSA harus disetujui oleh orang yang berbeda dari yang melakukan review. Silakan minta Approver PGN lain untuk menyetujui.");
@@ -317,8 +320,8 @@ export async function approveJsa(jsaId: string) {
 
   // Setelah review PGSOL selesai, giliran PGN yang harus bertindak.
   if (nextStatus === JSA_STATUS.approvalPgn) {
-    await notifyUsersByRole({
-      role: 'pgn_approver',
+    await notifyUsersByPermission({
+      ...JSA_STAGE_PERMISSION[JSA_STATUS.approvalPgn],
       type: 'action_required',
       title: 'JSA Menunggu Persetujuan PGN',
       message: `JSA untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu persetujuan Anda.`,
@@ -348,10 +351,10 @@ export async function rejectJsa(jsaId: string, note: string) {
   const { data: current } = await supabase.from('jsa').select('status').eq('id', jsaId).single();
   let penolak = '';
   if (current?.status === JSA_STATUS.reviewPgsol) {
-    await requireRole(supabase, user.id, ['pgsol_reviewer'], "Hanya Reviewer PGSOL yang dapat menolak JSA pada tahap ini.");
+    await requirePermission(supabase, user.id, JSA_STAGE_PERMISSION[JSA_STATUS.reviewPgsol], "Anda tidak memiliki izin untuk menolak JSA pada tahap ini.");
     penolak = 'PGSOL';
   } else if (current?.status === JSA_STATUS.approvalPgn) {
-    await requireRole(supabase, user.id, ['pgn_approver'], "Hanya Approver PGN yang dapat menolak JSA pada tahap ini.");
+    await requirePermission(supabase, user.id, JSA_STAGE_PERMISSION[JSA_STATUS.approvalPgn], "Anda tidak memiliki izin untuk menolak JSA pada tahap ini.");
     penolak = 'PGN';
   } else {
     throw new Error("JSA tidak dalam tahap yang bisa ditolak.");
@@ -402,13 +405,13 @@ export async function approvePtw(ptwId: string) {
   let updatePayload: any = {};
 
   if (current?.status === PTW_STATUS.menungguApprovalPM) {
-    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.menungguApprovalPM], "Hanya PTW Authority yang dapat menyetujui tahap ini.");
+    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.menungguApprovalPM], "Anda tidak memiliki izin untuk menyetujui tahap ini.");
     updatePayload = { authority_id: user.id, authority_approved_at: new Date().toISOString(), status: PTW_STATUS.reviewPtwIssuer };
   } else if (current?.status === PTW_STATUS.reviewPtwIssuer) {
-    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.reviewPtwIssuer], "Hanya PTW Issuer yang dapat menyetujui tahap ini.");
+    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.reviewPtwIssuer], "Anda tidak memiliki izin untuk menyetujui tahap ini.");
     updatePayload = { issuer_id: user.id, issuer_approved_at: new Date().toISOString(), status: PTW_STATUS.menungguPenomoranHSSE };
   } else if (current?.status === PTW_STATUS.menungguPenomoranHSSE) {
-    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.menungguPenomoranHSSE], "Hanya HSE yang dapat menerbitkan nomor PTW.");
+    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.menungguPenomoranHSSE], "Anda tidak memiliki izin untuk menerbitkan nomor PTW.");
     // Generate PTW number: PTW-YYYY-XXX
     const year = new Date().getFullYear();
     const { count } = await supabase.from('ptw').select('*', { count: 'exact', head: true }).like('ptw_number', `PTW-${year}-%`);
@@ -468,8 +471,8 @@ export async function approvePtw(ptwId: string) {
        });
     }
 
-    await notifyUsersByRole({
-      role: 'hse',
+    await notifyUsersByPermission({
+      ...PTW_STAGE_PERMISSION[PTW_STATUS.menungguPenomoranHSSE],
       type: 'info',
       title: `PTW Aktif: ${updatePayload.ptw_number}`,
       message: `PTW ${updatePayload.ptw_number} untuk proyek "${proj?.name}" telah diterbitkan dan aktif.`,
@@ -486,11 +489,11 @@ export async function rejectPtw(ptwId: string, note: string) {
 
   const { data: current } = await supabase.from('ptw').select('status').eq('id', ptwId).single();
   if (current?.status === PTW_STATUS.menungguApprovalPM) {
-    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.menungguApprovalPM], "Hanya PTW Authority yang dapat menolak tahap ini.");
+    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.menungguApprovalPM], "Anda tidak memiliki izin untuk menolak tahap ini.");
   } else if (current?.status === PTW_STATUS.reviewPtwIssuer) {
-    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.reviewPtwIssuer], "Hanya PTW Issuer yang dapat menolak tahap ini.");
+    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.reviewPtwIssuer], "Anda tidak memiliki izin untuk menolak tahap ini.");
   } else if (current?.status === PTW_STATUS.menungguPenomoranHSSE) {
-    await requireRole(supabase, user.id, PTW_STAGE_ROLES[PTW_STATUS.menungguPenomoranHSSE], "Hanya HSE yang dapat menolak tahap ini.");
+    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.menungguPenomoranHSSE], "Anda tidak memiliki izin untuk menolak tahap ini.");
   } else {
     throw new Error("PTW tidak dalam tahap yang bisa ditolak.");
   }

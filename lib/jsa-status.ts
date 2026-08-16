@@ -29,8 +29,13 @@ export function isJsaPending(status: string | null | undefined): boolean {
   return !!status && JSA_PENDING_STATUSES.includes(status);
 }
 
-/** Role yang berhak bertindak pada tiap tahap. */
-export const JSA_STAGE_ROLES: Record<string, string[]> = {
-  [JSA_STATUS.reviewPgsol]: ['pgsol_reviewer'],
-  [JSA_STATUS.approvalPgn]: ['pgn_approver'],
+/**
+ * Permission yang berhak bertindak pada tiap tahap — dicocokkan lewat
+ * roles.permissions (lihat utils/permissions.ts), bukan role slug yang
+ * di-hardcode. Role apa pun yang dikasih permission ini dari halaman
+ * Role & Permission otomatis bisa bertindak di tahap tersebut.
+ */
+export const JSA_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
+  [JSA_STATUS.reviewPgsol]: { module: 'jsa', action: 'review_pgsol' },
+  [JSA_STATUS.approvalPgn]: { module: 'jsa', action: 'approve_pgn' },
 };

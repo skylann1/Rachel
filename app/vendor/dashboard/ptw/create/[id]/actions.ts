@@ -1,9 +1,9 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
+import { notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
 import { APPROVED_JSA } from "@/lib/project-stage";
-import { PTW_STATUS } from "@/lib/ptw-status";
+import { PTW_STATUS, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
 import type { PtwFormDetails } from "@/lib/ptw-types";
 import { logDocumentEvent } from "@/lib/document-logs";
 
@@ -131,8 +131,8 @@ export async function savePtw(
   }
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
-  await notifyUsersByRole({
-    role: 'ptw_authority',
+  await notifyUsersByPermission({
+    ...PTW_STAGE_PERMISSION[PTW_STATUS.menungguApprovalPM],
     type: 'action_required',
     title: 'PTW Menunggu Persetujuan',
     message: `PTW untuk proyek "${project?.name}" telah diajukan dan menunggu persetujuan Anda.`,

@@ -1,8 +1,8 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
-import { JSA_STATUS } from "@/lib/jsa-status";
+import { notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
+import { JSA_STATUS, JSA_STAGE_PERMISSION } from "@/lib/jsa-status";
 import { APPROVED_PROCEDURE } from "@/lib/project-stage";
 import { logDocumentEvent } from "@/lib/document-logs";
 
@@ -79,8 +79,8 @@ export async function saveJsa(projectId: string, jsaData: any) {
   });
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
-  await notifyUsersByRole({
-    role: 'pgsol_reviewer',
+  await notifyUsersByPermission({
+    ...JSA_STAGE_PERMISSION[JSA_STATUS.reviewPgsol],
     type: 'action_required',
     title: 'JSA Menunggu Review PGSOL',
     message: `JSA untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,

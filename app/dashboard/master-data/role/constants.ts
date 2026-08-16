@@ -37,15 +37,35 @@ export const allPermissionModules = [
     ]
   },
   {
+    id: 'procedure',
+    title: 'Modul Prosedur Kerja',
+    description: 'Hak akses terkait dokumen Prosedur Kerja vendor — tahap pertama alur Prosedur → JSA → PTW.',
+    items: [
+      { key: 'view', label: 'Melihat Daftar Prosedur Kerja' },
+      { key: 'review', label: 'Review & Approve Prosedur Kerja' },
+    ]
+  },
+  {
     id: 'jsa',
-    title: 'Modul JSA & PTW',
-    description: 'Hak akses terkait manajemen Job Safety Analysis dan Surat Izin Kerja Aman.',
+    title: 'Modul JSA (Job Safety Analysis)',
+    description: 'Hak akses terkait manajemen Job Safety Analysis. Review PGSOL dan Approve PGN wajib dilakukan oleh dua orang berbeda.',
     items: [
       { key: 'view', label: 'Melihat Daftar JSA' },
       { key: 'create', label: 'Membuat Pengajuan JSA Baru' },
-      { key: 'review', label: 'Review JSA (Tim HSE)' },
-      { key: 'approve', label: 'Approve / Validasi PTW (Project Manager)' },
+      { key: 'review_pgsol', label: 'Review JSA — Tahap PGSOL' },
+      { key: 'approve_pgn', label: 'Approve JSA — Tahap PGN' },
       { key: 'delete', label: 'Menghapus Data JSA' },
+    ]
+  },
+  {
+    id: 'ptw',
+    title: 'Modul PTW (Permit to Work)',
+    description: 'Hak akses terkait manajemen Surat Izin Kerja Aman — tiga tahap approval berurutan.',
+    items: [
+      { key: 'view', label: 'Melihat Daftar PTW' },
+      { key: 'approve_pm', label: 'Approval Tahap PM (PTW Authority)' },
+      { key: 'review_issuer', label: 'Review Tahap PTW Issuer' },
+      { key: 'numbering_hsse', label: 'Penomoran & Penerbitan PTW (HSSE)' },
     ]
   },
   {

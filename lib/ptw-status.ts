@@ -26,11 +26,16 @@ export function isPtwPending(status: string | null | undefined): boolean {
   return !!status && PTW_PENDING_STATUSES.includes(status);
 }
 
-/** Role yang berhak bertindak pada tiap tahap. */
-export const PTW_STAGE_ROLES: Record<string, string[]> = {
-  [PTW_STATUS.menungguApprovalPM]: ['ptw_authority'],
-  [PTW_STATUS.reviewPtwIssuer]: ['ptw_issuer'],
-  [PTW_STATUS.menungguPenomoranHSSE]: ['hse'],
+/**
+ * Permission yang berhak bertindak pada tiap tahap — dicocokkan lewat
+ * roles.permissions (lihat utils/permissions.ts), bukan role slug yang
+ * di-hardcode. Role apa pun yang dikasih permission ini dari halaman
+ * Role & Permission otomatis bisa bertindak di tahap tersebut.
+ */
+export const PTW_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
+  [PTW_STATUS.menungguApprovalPM]: { module: 'ptw', action: 'approve_pm' },
+  [PTW_STATUS.reviewPtwIssuer]: { module: 'ptw', action: 'review_issuer' },
+  [PTW_STATUS.menungguPenomoranHSSE]: { module: 'ptw', action: 'numbering_hsse' },
 };
 
 /**
