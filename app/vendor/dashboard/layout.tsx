@@ -24,12 +24,12 @@ export default async function VendorDashboardLayout({
           <div className="flex items-center">
             <VendorMobileSidebar />
             <div className="hidden md:block leading-tight">
-              <p className="text-xs font-bold text-slate-800">Portal Vendor</p>
+              <p className="text-xs font-bold text-slate-800">Portal Mitra Kerja</p>
               <p className="text-[11px] text-slate-400">
                 {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             </div>
-            <p className="font-bold text-sm text-primary md:hidden">Portal Vendor</p>
+            <p className="font-bold text-sm text-primary md:hidden">Portal Mitra Kerja</p>
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">

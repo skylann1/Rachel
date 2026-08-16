@@ -41,17 +41,17 @@ export default async function VendorLoginPage({
               <HardHat className="w-7 h-7" />
             </div>
             <h1 className="text-2xl font-black text-white tracking-tight">RACHEL</h1>
-            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-widest mt-1">Portal Vendor</span>
+            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-widest mt-1">Portal Mitra Kerja</span>
           </div>
 
           <div className="mb-8 text-center">
-            <h2 className="text-lg font-bold text-white mb-1.5">Masuk sebagai Vendor</h2>
-            <p className="text-sm text-slate-400 leading-relaxed">Akses khusus untuk mitra vendor dan kontraktor terdaftar.</p>
+            <h2 className="text-lg font-bold text-white mb-1.5">Masuk sebagai Mitra Kerja</h2>
+            <p className="text-sm text-slate-400 leading-relaxed">Akses khusus untuk mitra kerja dan kontraktor terdaftar.</p>
           </div>
 
           <form className="space-y-5">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Email Vendor</label>
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Email Mitra Kerja</label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input

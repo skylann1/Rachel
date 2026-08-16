@@ -55,7 +55,7 @@ export default async function AuthDashboardLayout({
                 RACHEL
               </span>
               <div className="flex h-5 items-center justify-center rounded-md border border-primary/20 bg-primary/5 px-1.5 font-mono text-[10px] font-bold text-primary ml-1">
-                v1.0
+                v0.1
               </div>
             </div>
             <p className="text-sm font-bold text-primary lg:hidden">RACHEL</p>
@@ -72,7 +72,7 @@ export default async function AuthDashboardLayout({
 
         {/* Sub-Header Banner */}
         <div className="bg-white border-b border-slate-200 border-l-4 border-l-slate-300 px-6 lg:px-8 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 sm:gap-0 text-sm text-slate-600 shadow-sm z-10">
-          <div className="font-medium text-slate-500">RACHEL v1</div>
+          <div className="font-medium text-slate-500">Request for Approval and Control of Hazard Evaluation Log</div>
           <div className="text-slate-500 text-xs">
             {new Date().toLocaleDateString("id-ID", {
               weekday: "long",

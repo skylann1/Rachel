@@ -6,7 +6,7 @@ import { isJsaPending } from "@/lib/jsa-status";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 
 export const metadata = {
-  title: 'Profil Vendor | Portal Vendor K3',
+  title: 'Profil Mitra Kerja | Portal Mitra Kerja RACHEL',
 };
 
 export default async function VendorProfilePage() {
