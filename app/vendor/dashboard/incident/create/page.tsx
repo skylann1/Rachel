@@ -10,6 +10,7 @@ export default function VendorIncidentReportPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -169,8 +170,16 @@ export default function VendorIncidentReportPage() {
               </div>
               <h3 className="text-sm font-bold text-slate-700 mb-1">Unggah Foto Insiden</h3>
               <p className="text-xs text-slate-500 mb-4">Format JPG, PNG, atau PDF (Maks. 5MB per file)</p>
-               <input type="file" className="hidden" id="incident-photo" name="image" accept="image/*,.pdf" />
+               <input
+                 type="file"
+                 className="hidden"
+                 id="incident-photo"
+                 name="image"
+                 accept="image/*,.pdf"
+                 onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+               />
                <label htmlFor="incident-photo" className="text-sm font-bold text-rose-600 bg-rose-50 px-4 py-2 rounded-lg cursor-pointer">Pilih File</label>
+               {fileName && <p className="text-xs text-slate-600 mt-3 font-medium">{fileName}</p>}
             </div>
          </div>
 

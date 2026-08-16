@@ -139,6 +139,25 @@ export default function IncidentInvestigationPage() {
                   <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{incidentData.immediate_action}</p>
                 </div>
               )}
+              {incidentData.image_url && (
+                <div className="mt-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase block mb-2">Dokumentasi Kejadian</span>
+                  <a href={incidentData.image_url} target="_blank" rel="noopener noreferrer" className="block">
+                    {incidentData.image_url.toLowerCase().endsWith('.pdf') ? (
+                      <div className="flex items-center gap-2 text-sm font-bold text-primary bg-slate-50 border border-slate-100 rounded-xl p-4 hover:bg-slate-100 transition-colors">
+                        <FileText className="w-4 h-4" /> Lihat Dokumen PDF
+                      </div>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={incidentData.image_url}
+                        alt="Dokumentasi kejadian"
+                        className="max-h-72 w-auto rounded-xl border border-slate-200 hover:opacity-90 transition-opacity"
+                      />
+                    )}
+                  </a>
+                </div>
+              )}
             </div>
           </div>
 

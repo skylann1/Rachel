@@ -13,8 +13,28 @@ export async function submitIncident(formData: FormData) {
   const location = formData.get("location") as string;
   const chronology = formData.get("chronology") as string;
   const immediate_action = formData.get("immediate_action") as string;
-  // TODO: Handle image upload in a real scenario
-  // const image = formData.get("image") as File;
+  const image = formData.get("image") as File | null;
+
+  let image_url: string | null = null;
+  if (image && image.size > 0) {
+    const fileExt = image.name.split('.').pop();
+    const filePath = `incidents/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('sipermit-images')
+      .upload(filePath, image);
+
+    if (uploadError) {
+      console.error(uploadError);
+      throw new Error(uploadError.message);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('sipermit-images')
+      .getPublicUrl(filePath);
+
+    image_url = publicUrlData.publicUrl;
+  }
 
   // We map the select type to incident_type enum ('Near Miss', 'First Aid', etc. in schema)
   let mappedType = 'Near Miss';
@@ -43,6 +63,7 @@ export async function submitIncident(formData: FormData) {
       location,
       chronology,
       immediate_action,
+      image_url,
       status: 'Menunggu Investigasi'
     })
     .select('id')
