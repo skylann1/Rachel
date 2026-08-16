@@ -18,6 +18,7 @@ import {
   hazardSourcesFor, APD_CATEGORY_LABELS,
 } from '@/lib/ptw-types';
 import { getWorkers, WorkerItem } from '@/app/vendor/dashboard/pekerja/actions';
+import { worstExpiry } from '@/lib/document-expiry';
 import { getEquipment, EquipmentItem } from '@/app/vendor/dashboard/peralatan/actions';
 
 export default function PTWCreatePage() {
@@ -175,7 +176,13 @@ export default function PTWCreatePage() {
 
   const selectedPekerjaData = rosterPekerja
     .filter(p => selectedPekerja.includes(p.id))
-    .map(p => ({ id: p.id, worker_name: p.full_name, worker_role: p.position, certification: p.certification }));
+    .map(p => ({
+      id: p.id,
+      worker_name: p.full_name,
+      worker_role: p.position,
+      // Kompetensi kini berupa daftar; PTW hanya butuh ringkasannya sebagai teks.
+      certification: p.competencies.map(c => c.title).join(', ') || null,
+    }));
   const selectedPeralatanData = rosterPeralatan
     .filter(p => selectedPeralatan.includes(p.id))
     .map(p => ({ id: p.id, name: p.name, type: p.category, certificate_number: p.certificate_number }));
@@ -465,7 +472,12 @@ export default function PTWCreatePage() {
                     />
                     <div>
                       <div className="font-bold text-sm text-slate-800">{p.full_name}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{p.position} • Sertifikat: {p.certification || 'Tidak Ada'}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {p.position} • Kompetensi: {p.competencies.length > 0 ? p.competencies.map(c => c.title).join(', ') : 'Tidak Ada'}
+                      </div>
+                      {worstExpiry(p.competencies.map(c => c.valid_to)) === 'expired' && (
+                        <div className="text-xs font-bold text-rose-600 mt-0.5">Ada kompetensi yang sudah kedaluwarsa</div>
+                      )}
                     </div>
                   </label>
                 ))

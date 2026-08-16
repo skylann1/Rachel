@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Edit2, Trash2, Loader2, Truck, AlertTriangle } from 'lucide-react';
-import { getEquipment, saveEquipment, deleteEquipment, EquipmentItem } from './actions';
+import { Search, Plus, Edit2, Trash2, Loader2, Package, AlertTriangle } from 'lucide-react';
+import { getMaterials, saveMaterial, deleteMaterial, MaterialItem } from './actions';
 import type { AssetDocumentItem } from '@/lib/asset-document';
 import { FileUploadField } from '@/components/vendor/file-upload-field';
 import { AssetDocumentEditor } from '@/components/vendor/asset-document-editor';
@@ -11,11 +11,9 @@ import { EXPIRY_TONE, worstExpiry } from '@/lib/document-expiry';
 const emptyForm = {
   id: undefined as string | undefined,
   name: '',
-  category: '',
   brand: '',
   type_serial: '',
   dimension: '',
-  capacity: '',
   quantity: 1,
   unit: 'unit',
   photo_url: null as string | null,
@@ -25,79 +23,77 @@ const emptyForm = {
 const inputClass =
   'w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm';
 
-export default function PeralatanMasterPage() {
-  const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
+export default function MaterialMasterPage() {
+  const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [query, setQuery] = useState('');
 
-  const fetchEquipment = async () => {
+  const fetchMaterials = async () => {
     setIsLoading(true);
     try {
-      setEquipment(await getEquipment());
+      setMaterials(await getMaterials());
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => { fetchEquipment(); }, []);
+  useEffect(() => { fetchMaterials(); }, []);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    return equipment.filter(e =>
-      !q || e.name.toLowerCase().includes(q) || (e.brand || '').toLowerCase().includes(q) || e.category.toLowerCase().includes(q),
+    return materials.filter(m =>
+      !q || m.name.toLowerCase().includes(q) || (m.brand || '').toLowerCase().includes(q) || (m.type_serial || '').toLowerCase().includes(q),
     );
-  }, [equipment, query]);
+  }, [materials, query]);
 
   const expiredCount = useMemo(
-    () => equipment.filter(e => worstExpiry(e.documents.map(d => d.valid_to)) === 'expired').length,
-    [equipment],
+    () => materials.filter(m => worstExpiry(m.documents.map(d => d.valid_to)) === 'expired').length,
+    [materials],
   );
 
   const openAdd = () => { setForm(emptyForm); setIsModalOpen(true); };
-  const openEdit = (e: EquipmentItem) => {
+  const openEdit = (m: MaterialItem) => {
     setForm({
-      id: e.id,
-      name: e.name,
-      category: e.category,
-      brand: e.brand || '',
-      type_serial: e.type_serial || '',
-      dimension: e.dimension || '',
-      capacity: e.capacity || '',
-      quantity: e.quantity ?? 1,
-      unit: e.unit || 'unit',
-      photo_url: e.photo_url,
-      documents: e.documents.map(d => ({ ...d })),
+      id: m.id,
+      name: m.name,
+      brand: m.brand || '',
+      type_serial: m.type_serial || '',
+      dimension: m.dimension || '',
+      quantity: m.quantity ?? 1,
+      unit: m.unit || 'unit',
+      photo_url: m.photo_url,
+      documents: m.documents.map(d => ({ ...d })),
     });
     setIsModalOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.name || !form.category) {
-      alert('Nama alat dan kategori wajib diisi.');
+    if (!form.name) {
+      alert('Nama material wajib diisi.');
       return;
     }
     setIsSaving(true);
     try {
-      await saveEquipment(form);
+      await saveMaterial(form);
       setIsModalOpen(false);
-      await fetchEquipment();
+      await fetchMaterials();
     } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan data peralatan.');
+      alert(err.message || 'Gagal menyimpan data material.');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus data peralatan ini?')) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus data material ini?')) return;
     try {
-      await deleteEquipment(id);
-      await fetchEquipment();
+      await deleteMaterial(id);
+      await fetchMaterials();
     } catch (err: any) {
-      alert(err.message || 'Gagal menghapus data peralatan.');
+      alert(err.message || 'Gagal menghapus data material.');
     }
   };
 
@@ -105,9 +101,9 @@ export default function PeralatanMasterPage() {
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Data Peralatan</h1>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Data Material</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Kelola master data peralatan beserta dokumen kelayakannya untuk ditarik ke JSA dan proyek berikutnya.
+            Kelola master data material beserta dokumen keselamatannya (MSDS, dsb.) untuk ditarik ke JSA.
           </p>
         </div>
         <button
@@ -115,7 +111,7 @@ export default function PeralatanMasterPage() {
           className="w-full sm:w-auto flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-sm shadow-primary/30"
         >
           <Plus className="w-4 h-4" />
-          Tambah Peralatan
+          Tambah Material
         </button>
       </div>
 
@@ -123,7 +119,7 @@ export default function PeralatanMasterPage() {
         <div className="flex items-center gap-3 bg-rose-50 border border-rose-100 rounded-2xl px-4 py-3">
           <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
           <p className="text-sm font-semibold text-rose-800">
-            {expiredCount} peralatan memiliki dokumen yang sudah kedaluwarsa. Perbarui sebelum digunakan di pekerjaan baru.
+            {expiredCount} material memiliki dokumen yang sudah kedaluwarsa. Perbarui sebelum digunakan di pekerjaan baru.
           </p>
         </div>
       )}
@@ -138,7 +134,7 @@ export default function PeralatanMasterPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm transition-all"
-            placeholder="Cari nama, merek, atau kategori..."
+            placeholder="Cari nama, merek, atau tipe..."
           />
         </div>
       </div>
@@ -148,7 +144,7 @@ export default function PeralatanMasterPage() {
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Peralatan</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Material</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Spesifikasi</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Jumlah</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Dokumen</th>
@@ -161,40 +157,37 @@ export default function PeralatanMasterPage() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                    <Truck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    {equipment.length === 0 ? 'Belum ada data peralatan. Tambahkan peralatan pertama Anda.' : 'Tidak ada peralatan yang cocok dengan pencarian.'}
+                    <Package className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    {materials.length === 0 ? 'Belum ada data material. Tambahkan material pertama Anda.' : 'Tidak ada material yang cocok dengan pencarian.'}
                   </td>
                 </tr>
               ) : (
-                filtered.map((alat) => {
-                  const worst = worstExpiry(alat.documents.map(d => d.valid_to));
+                filtered.map((mat) => {
+                  const worst = worstExpiry(mat.documents.map(d => d.valid_to));
                   return (
-                    <tr key={alat.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={mat.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="text-sm font-bold text-slate-800">{alat.name}</div>
-                        <div className="text-xs text-slate-500">{alat.category}{alat.brand ? ` • ${alat.brand}` : ''}</div>
-                        {alat.photo_url && (
-                          <a href={alat.photo_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary hover:underline">
+                        <div className="text-sm font-bold text-slate-800">{mat.name}</div>
+                        {mat.brand && <div className="text-xs text-slate-500">{mat.brand}</div>}
+                        {mat.photo_url && (
+                          <a href={mat.photo_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary hover:underline">
                             Lihat foto
                           </a>
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
-                        <div>{alat.type_serial || '—'}</div>
-                        <div className="text-xs text-slate-500">
-                          {alat.dimension ? `${alat.dimension}` : ''}{alat.dimension && alat.capacity ? ' • ' : ''}{alat.capacity || ''}
-                          {!alat.dimension && !alat.capacity && '—'}
-                        </div>
+                        <div>{mat.type_serial || '—'}</div>
+                        <div className="text-xs text-slate-500">{mat.dimension || ''}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-700 tabular-nums">
-                        {alat.quantity ?? 1} {alat.unit || 'unit'}
+                        {mat.quantity ?? 1} {mat.unit || 'unit'}
                       </td>
                       <td className="px-6 py-4">
-                        {alat.documents.length === 0 ? (
+                        {mat.documents.length === 0 ? (
                           <span className="text-xs text-slate-400">Belum ada</span>
                         ) : (
                           <div className="flex flex-col gap-1">
-                            <span className="text-sm font-semibold text-slate-700">{alat.documents.length} dokumen</span>
+                            <span className="text-sm font-semibold text-slate-700">{mat.documents.length} dokumen</span>
                             <span className={`inline-flex w-fit items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${EXPIRY_TONE[worst]}`}>
                               {worst === 'expired' ? 'Ada yang kedaluwarsa'
                                 : worst === 'expiring' ? 'Ada yang segera berakhir'
@@ -206,10 +199,10 @@ export default function PeralatanMasterPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => openEdit(alat)} className="text-slate-400 hover:text-primary transition-colors p-2 hover:bg-primary/10 rounded-lg" title="Edit Data">
+                          <button onClick={() => openEdit(mat)} className="text-slate-400 hover:text-primary transition-colors p-2 hover:bg-primary/10 rounded-lg" title="Edit Data">
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handleDelete(alat.id)} className="text-slate-400 hover:text-rose-600 transition-colors p-2 hover:bg-rose-50 rounded-lg" title="Hapus Data">
+                          <button onClick={() => handleDelete(mat.id)} className="text-slate-400 hover:text-rose-600 transition-colors p-2 hover:bg-rose-50 rounded-lg" title="Hapus Data">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -227,42 +220,31 @@ export default function PeralatanMasterPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh]">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
-              <h2 className="text-lg font-bold text-slate-800">{form.id ? 'Edit Data Peralatan' : 'Tambah Data Peralatan'}</h2>
-              <p className="text-sm text-slate-500 mt-1">Spesifikasi alat, dokumentasi foto, dan dokumen kelayakan.</p>
+              <h2 className="text-lg font-bold text-slate-800">{form.id ? 'Edit Data Material' : 'Tambah Data Material'}</h2>
+              <p className="text-sm text-slate-500 mt-1">Spesifikasi material, dokumentasi foto, dan dokumen keselamatan.</p>
             </div>
 
             <div className="p-6 overflow-y-auto">
               <div className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-semibold text-slate-700 block mb-2">Nama Alat <span className="text-rose-500">*</span></label>
-                    <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Contoh: Compressor" />
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Nama Material <span className="text-rose-500">*</span></label>
+                    <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Contoh: Cat" />
                   </div>
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700 block mb-2">Kategori <span className="text-rose-500">*</span></label>
-                    <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={inputClass} placeholder="Contoh: Alat Berat, Tools" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Merek / Brand</label>
-                    <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className={inputClass} placeholder="Contoh: Perkins" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700 block mb-2">Tipe / Seri</label>
-                    <input type="text" value={form.type_serial} onChange={(e) => setForm({ ...form, type_serial: e.target.value })} className={inputClass} placeholder="Contoh: K-1320" />
+                    <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className={inputClass} placeholder="Contoh: Jotun" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Tipe / Seri</label>
+                    <input type="text" value={form.type_serial} onChange={(e) => setForm({ ...form, type_serial: e.target.value })} className={inputClass} placeholder="Contoh: RAL 1330" />
+                  </div>
                   <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Dimensi</label>
                     <input type="text" value={form.dimension} onChange={(e) => setForm({ ...form, dimension: e.target.value })} className={inputClass} placeholder="Contoh: 1 x 0,5 x 0,5 m" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700 block mb-2">Kapasitas</label>
-                    <input type="text" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} className={inputClass} placeholder="Contoh: 1 CFM" />
                   </div>
                 </div>
 
@@ -271,7 +253,8 @@ export default function PeralatanMasterPage() {
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Jumlah</label>
                     <input
                       type="number"
-                      min={1}
+                      min={0}
+                      step="any"
                       value={form.quantity}
                       onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) || 1 })}
                       className={inputClass}
@@ -279,23 +262,23 @@ export default function PeralatanMasterPage() {
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Satuan</label>
-                    <input type="text" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className={inputClass} placeholder="unit" />
+                    <input type="text" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className={inputClass} placeholder="Contoh: galon" />
                   </div>
                 </div>
 
                 <FileUploadField
-                  label="Foto Peralatan"
+                  label="Foto Material"
                   value={form.photo_url}
                   onChange={(url) => setForm({ ...form, photo_url: url })}
                   accept="image/*"
-                  hint="Foto kondisi alat, maksimal 5MB."
+                  hint="Foto kemasan atau material, maksimal 5MB."
                 />
 
                 <AssetDocumentEditor
                   documents={form.documents}
                   onChange={(documents) => setForm({ ...form, documents })}
-                  namePlaceholder="Contoh: Sertifikasi Kelayakan"
-                  issuerPlaceholder="Contoh: Sucofindo"
+                  namePlaceholder="Contoh: MSDS"
+                  issuerPlaceholder="Contoh: Manufacturer"
                 />
               </div>
             </div>

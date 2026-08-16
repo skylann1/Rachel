@@ -3,11 +3,11 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
 import { logout } from "@/app/vendor/login/actions";
 
 const menuUtama = [
-  { name: 'Dashboard Vendor', href: '/vendor/dashboard', icon: LayoutDashboard },
+  { name: 'Dashboard Mitra Kerja', href: '/vendor/dashboard', icon: LayoutDashboard },
   { name: 'My Task', href: '/vendor/dashboard/my-task', icon: ClipboardList },
   { name: 'Proyek Aktif', href: '/vendor/dashboard/projects', icon: Briefcase },
   { name: 'Inbox Temuan K3', href: '/vendor/dashboard/inspection', icon: AlertTriangle },
@@ -18,6 +18,7 @@ const masterData = [
   { name: 'Dokumen K3', href: '/vendor/dashboard/dokumen', icon: FileSignature },
   { name: 'Data Pekerja', href: '/vendor/dashboard/pekerja', icon: Users },
   { name: 'Data Peralatan', href: '/vendor/dashboard/peralatan', icon: Truck },
+  { name: 'Data Material', href: '/vendor/dashboard/material', icon: Package },
 ];
 
 export function VendorDesktopSidebar() {
@@ -49,7 +50,7 @@ export function VendorDesktopSidebar() {
         </div>
         {!isCollapsed && (
           <div className="overflow-hidden whitespace-nowrap">
-            <p className="font-black text-sm text-white tracking-tight leading-none">Portal Vendor</p>
+            <p className="font-black text-sm text-white tracking-tight leading-none">Portal Mitra Kerja</p>
             <p className="text-[10px] text-slate-400 font-bold mt-1.5 tracking-widest uppercase">RACHEL K3</p>
           </div>
         )}

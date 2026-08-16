@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Edit2, Trash2, Loader2, Users } from 'lucide-react';
-import { getWorkers, saveWorker, deleteWorker, WorkerItem } from './actions';
+import { Search, Plus, Edit2, Trash2, Loader2, Users, ShieldCheck, Wrench, AlertTriangle } from 'lucide-react';
+import { getWorkers, saveWorker, deleteWorker, WorkerItem, CompetencyItem } from './actions';
+import { FileUploadField } from '@/components/vendor/file-upload-field';
+import { getExpiry, expiryLabel, EXPIRY_TONE, worstExpiry } from '@/lib/document-expiry';
 
 const emptyForm = {
   id: undefined as string | undefined,
@@ -10,9 +12,22 @@ const emptyForm = {
   position: '',
   ktp_number: '',
   bpjs_number: '',
-  certification: '',
+  education: '',
+  id_card_url: null as string | null,
   status: 'Active' as 'Active' | 'Inactive',
+  competencies: [] as CompetencyItem[],
 };
+
+const emptyCompetency: CompetencyItem = {
+  category: 'Safety',
+  title: '',
+  valid_from: null,
+  valid_to: null,
+  document_url: null,
+};
+
+const inputClass =
+  'w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm';
 
 export default function PekerjaMasterPage() {
   const [workers, setWorkers] = useState<WorkerItem[]>([]);
@@ -43,6 +58,12 @@ export default function PekerjaMasterPage() {
     });
   }, [workers, query, statusFilter]);
 
+  // Berapa pekerja yang punya kompetensi kedaluwarsa — dipakai sebagai peringatan di atas tabel.
+  const expiredCount = useMemo(
+    () => workers.filter(w => worstExpiry(w.competencies.map(c => c.valid_to)) === 'expired').length,
+    [workers],
+  );
+
   const openAdd = () => { setForm(emptyForm); setIsModalOpen(true); };
   const openEdit = (w: WorkerItem) => {
     setForm({
@@ -51,15 +72,37 @@ export default function PekerjaMasterPage() {
       position: w.position,
       ktp_number: w.ktp_number || '',
       bpjs_number: w.bpjs_number || '',
-      certification: w.certification || '',
+      education: w.education || '',
+      id_card_url: w.id_card_url,
       status: w.status,
+      competencies: w.competencies.map(c => ({ ...c })),
     });
     setIsModalOpen(true);
+  };
+
+  const updateCompetency = (index: number, patch: Partial<CompetencyItem>) => {
+    setForm(prev => ({
+      ...prev,
+      competencies: prev.competencies.map((c, i) => (i === index ? { ...c, ...patch } : c)),
+    }));
+  };
+
+  const addCompetency = (category: 'Safety' | 'Teknis') => {
+    setForm(prev => ({ ...prev, competencies: [...prev.competencies, { ...emptyCompetency, category }] }));
+  };
+
+  const removeCompetency = (index: number) => {
+    setForm(prev => ({ ...prev, competencies: prev.competencies.filter((_, i) => i !== index) }));
   };
 
   const handleSave = async () => {
     if (!form.full_name || !form.position) {
       alert('Nama dan jabatan wajib diisi.');
+      return;
+    }
+    const incomplete = form.competencies.find(c => c.title.trim() && c.valid_from && c.valid_to && c.valid_to < c.valid_from);
+    if (incomplete) {
+      alert(`Masa berlaku kompetensi "${incomplete.title}" tidak valid — tanggal akhir mendahului tanggal mulai.`);
       return;
     }
     setIsSaving(true);
@@ -84,6 +127,95 @@ export default function PekerjaMasterPage() {
     }
   };
 
+  const renderCompetencyGroup = (category: 'Safety' | 'Teknis') => {
+    const Icon = category === 'Safety' ? ShieldCheck : Wrench;
+    const rows = form.competencies
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.category === category);
+
+    return (
+      <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+        <div className="flex items-center justify-between mb-3">
+          <span className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <Icon className="w-4 h-4 text-primary" />
+            Kompetensi {category}
+          </span>
+          <button
+            type="button"
+            onClick={() => addCompetency(category)}
+            className="flex items-center gap-1 text-xs font-bold text-primary hover:bg-primary/10 px-2.5 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Tambah
+          </button>
+        </div>
+
+        {rows.length === 0 ? (
+          <p className="text-xs text-slate-400">Belum ada kompetensi {category.toLowerCase()}.</p>
+        ) : (
+          <div className="space-y-3">
+            {rows.map(({ c, i }) => {
+              const info = getExpiry(c.valid_to);
+              return (
+                <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="text"
+                      value={c.title}
+                      onChange={(e) => updateCompetency(i, { title: e.target.value })}
+                      className={inputClass}
+                      placeholder={category === 'Safety' ? 'Contoh: HSSE Passport' : 'Contoh: Basic Coating'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCompetency(i)}
+                      className="text-slate-400 hover:text-rose-600 p-2 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                      title="Hapus kompetensi"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 block mb-1">Berlaku dari</label>
+                      <input
+                        type="date"
+                        value={c.valid_from || ''}
+                        onChange={(e) => updateCompetency(i, { valid_from: e.target.value || null })}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 block mb-1">Sampai</label>
+                      <input
+                        type="date"
+                        value={c.valid_to || ''}
+                        onChange={(e) => updateCompetency(i, { valid_to: e.target.value || null })}
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
+                  {c.valid_to && (
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${EXPIRY_TONE[info.status]}`}>
+                      {expiryLabel(info)}
+                    </span>
+                  )}
+
+                  <FileUploadField
+                    label="Bukti dokumen"
+                    value={c.document_url}
+                    onChange={(url) => updateCompetency(i, { document_url: url })}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header Section */}
@@ -91,7 +223,7 @@ export default function PekerjaMasterPage() {
         <div>
           <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Data Pekerja</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Kelola master data pekerja untuk didaftarkan ke proyek-proyek Anda.
+            Kelola master data pekerja beserta kompetensinya untuk ditarik ke JSA dan proyek berikutnya.
           </p>
         </div>
         <div className="flex gap-3 w-full sm:w-auto">
@@ -104,6 +236,15 @@ export default function PekerjaMasterPage() {
           </button>
         </div>
       </div>
+
+      {expiredCount > 0 && (
+        <div className="flex items-center gap-3 bg-rose-50 border border-rose-100 rounded-2xl px-4 py-3">
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+          <p className="text-sm font-semibold text-rose-800">
+            {expiredCount} pekerja memiliki kompetensi yang sudah kedaluwarsa. Perbarui sebelum didaftarkan ke pekerjaan baru.
+          </p>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -140,8 +281,8 @@ export default function PekerjaMasterPage() {
               <tr>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nama Pekerja</th>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Jabatan</th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">No. KTP / BPJS</th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Sertifikasi</th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Identitas</th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Kompetensi</th>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th scope="col" className="relative px-6 py-4"><span className="sr-only">Aksi</span></th>
               </tr>
@@ -157,49 +298,68 @@ export default function PekerjaMasterPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((pekerja) => (
-                  <tr key={pekerja.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                          {pekerja.full_name.charAt(0)}
+                filtered.map((pekerja) => {
+                  const worst = worstExpiry(pekerja.competencies.map(c => c.valid_to));
+                  return (
+                    <tr key={pekerja.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="h-10 w-10 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                            {pekerja.full_name.charAt(0)}
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-bold text-slate-800">{pekerja.full_name}</div>
+                            {pekerja.education && <div className="text-xs text-slate-500">{pekerja.education}</div>}
+                          </div>
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-bold text-slate-800">{pekerja.full_name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">
+                        {pekerja.position}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-800">{pekerja.ktp_number || '—'} (KTP)</div>
+                        <div className="text-xs text-slate-500">{pekerja.bpjs_number || '—'} (BPJS)</div>
+                        {pekerja.id_card_url && (
+                          <a href={pekerja.id_card_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary hover:underline">
+                            Lihat ID Card
+                          </a>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {pekerja.competencies.length === 0 ? (
+                          <span className="text-xs text-slate-400">Belum ada</span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold text-slate-700">{pekerja.competencies.length} kompetensi</span>
+                            <span className={`inline-flex w-fit items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${EXPIRY_TONE[worst]}`}>
+                              {worst === 'expired' ? 'Ada yang kedaluwarsa'
+                                : worst === 'expiring' ? 'Ada yang segera berakhir'
+                                : worst === 'valid' ? 'Semua berlaku'
+                                : 'Tanpa masa berlaku'}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          pekerja.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {pekerja.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => openEdit(pekerja)} className="text-slate-400 hover:text-primary transition-colors p-2 hover:bg-primary/10 rounded-lg" title="Edit Data">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDelete(pekerja.id)} className="text-slate-400 hover:text-rose-600 transition-colors p-2 hover:bg-rose-50 rounded-lg" title="Hapus Data">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">
-                      {pekerja.position}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-slate-800">{pekerja.ktp_number || '—'} (KTP)</div>
-                      <div className="text-xs text-slate-500">{pekerja.bpjs_number || '—'} (BPJS)</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${pekerja.certification ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {pekerja.certification || 'Tidak Ada'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        pekerja.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                      }`}>
-                        {pekerja.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => openEdit(pekerja)} className="text-slate-400 hover:text-primary transition-colors p-2 hover:bg-primary/10 rounded-lg" title="Edit Data">
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(pekerja.id)} className="text-slate-400 hover:text-rose-600 transition-colors p-2 hover:bg-rose-50 rounded-lg" title="Hapus Data">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -209,44 +369,61 @@ export default function PekerjaMasterPage() {
       {/* Modal Tambah/Edit Pekerja */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh]">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <div>
                 <h2 className="text-lg font-bold text-slate-800">{form.id ? 'Edit Data Pekerja' : 'Tambah Data Pekerja'}</h2>
-                <p className="text-sm text-slate-500 mt-1">Masukkan profil pekerja beserta dokumen identitas.</p>
+                <p className="text-sm text-slate-500 mt-1">Profil pekerja, dokumen identitas, dan kompetensi yang dimiliki.</p>
               </div>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[70vh]">
+            <div className="p-6 overflow-y-auto">
               <div className="space-y-5">
                 <div>
                   <label className="text-sm font-semibold text-slate-700 block mb-2">Nama Lengkap <span className="text-rose-500">*</span></label>
-                  <input type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Budi Santoso" />
+                  <input type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className={inputClass} placeholder="Contoh: Budi Santoso" />
                 </div>
-                <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-2">Jabatan / Posisi <span className="text-rose-500">*</span></label>
-                  <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Welder, Helper, dll" />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Jabatan / Posisi <span className="text-rose-500">*</span></label>
+                    <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className={inputClass} placeholder="Contoh: Operator Cat" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Pendidikan Formal</label>
+                    <input type="text" value={form.education} onChange={(e) => setForm({ ...form, education: e.target.value })} className={inputClass} placeholder="Contoh: SMA" />
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">No. KTP</label>
-                    <input type="text" value={form.ktp_number} onChange={(e) => setForm({ ...form, ktp_number: e.target.value })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="16 Digit NIK" />
+                    <input type="text" value={form.ktp_number} onChange={(e) => setForm({ ...form, ktp_number: e.target.value })} className={inputClass} placeholder="16 Digit NIK" />
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">No. BPJS Ketenagakerjaan</label>
-                    <input type="text" value={form.bpjs_number} onChange={(e) => setForm({ ...form, bpjs_number: e.target.value })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Nomor BPJS" />
+                    <input type="text" value={form.bpjs_number} onChange={(e) => setForm({ ...form, bpjs_number: e.target.value })} className={inputClass} placeholder="Nomor BPJS" />
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-2">Sertifikasi Spesifik (Opsional)</label>
-                  <input type="text" value={form.certification} onChange={(e) => setForm({ ...form, certification: e.target.value })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Ahli K3 Umum, Welder 6G" />
-                </div>
+
+                <FileUploadField
+                  label="ID Card"
+                  value={form.id_card_url}
+                  onChange={(url) => setForm({ ...form, id_card_url: url })}
+                  hint="Foto atau PDF kartu identitas pekerja, maksimal 5MB."
+                />
+
                 <div>
                   <label className="text-sm font-semibold text-slate-700 block mb-2">Status</label>
-                  <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as 'Active' | 'Inactive' })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
+                  <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as 'Active' | 'Inactive' })} className={inputClass}>
                     <option value="Active">Active</option>
                     <option value="Inactive">Inactive</option>
                   </select>
+                </div>
+
+                <div className="pt-2 space-y-4">
+                  {renderCompetencyGroup('Safety')}
+                  {renderCompetencyGroup('Teknis')}
                 </div>
               </div>
             </div>

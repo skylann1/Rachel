@@ -4,56 +4,47 @@ import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { AssetDocumentItem } from "@/lib/asset-document";
 
-export interface EquipmentItem {
+export interface MaterialItem {
   id: string;
   name: string;
-  category: string;
   brand: string | null;
   type_serial: string | null;
   dimension: string | null;
-  capacity: string | null;
   quantity: number | null;
   unit: string | null;
   photo_url: string | null;
-  certificate_number: string | null;
-  certificate_expiry: string | null;
   documents: AssetDocumentItem[];
 }
 
-export async function getEquipment(): Promise<EquipmentItem[]> {
+export async function getMaterials(): Promise<MaterialItem[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
   const { data, error } = await supabase
-    .from('vendor_equipment')
+    .from('vendor_materials')
     .select(`
-      id, name, category, brand, type_serial, dimension, capacity, quantity, unit,
-      photo_url, certificate_number, certificate_expiry,
-      vendor_equipment_documents ( id, doc_name, issuer, valid_to, document_url )
+      id, name, brand, type_serial, dimension, quantity, unit, photo_url,
+      vendor_material_documents ( id, doc_name, issuer, valid_to, document_url )
     `)
     .eq('vendor_id', user.id)
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('getEquipment error:', error.message);
+    console.error('getMaterials error:', error.message);
     return [];
   }
 
-  return (data || []).map((e: any) => ({
-    id: e.id,
-    name: e.name,
-    category: e.category,
-    brand: e.brand,
-    type_serial: e.type_serial,
-    dimension: e.dimension,
-    capacity: e.capacity,
-    quantity: e.quantity,
-    unit: e.unit,
-    photo_url: e.photo_url,
-    certificate_number: e.certificate_number,
-    certificate_expiry: e.certificate_expiry,
-    documents: (e.vendor_equipment_documents || []).map((d: any) => ({
+  return (data || []).map((m: any) => ({
+    id: m.id,
+    name: m.name,
+    brand: m.brand,
+    type_serial: m.type_serial,
+    dimension: m.dimension,
+    quantity: m.quantity,
+    unit: m.unit,
+    photo_url: m.photo_url,
+    documents: (m.vendor_material_documents || []).map((d: any) => ({
       id: d.id,
       doc_name: d.doc_name,
       issuer: d.issuer,
@@ -63,14 +54,12 @@ export async function getEquipment(): Promise<EquipmentItem[]> {
   }));
 }
 
-export async function saveEquipment(payload: {
+export async function saveMaterial(payload: {
   id?: string;
   name: string;
-  category: string;
   brand: string;
   type_serial: string;
   dimension: string;
-  capacity: string;
   quantity: number;
   unit: string;
   photo_url: string | null;
@@ -83,46 +72,43 @@ export async function saveEquipment(payload: {
   const row = {
     vendor_id: user.id,
     name: payload.name,
-    category: payload.category,
     brand: payload.brand || null,
     type_serial: payload.type_serial || null,
     dimension: payload.dimension || null,
-    capacity: payload.capacity || null,
     quantity: payload.quantity || 1,
     unit: payload.unit || 'unit',
     photo_url: payload.photo_url || null,
   };
 
-  let equipmentId = payload.id;
+  let materialId = payload.id;
 
-  if (equipmentId) {
+  if (materialId) {
     const { error } = await supabase
-      .from('vendor_equipment')
+      .from('vendor_materials')
       .update(row)
-      .eq('id', equipmentId)
+      .eq('id', materialId)
       .eq('vendor_id', user.id);
     if (error) throw new Error(error.message);
   } else {
     const { data, error } = await supabase
-      .from('vendor_equipment')
+      .from('vendor_materials')
       .insert(row)
       .select('id')
       .single();
     if (error) throw new Error(error.message);
-    equipmentId = data.id;
+    materialId = data.id;
   }
 
-  // Sama seperti kompetensi pekerja: daftar dokumen ditulis ulang utuh.
   const { error: delError } = await supabase
-    .from('vendor_equipment_documents')
+    .from('vendor_material_documents')
     .delete()
-    .eq('equipment_id', equipmentId);
+    .eq('material_id', materialId);
   if (delError) throw new Error(delError.message);
 
   const rows = payload.documents
     .filter(d => d.doc_name.trim().length > 0)
     .map(d => ({
-      equipment_id: equipmentId,
+      material_id: materialId,
       doc_name: d.doc_name.trim(),
       issuer: d.issuer || null,
       valid_to: d.valid_to || null,
@@ -130,19 +116,19 @@ export async function saveEquipment(payload: {
     }));
 
   if (rows.length > 0) {
-    const { error: insError } = await supabase.from('vendor_equipment_documents').insert(rows);
+    const { error: insError } = await supabase.from('vendor_material_documents').insert(rows);
     if (insError) throw new Error(insError.message);
   }
 
-  revalidatePath('/vendor/dashboard/peralatan');
+  revalidatePath('/vendor/dashboard/material');
 }
 
-export async function deleteEquipment(id: string) {
+export async function deleteMaterial(id: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
-  const { error } = await supabase.from('vendor_equipment').delete().eq('id', id).eq('vendor_id', user.id);
+  const { error } = await supabase.from('vendor_materials').delete().eq('id', id).eq('vendor_id', user.id);
   if (error) throw new Error(error.message);
-  revalidatePath('/vendor/dashboard/peralatan');
+  revalidatePath('/vendor/dashboard/material');
 }
