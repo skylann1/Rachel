@@ -6,6 +6,7 @@ import { createNotification, notifyUsersByRole } from "@/app/dashboard/inbox/act
 import { JSA_STATUS } from "@/lib/jsa-status";
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_ROLES } from "@/lib/procedure-status";
 import { PTW_STATUS, PTW_STAGE_ROLES } from "@/lib/ptw-status";
+import { logDocumentEvent } from "@/lib/document-logs";
 
 // =====================================================================
 // FETCH FUNCTIONS
@@ -135,6 +136,21 @@ export async function getPendingPtw() {
   return data || [];
 }
 
+/** Full Prosedur/JSA/PTW history for a project, newest first — see document_logs. */
+export async function getDocumentLogs(projectId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('document_logs')
+    .select(`
+      id, doc_type, doc_id, action, notes, created_at,
+      profiles ( full_name, role )
+    `)
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+  if (error) { console.error("getDocumentLogs error:", error.message); return []; }
+  return data || [];
+}
+
 // =====================================================================
 // UPDATE FUNCTIONS
 // =====================================================================
@@ -174,6 +190,12 @@ export async function approveProcedure(procedureId: string) {
   // Notify: Get vendor (project owner) about approval
   const { data: proc } = await supabase.from('procedures').select('project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
   const proj: any = Array.isArray(proc?.projects) ? proc?.projects[0] : proc?.projects;
+  if (proc?.project_id) {
+    await logDocumentEvent(supabase, {
+      docType: 'procedure', docId: procedureId, projectId: proc.project_id, actorId: user.id,
+      action: 'Direview & Disetujui PM',
+    });
+  }
   if (proj?.vendor_id) {
     await createNotification({
       userId: proj.vendor_id,
@@ -218,6 +240,13 @@ export async function rejectProcedure(procedureId: string, note: string) {
     .eq('id', procedureId);
 
   if (error) throw new Error(error.message);
+
+  if (proc?.project_id) {
+    await logDocumentEvent(supabase, {
+      docType: 'procedure', docId: procedureId, projectId: proc.project_id, actorId: user.id,
+      action: 'Ditolak PM — Revisi Diperlukan', notes: note,
+    });
+  }
 
   // Notify vendor about rejection
   const proj: any = Array.isArray(proc?.projects) ? proc?.projects[0] : proc?.projects;
@@ -279,6 +308,13 @@ export async function approveJsa(jsaId: string) {
   const { data: jsa } = await supabase.from('jsa').select('project_id, projects ( name, vendor_id )').eq('id', jsaId).single();
   const proj: any = Array.isArray(jsa?.projects) ? jsa?.projects[0] : jsa?.projects;
 
+  if (jsa?.project_id) {
+    await logDocumentEvent(supabase, {
+      docType: 'jsa', docId: jsaId, projectId: jsa.project_id, actorId: user.id,
+      action: nextStatus === JSA_STATUS.approved ? 'Disetujui PGN' : 'Direview PGSOL',
+    });
+  }
+
   // Setelah review PGSOL selesai, giliran PGN yang harus bertindak.
   if (nextStatus === JSA_STATUS.approvalPgn) {
     await notifyUsersByRole({
@@ -338,6 +374,12 @@ export async function rejectJsa(jsaId: string, note: string) {
   // Notify vendor
   const { data: jsa } = await supabase.from('jsa').select('project_id, projects ( name, vendor_id )').eq('id', jsaId).single();
   const proj: any = Array.isArray(jsa?.projects) ? jsa?.projects[0] : jsa?.projects;
+  if (jsa?.project_id) {
+    await logDocumentEvent(supabase, {
+      docType: 'jsa', docId: jsaId, projectId: jsa.project_id, actorId: user.id,
+      action: `Ditolak ${penolak}`, notes: note,
+    });
+  }
   if (proj?.vendor_id) {
     await createNotification({
       userId: proj.vendor_id,
@@ -382,6 +424,19 @@ export async function approvePtw(ptwId: string) {
   // Notify vendor about PTW status
   const { data: ptw } = await supabase.from('ptw').select('project_id, status, ptw_number, projects ( name, vendor_id )').eq('id', ptwId).single();
   const proj: any = Array.isArray(ptw?.projects) ? ptw?.projects[0] : ptw?.projects;
+
+  if (ptw?.project_id) {
+    const stageAction = updatePayload.status === PTW_STATUS.aktif
+      ? `Nomor PTW Diterbitkan & Aktif (${updatePayload.ptw_number})`
+      : updatePayload.status === PTW_STATUS.reviewPtwIssuer
+        ? 'Disetujui PTW Authority (PM)'
+        : 'Disetujui PTW Issuer';
+    await logDocumentEvent(supabase, {
+      docType: 'ptw', docId: ptwId, projectId: ptw.project_id, actorId: user.id,
+      action: stageAction,
+    });
+  }
+
   if (proj?.vendor_id) {
     const isPtwActive = ptw?.status === PTW_STATUS.aktif;
     await createNotification({
@@ -449,6 +504,12 @@ export async function rejectPtw(ptwId: string, note: string) {
   // Notify vendor
   const { data: ptw } = await supabase.from('ptw').select('project_id, projects ( name, vendor_id )').eq('id', ptwId).single();
   const proj: any = Array.isArray(ptw?.projects) ? ptw?.projects[0] : ptw?.projects;
+  if (ptw?.project_id) {
+    await logDocumentEvent(supabase, {
+      docType: 'ptw', docId: ptwId, projectId: ptw.project_id, actorId: user.id,
+      action: 'Ditolak — Perlu Perbaikan', notes: note,
+    });
+  }
   if (proj?.vendor_id) {
     await createNotification({
       userId: proj.vendor_id,

@@ -3,10 +3,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
+import {
   Briefcase, MapPin, Calendar, AlertTriangle, Building2,
   FileSignature, ShieldAlert, Stamp, ArrowLeft, CheckCircle2, XCircle, X, Loader2, Check,
-  Users, Activity, FileText, MessageSquare, ChevronDown, ChevronUp
+  Users, Activity, FileText, MessageSquare, ChevronDown, ChevronUp, History, Sparkles
 } from 'lucide-react';
 import { ProjectDiscussion } from '@/components/project-discussion';
 import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, rejectPtw } from '@/app/dashboard/approval/actions';
@@ -19,6 +19,7 @@ import { JSA_STATUS, JSA_STAGE_ROLES, isJsaPending } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { EXPIRY_TONE } from '@/lib/document-expiry';
+import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const PDFViewer = dynamic(
@@ -30,6 +31,19 @@ const BlobProvider = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.BlobProvider),
   { ssr: false }
 );
+
+function docLogIcon(docType: DocLogType) {
+  if (docType === 'procedure') return FileText;
+  if (docType === 'jsa') return ShieldAlert;
+  return Stamp;
+}
+
+/** Colours a log entry by what happened, read off the action text set in lib/document-logs.ts callers. */
+function docLogTone(action: string) {
+  if (/ditolak/i.test(action)) return { text: 'text-rose-600', bg: 'bg-rose-50 border-rose-100', icon: XCircle };
+  if (/disetujui|direview|diterbitkan/i.test(action)) return { text: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', icon: CheckCircle2 };
+  return { text: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', icon: FileSignature };
+}
 
 function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -186,12 +200,14 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
 }
 
 export default function AdminProjectClient({
-  project, userRole, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry,
+  project, userRole, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs,
 }: {
   project: any, userRole: string, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
   /** worker_id / equipment_id -> 'expired' | 'expiring' | 'valid' | 'unknown', computed server-side against live master data. */
   workerExpiry?: Record<string, string>,
   equipmentExpiry?: Record<string, string>,
+  /** Full Prosedur/JSA/PTW audit trail for this project, newest first — see document_logs. */
+  documentLogs?: any[],
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -199,6 +215,9 @@ export default function AdminProjectClient({
   const [approveTarget, setApproveTarget] = useState<{ type: 'prosedur' | 'jsa' | 'ptw'; id: string } | null>(null);
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [fullScreenPreview, setFullScreenPreview] = useState<'prosedur' | 'jsa' | 'ptw' | null>(null);
+  const [hseLoading, setHseLoading] = useState(false);
+  const [hseAnomalies, setHseAnomalies] = useState<{ id: number; auto_comment: string }[] | null>(null);
+  const [hseError, setHseError] = useState<string | null>(null);
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
   // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda) — lihat lib/project-stage.ts
@@ -284,6 +303,47 @@ export default function AdminProjectClient({
     const names = [...workers.map((w: any) => w.worker_name), ...equipment.map((e: any) => e.name)];
     return `${names.join(', ')} memiliki kompetensi/dokumen yang sudah kedaluwarsa. Menyetujui PTW ini tetap mengizinkan mereka bekerja di lapangan.`;
   })();
+
+  /**
+   * AI HSE Assistant — scans this JSA's steps for high-risk work (confined
+   * space, hot work, electrical, etc.) paired with weak or passive
+   * mitigation, and drafts a revision comment per flagged step so the
+   * reviewer can send it to the vendor without writing it from scratch.
+   * A reviewer aid, not a gate — it never blocks approve/reject.
+   */
+  const handleHseAssistant = async () => {
+    if (!jsa?.jsa_steps?.length) return;
+    setHseLoading(true);
+    setHseError(null);
+    setHseAnomalies(null);
+    try {
+      const jsaData = jsa.jsa_steps.map((step: any) => {
+        let bahayaObj: any = {}; let tindakanObj: any = {};
+        try { bahayaObj = typeof step.bahaya === 'string' ? JSON.parse(step.bahaya) : step.bahaya || {}; } catch (e) {}
+        try { tindakanObj = typeof step.tindakan === 'string' ? JSON.parse(step.tindakan) : step.tindakan || {}; } catch (e) {}
+        return {
+          id: step.step_number,
+          langkah: step.pekerjaan,
+          jenisBahaya: bahayaObj.jenisBahaya || '',
+          potensiBahaya: bahayaObj.potensiBahaya || '',
+          mitigasi: tindakanObj.mitigasi || '',
+        };
+      });
+
+      const res = await fetch('/api/ai/hse-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsaData }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error || 'Gagal menjalankan analisis AI.');
+      setHseAnomalies(body.anomalies || []);
+    } catch (err) {
+      setHseError(err instanceof Error ? err.message : 'Gagal menjalankan analisis AI.');
+    } finally {
+      setHseLoading(false);
+    }
+  };
 
   const handleConfirmApprove = async () => {
     if (!approveTarget) return;
@@ -426,6 +486,9 @@ export default function AdminProjectClient({
         </button>
         <button onClick={() => setActiveTab('diskusi')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'diskusi' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
            <MessageSquare className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Diskusi</span>
+        </button>
+        <button onClick={() => setActiveTab('riwayat')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'riwayat' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <History className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Riwayat</span>
         </button>
       </div>
 
@@ -646,12 +709,52 @@ export default function AdminProjectClient({
                          </p>
                        </div>
                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                         <button
+                           onClick={handleHseAssistant}
+                           disabled={hseLoading || !jsa?.jsa_steps?.length}
+                           title="Minta AI memindai langkah kerja berisiko tinggi dengan mitigasi lemah"
+                           className="px-5 py-2.5 text-sm font-bold text-center text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                         >
+                           {hseLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                           Analisis Anomali AI
+                         </button>
                          <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
                          <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
                            {isTahapReviewPgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
                          </button>
                        </div>
                     </div>
+                    {hseError && (
+                      <div className="flex items-start gap-3 bg-rose-50 border-b border-rose-100 px-4 sm:px-6 py-4">
+                        <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                        <p className="text-sm text-rose-700">{hseError}</p>
+                      </div>
+                    )}
+                    {hseAnomalies && hseAnomalies.length === 0 && (
+                      <div className="flex items-start gap-3 bg-emerald-50 border-b border-emerald-100 px-4 sm:px-6 py-4">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <p className="text-sm text-emerald-700">AI tidak menemukan langkah berisiko tinggi dengan mitigasi lemah.</p>
+                      </div>
+                    )}
+                    {hseAnomalies && hseAnomalies.length > 0 && (
+                      <div className="bg-violet-50 border-b border-violet-100 px-4 sm:px-6 py-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-violet-600" />
+                          <p className="text-sm font-bold text-violet-900">{hseAnomalies.length} langkah ditandai AI untuk revisi</p>
+                        </div>
+                        {hseAnomalies.map(a => {
+                          const step = jsa?.jsa_steps?.find((s: any) => s.step_number === a.id);
+                          return (
+                            <div key={a.id} className="bg-white border border-violet-200 rounded-xl p-4">
+                              <p className="text-xs font-bold text-violet-700 uppercase tracking-wider mb-1">
+                                Langkah {a.id}{step?.pekerjaan ? ` — ${step.pekerjaan}` : ''}
+                              </p>
+                              <p className="text-sm text-slate-700">{a.auto_comment}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     <div className="bg-slate-100 p-2">
                       <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
                          <JsaPDF projectId={project.id} signatories={jsaSignatories} preparer={{ satker: project.vendor_profiles?.company_name }} steps={jsa?.jsa_steps?.map((step: any) => {
@@ -1024,6 +1127,56 @@ export default function AdminProjectClient({
       {activeTab === 'diskusi' && (
          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 p-4 sm:p-8 min-h-[600px]">
             <ProjectDiscussion projectId={project.id} currentUserId={currentUserId} />
+         </div>
+      )}
+
+      {activeTab === 'riwayat' && (
+         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 p-4 sm:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                <History className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">Riwayat Dokumen</h3>
+                <p className="text-xs text-slate-500">Jejak audit pengajuan, review, dan persetujuan Prosedur, JSA, dan PTW</p>
+              </div>
+            </div>
+
+            {!documentLogs || documentLogs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center py-16 gap-2 text-slate-400">
+                <History className="w-10 h-10 opacity-20" />
+                <p className="text-sm">Belum ada riwayat tercatat untuk proyek ini.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {documentLogs.map((log: any) => {
+                  const docType = log.doc_type as DocLogType;
+                  const DocIcon = docLogIcon(docType);
+                  const tone = docLogTone(log.action || '');
+                  const ToneIcon = tone.icon;
+                  const actor = Array.isArray(log.profiles) ? log.profiles[0] : log.profiles;
+                  return (
+                    <div key={log.id} className={`flex gap-3 p-4 rounded-xl border ${tone.bg}`}>
+                      <div className={`shrink-0 w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center ${tone.text}`}>
+                        <DocIcon className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{DOC_TYPE_LABEL[docType] ?? docType}</span>
+                          <span className={`inline-flex items-center gap-1 text-xs font-bold ${tone.text}`}>
+                            <ToneIcon className="w-3.5 h-3.5" /> {log.action}
+                          </span>
+                        </div>
+                        {log.notes && <p className="text-sm text-slate-600 mt-1">{log.notes}</p>}
+                        <p className="text-[11px] text-slate-400 mt-1.5">
+                          {actor?.full_name || 'Sistem'}{actor?.role ? ` · ${actor.role}` : ''} · {new Date(log.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
          </div>
       )}
 

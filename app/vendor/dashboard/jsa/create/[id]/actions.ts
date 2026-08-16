@@ -4,9 +4,11 @@ import { createClient } from "@/utils/supabase/server";
 import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 import { JSA_STATUS } from "@/lib/jsa-status";
 import { APPROVED_PROCEDURE } from "@/lib/project-stage";
+import { logDocumentEvent } from "@/lib/document-logs";
 
 export async function saveJsa(projectId: string, jsaData: any) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const { data: procedure } = await supabase
     .from('procedures')
@@ -70,6 +72,11 @@ export async function saveJsa(projectId: string, jsaData: any) {
     const { error: stepError } = await supabase.from('jsa_steps').insert(stepsToInsert);
     if (stepError) throw new Error(stepError.message);
   }
+
+  await logDocumentEvent(supabase, {
+    docType: 'jsa', docId: jsaId, projectId, actorId: user?.id,
+    action: existing ? 'JSA Diajukan Ulang' : 'JSA Diajukan',
+  });
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
   await notifyUsersByRole({

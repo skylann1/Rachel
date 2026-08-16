@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     const { object } = await generateObject({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-flash-latest'),
       system: 'Analisis baris-baris Job Safety Analysis (JSA) berikut. Cari baris di mana risiko bahaya tinggi (misal: ruang terbatas, api, listrik) tetapi mitigasinya sangat lemah atau pasif. Untuk setiap baris anomali yang ditemukan, kembalikan ID baris tersebut beserta draf komentar instruksi revisi yang spesifik agar HSE dapat langsung mengirimkannya ke vendor.',
       prompt: `Berikut adalah data JSA: ${JSON.stringify(jsaData)}`,
       schema: z.object({

@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     const { object } = await generateObject({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-flash-latest'),
       system: 'Anda adalah Ahli K3 Senior di industri Migas. Pengguna akan memberikan deskripsi langkah kerja (job step). Tugas Anda adalah mendeteksi 1 potensi bahaya utama (potential hazard) dan 1 tindakan pengendalian (mitigation) yang sesuai standar HSE. Jawab menggunakan bahasa Indonesia yang teknis dan padat.',
       prompt: `Langkah kerja: "${jobStep}"`,
       schema: z.object({

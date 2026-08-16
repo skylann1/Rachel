@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText, Sparkles, Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
@@ -46,6 +46,11 @@ export default function JSACreatePage() {
   ]);
   const [procSteps, setProcSteps] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [aiLoadingId, setAiLoadingId] = useState<number | null>(null);
+  const [aiError, setAiError] = useState<{ id: number; message: string } | null>(null);
+  const [gatekeeperLoading, setGatekeeperLoading] = useState(false);
+  const [gatekeeperResult, setGatekeeperResult] = useState<{ score: number; summary: string } | null>(null);
+  const [gatekeeperError, setGatekeeperError] = useState<string | null>(null);
 
   React.useEffect(() => {
     async function loadData() {
@@ -204,6 +209,58 @@ export default function JSACreatePage() {
     }));
   };
 
+  /** Fills in Potensi Bahaya + Mitigasi (Administrasi) from the AI Copilot given the step description. */
+  const handleAiSuggest = async (step: JsaStepData) => {
+    if (!step.langkah.trim() || aiLoadingId !== null) return;
+    setAiLoadingId(step.id);
+    setAiError(null);
+    try {
+      const res = await fetch('/api/ai/copilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobStep: step.langkah }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error || 'Gagal mendapat saran AI.');
+
+      setJsaSteps(prev => prev.map(s => s.id === step.id
+        ? { ...s, potensiBahaya: body.hazard, mitigasi: { ...s.mitigasi, administrasi: body.mitigation } }
+        : s));
+    } catch (err) {
+      setAiError({ id: step.id, message: err instanceof Error ? err.message : 'Gagal mendapat saran AI.' });
+    } finally {
+      setAiLoadingId(null);
+    }
+  };
+
+  /** AI Gatekeeper — a pre-submit compliance score so the vendor can catch a weak JSA before HSE does. */
+  const handleCheckGatekeeper = async () => {
+    setGatekeeperLoading(true);
+    setGatekeeperError(null);
+    setGatekeeperResult(null);
+    try {
+      const jsaData = jsaSteps.map(step => ({
+        langkah: step.langkah,
+        jenisBahaya: step.jenisBahaya,
+        sebab: step.sebab,
+        potensiBahaya: step.potensiBahaya,
+        mitigasi: step.mitigasi,
+      }));
+      const res = await fetch('/api/ai/gatekeeper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsaData }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error || 'Gagal mengecek skor kepatuhan AI.');
+      setGatekeeperResult(body);
+    } catch (err) {
+      setGatekeeperError(err instanceof Error ? err.message : 'Gagal mengecek skor kepatuhan AI.');
+    } finally {
+      setGatekeeperLoading(false);
+    }
+  };
+
   const handleSimpan = async () => {
     setIsSaving(true);
     try {
@@ -238,6 +295,10 @@ export default function JSACreatePage() {
           </h1>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={handleCheckGatekeeper} disabled={gatekeeperLoading} className="px-5 py-3 bg-violet-50 text-violet-700 border border-violet-200 text-sm font-bold rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-colors flex items-center gap-2">
+            {gatekeeperLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+            Cek Skor Kepatuhan AI
+          </button>
           <button onClick={handleSimpan} disabled={isSaving} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
             {isSaving ? (
               <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</span>
@@ -247,6 +308,29 @@ export default function JSACreatePage() {
           </button>
         </div>
       </div>
+
+      {gatekeeperError && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-sm text-rose-700">
+          {gatekeeperError}
+        </div>
+      )}
+
+      {gatekeeperResult && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+          <div className={`shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center font-black text-2xl ${
+            gatekeeperResult.score >= 80 ? 'bg-emerald-50 text-emerald-600' : gatekeeperResult.score >= 50 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
+          }`}>
+            {gatekeeperResult.score}
+            <span className="text-[9px] font-bold uppercase tracking-wider -mt-1">/ 100</span>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-violet-500" /> Skor Kepatuhan AI
+            </p>
+            <p className="text-sm text-slate-700 mt-1">{gatekeeperResult.summary}</p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 bg-slate-50 border-b border-slate-200">
@@ -301,7 +385,25 @@ export default function JSACreatePage() {
               {jsaSteps.map((step, index) => (
                 <tr key={step.id} className="hover:bg-slate-50/50 border-b border-slate-200">
                   <td className="border border-slate-300 p-2 text-center align-top font-bold text-slate-500">{index + 1}</td>
-                  <td className="border border-slate-300 p-1 align-top"><textarea value={step.langkah} onChange={(e) => updateStepText(step.id, 'langkah', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Tuliskan langkah pekerjaan..." /></td>
+                  <td className="border border-slate-300 p-1 align-top">
+                    <textarea value={step.langkah} onChange={(e) => updateStepText(step.id, 'langkah', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Tuliskan langkah pekerjaan..." />
+                    <button
+                      type="button"
+                      onClick={() => handleAiSuggest(step)}
+                      disabled={!step.langkah.trim() || aiLoadingId !== null}
+                      title="Minta AI menyarankan potensi bahaya & mitigasi dari langkah kerja ini"
+                      className="mt-1 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {aiLoadingId === step.id ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> Menganalisis...</>
+                      ) : (
+                        <><Sparkles className="w-3 h-3" /> Saran AI</>
+                      )}
+                    </button>
+                    {aiError?.id === step.id && (
+                      <p className="text-[9px] text-rose-500 mt-1 leading-snug">{aiError.message}</p>
+                    )}
+                  </td>
                   <td className="border border-slate-300 p-1 align-top"><select value={step.jenisBahaya} onChange={(e) => updateStepText(step.id, 'jenisBahaya', e.target.value)} className="w-full p-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-primary">{BAHAYA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></td>
                   <td className="border border-slate-300 p-1 align-top"><textarea value={step.sebab} onChange={(e) => updateStepText(step.id, 'sebab', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Sebab / sumber bahaya..." /></td>
                   <td className="border border-slate-300 p-1 align-top"><textarea value={step.potensiBahaya} onChange={(e) => updateStepText(step.id, 'potensiBahaya', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Potensi bahaya..." /></td>

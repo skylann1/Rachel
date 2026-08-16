@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     const { object } = await generateObject({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-flash-latest'),
       system: 'Evaluasi dokumen Job Safety Analysis (JSA) berikut. Berikan skor kepatuhan K3 (0-100) berdasarkan kelengkapan identifikasi bahaya dan ketegasan mitigasi. Jika ada mitigasi yang bersifat pasif (misal: "berhati-hati", "waspada"), kurangi skor secara drastis. Kembalikan JSON berisi "score" dan "summary" singkat.',
       prompt: `Berikut adalah baris JSA yang diinput vendor: ${JSON.stringify(jsaData)}`,
       schema: z.object({

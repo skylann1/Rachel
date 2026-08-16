@@ -5,6 +5,7 @@ import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 import { APPROVED_JSA } from "@/lib/project-stage";
 import { PTW_STATUS } from "@/lib/ptw-status";
 import type { PtwFormDetails } from "@/lib/ptw-types";
+import { logDocumentEvent } from "@/lib/document-logs";
 
 /** Tanggal proyek, dipakai sebagai nilai awal masa berlaku PTW di form. */
 export async function getProjectPeriod(projectId: string) {
@@ -49,6 +50,7 @@ export async function savePtw(
   details: PtwFormDetails = {}
 ) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const { data: jsa } = await supabase
     .from('jsa')
@@ -76,6 +78,8 @@ export async function savePtw(
     .eq('ptw_type', ptwType)
     .maybeSingle();
 
+  let ptwId = existing?.id;
+
   if (existing) {
     const { error } = await supabase
       .from('ptw')
@@ -96,7 +100,7 @@ export async function savePtw(
       throw new Error(error.message);
     }
   } else {
-    const { error } = await supabase
+    const { data: created, error } = await supabase
       .from('ptw')
       .insert({
         project_id: projectId,
@@ -108,12 +112,22 @@ export async function savePtw(
         gas_tests: gasTests,
         ...formDetails,
         status: PTW_STATUS.menungguApprovalPM
-      });
+      })
+      .select('id')
+      .single();
 
     if (error) {
       console.error(error);
       throw new Error(error.message);
     }
+    ptwId = created?.id;
+  }
+
+  if (ptwId) {
+    await logDocumentEvent(supabase, {
+      docType: 'ptw', docId: ptwId, projectId, actorId: user?.id,
+      action: existing ? `PTW Diajukan Ulang (${ptwType})` : `PTW Diajukan (${ptwType})`,
+    });
   }
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();

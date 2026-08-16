@@ -3,9 +3,11 @@
 import { createClient } from "@/utils/supabase/server";
 import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
+import { logDocumentEvent } from "@/lib/document-logs";
 
 export async function saveProsedur(projectId: string, payload: any) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   // check if procedure already exists
   const { data: existing } = await supabase
@@ -13,6 +15,8 @@ export async function saveProsedur(projectId: string, payload: any) {
     .select('id')
     .eq('project_id', projectId)
     .single();
+
+  let procedureId = existing?.id;
 
   if (existing) {
     const { error } = await supabase
@@ -22,15 +26,25 @@ export async function saveProsedur(projectId: string, payload: any) {
 
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await supabase
+    const { data: created, error } = await supabase
       .from('procedures')
       .insert({
         project_id: projectId,
         content: payload,
         status: PROCEDURE_STATUS.menungguReviewPM
-      });
+      })
+      .select('id')
+      .single();
 
     if (error) throw new Error(error.message);
+    procedureId = created?.id;
+  }
+
+  if (procedureId) {
+    await logDocumentEvent(supabase, {
+      docType: 'procedure', docId: procedureId, projectId, actorId: user?.id,
+      action: existing ? 'Revisi Diajukan Ulang' : 'Prosedur Kerja Diajukan',
+    });
   }
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();

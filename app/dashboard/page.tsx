@@ -132,7 +132,7 @@ export default async function DashboardOverviewPage({
      supabase.from('jsa').select('status, created_at, reviewed_at, approved_at'),
      supabase.from('ptw').select('status, workers, valid_from, valid_to, ptw_type, hazards, ptw_number, created_at, authority_approved_at, issuer_approved_at, projects ( name, end_date )'),
      supabase.from('inspections').select('status, finding_type, priority, created_at, location, target_vendor, vendor_profiles:target_vendor ( company_name )'),
-     supabase.from('incidents').select('type, incident_date, status, location, rca_root_cause'),
+     supabase.from('incidents').select('type, incident_date, incident_time, status, location, rca_root_cause'),
    ]);
 
    const vendorsCount = (vendors || []).length;
@@ -286,6 +286,42 @@ export default async function DashboardOverviewPage({
    const insidenTipe = SEVERITY_ORDER
      .map(tipe => ({ tipe, value: incidentList.filter(i => i.type === tipe).length }))
      .filter(t => t.value > 0);
+
+   // ------------------------------------------------- incident time pattern
+   // When during the week/day incidents actually happen — read against the
+   // full history (not the period filter) since a single month rarely has
+   // enough incidents for the pattern to mean anything.
+   const incidentMoments = incidentList
+     .map(i => {
+       const d = new Date(i.incident_date);
+       const hour = i.incident_time ? parseInt(String(i.incident_time).slice(0, 2), 10) : NaN;
+       if (isNaN(d.getTime()) || isNaN(hour)) return null;
+       return { weekday: d.getDay(), hour };
+     })
+     .filter((m): m is { weekday: number; hour: number } => m !== null);
+
+   const WEEKDAY_LABEL = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
+   const incidentByWeekday = WEEKDAY_LABEL.map((hari, idx) => ({
+     hari,
+     value: incidentMoments.filter(m => m.weekday === idx).length,
+   }));
+
+   const HOUR_SEGMENTS = [
+     { segmen: '00–06 (Dini Hari)', from: 0, to: 6 },
+     { segmen: '06–12 (Pagi)', from: 6, to: 12 },
+     { segmen: '12–18 (Siang/Sore)', from: 12, to: 18 },
+     { segmen: '18–24 (Malam)', from: 18, to: 24 },
+   ];
+   const incidentByHour = HOUR_SEGMENTS.map(({ segmen, from, to }) => ({
+     segmen,
+     value: incidentMoments.filter(m => m.hour >= from && m.hour < to).length,
+   }));
+
+   const incidentPattern = {
+     weekday: incidentByWeekday,
+     hour: incidentByHour,
+     sampleSize: incidentMoments.length,
+   };
 
    // ------------------------------------------------- lagging safety rates
    // TRIR and LTIFR use the standard OSHA/ILO constants. Man-hours here are an
@@ -508,6 +544,7 @@ export default async function DashboardOverviewPage({
      vendorScorecard,
      jadwal: { onSchedule, terlambat },
      insidenTipe,
+     incidentPattern,
      daysWithoutIncident,
      streakLabel,
      totalIncidents: incidentList.length,

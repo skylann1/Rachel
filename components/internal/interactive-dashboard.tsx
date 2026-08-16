@@ -23,6 +23,11 @@ export interface DashboardData {
   vendorScorecard: { nama: string; anomali: number; terbuka: number; positif: number; total: number; rasio: number }[];
   jadwal: { onSchedule: number; terlambat: number };
   insidenTipe: { tipe: string; value: number }[];
+  incidentPattern: {
+    weekday: { hari: string; value: number }[];
+    hour: { segmen: string; value: number }[];
+    sampleSize: number;
+  };
   daysWithoutIncident: number | null;
   streakLabel: string;
   totalIncidents: number;
@@ -266,7 +271,7 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
   const [detailConfig, setDetailConfig] = useState<DetailModalConfig | null>(null);
 
   const {
-    trend, pipeline, prioritas, anomali, jadwal, insidenTipe, daysWithoutIncident,
+    trend, pipeline, prioritas, anomali, jadwal, insidenTipe, incidentPattern, daysWithoutIncident,
     streakLabel, totalIncidents, vendorScorecard,
     safetyRates, pyramid, investigasi, ptwByType, ptwExpiring, cycleTime,
     aging, oldestOpenDays, topHazards, hotspots, csms, progresMix,
@@ -289,6 +294,10 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
   const csmsTotal = csms.reduce((s, c) => s + c.value, 0);
   const investigasiTotal = investigasi.selesai + investigasi.menunggu;
   const progresTotal = progresMix.unggul + progresMix.sesuai + progresMix.tertinggal;
+  const weekdayMax = Math.max(1, ...incidentPattern.weekday.map(w => w.value));
+  const hourMax = Math.max(1, ...incidentPattern.hour.map(h => h.value));
+  const peakWeekday = [...incidentPattern.weekday].sort((a, b) => b.value - a.value)[0];
+  const peakHour = [...incidentPattern.hour].sort((a, b) => b.value - a.value)[0];
 
   const fmtRate = (v: number | null) => (v === null ? '—' : v.toFixed(2));
 
@@ -510,6 +519,60 @@ export function InteractiveDashboard({ data }: { data: DashboardData }) {
                 </p>
               </div>
             </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ------------------------------------- Section: incident time pattern */}
+      <SectionHeading
+        icon={CalendarClock}
+        title="Pola Waktu Insiden"
+        desc="Kapan insiden paling sering terjadi — dasar untuk menambah pengawasan di jam/hari rawan"
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card
+          title="Hari Rawan Insiden"
+          subtitle="Sebaran insiden per hari dalam seminggu — sepanjang waktu"
+          className="animate-fade-up"
+        >
+          {incidentPattern.sampleSize === 0 ? (
+            <EmptyHint label="Belum ada insiden dengan tanggal & jam yang tercatat." />
+          ) : (
+            <>
+              <div className="space-y-2.5 flex-1">
+                {incidentPattern.weekday.map(w => (
+                  <BarRow key={w.hari} label={w.hari} value={w.value} max={weekdayMax} color={C.anomali} />
+                ))}
+              </div>
+              {peakWeekday && peakWeekday.value > 0 && (
+                <p className="text-[10px] text-slate-400 mt-3 leading-snug">
+                  Paling sering: <span className="font-bold text-slate-600">{peakWeekday.hari}</span> — pertimbangkan pengawasan ekstra di hari ini.
+                </p>
+              )}
+            </>
+          )}
+        </Card>
+
+        <Card
+          title="Jam Rawan Insiden"
+          subtitle="Sebaran insiden per segmen waktu — sepanjang waktu"
+          className="animate-fade-up"
+        >
+          {incidentPattern.sampleSize === 0 ? (
+            <EmptyHint label="Belum ada insiden dengan tanggal & jam yang tercatat." />
+          ) : (
+            <>
+              <div className="space-y-2.5 flex-1">
+                {incidentPattern.hour.map(h => (
+                  <BarRow key={h.segmen} label={h.segmen} value={h.value} max={hourMax} color={C.anomali} />
+                ))}
+              </div>
+              {peakHour && peakHour.value > 0 && (
+                <p className="text-[10px] text-slate-400 mt-3 leading-snug">
+                  Paling sering: <span className="font-bold text-slate-600">{peakHour.segmen}</span> — pertimbangkan pengawasan ekstra di jam ini.
+                </p>
+              )}
+            </>
           )}
         </Card>
       </div>

@@ -6,6 +6,7 @@ import AdminProjectClient from './AdminProjectClient';
 import { getJsaSignatories } from '@/lib/jsa-signatories';
 import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { worstExpiry } from '@/lib/document-expiry';
+import { getDocumentLogs } from '@/app/dashboard/approval/actions';
 
 export default async function AdminProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -97,6 +98,8 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
     equipmentExpiry[id] = worstExpiry((equipmentDocs || []).filter(d => d.equipment_id === id).map(d => d.valid_to));
   }
 
+  const documentLogs = await getDocumentLogs(projectId);
+
   return (
     <div className="p-8 pb-20 bg-slate-50 min-h-screen">
       <AdminProjectClient
@@ -107,6 +110,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
         ptwSignatories={ptwSignatories}
         workerExpiry={workerExpiry}
         equipmentExpiry={equipmentExpiry}
+        documentLogs={documentLogs}
       />
     </div>
   );
