@@ -170,12 +170,8 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
     const notes = formData.get('notes') as string;
 
     try {
-      const realTargets = disposisiTargets.filter(t => !t.id.includes('dummy'));
-      const hadDummy = realTargets.length !== disposisiTargets.length;
+      await Promise.all(disposisiTargets.map(t => delegateMonitoringTask(t.id, assigneeId, notes)));
 
-      await Promise.all(realTargets.map(t => delegateMonitoringTask(t.id, assigneeId, notes)));
-
-      if (hadDummy) alert('Sebagian data adalah dummy data — disposisi untuk data tersebut disimulasikan.');
       alert(disposisiTargets.length > 1 ? `Berhasil mendisposisikan ${disposisiTargets.length} tugas pengawasan!` : 'Berhasil mendisposisikan pengawasan lapangan!');
 
       const targetKeys = new Set(disposisiTargets.map(taskKey));
