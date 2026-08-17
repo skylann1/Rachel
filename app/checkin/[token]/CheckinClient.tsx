@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, Users, ClipboardList, LogIn, LogOut, Siren, CheckCircle2, MapPin, Building2 } from 'lucide-react';
 import { PTW_STATUS } from '@/lib/ptw-status';
@@ -33,6 +33,10 @@ export default function CheckinClient({
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  // React state updates aren't synchronous, so a fast double-click/double-tap
+  // can fire two handlers before `loading` re-renders the button as disabled.
+  // This ref blocks re-entrant calls immediately, in the same tick.
+  const busyRef = useRef(false);
   const [showStopForm, setShowStopForm] = useState(false);
   const [stopReporter, setStopReporter] = useState('');
   const [stopReason, setStopReason] = useState('');
@@ -46,6 +50,8 @@ export default function CheckinClient({
   const isStopped = effectiveStatus === PTW_STATUS.stoppedSwa;
 
   const run = async (fn: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setLoading(true);
     try {
       await fn();
@@ -53,6 +59,7 @@ export default function CheckinClient({
     } catch (e) {
       alert('Error: ' + (e as Error).message);
     } finally {
+      busyRef.current = false;
       setLoading(false);
     }
   };

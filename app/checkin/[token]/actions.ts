@@ -53,13 +53,30 @@ export async function logToolboxMeeting(token: string, params: { topics: string;
 export async function checkInWorker(token: string, workerName: string) {
   const { supabase, ptw } = await resolvePtwByToken(token);
   if (ptw.status !== PTW_STATUS.aktif) throw new Error("PTW tidak sedang aktif — check-in tidak bisa dilakukan.");
-  if (!workerName?.trim()) throw new Error("Nama pekerja wajib diisi.");
+  const name = workerName?.trim();
+  if (!name) throw new Error("Nama pekerja wajib diisi.");
+
+  // Fast-path guard: skip the insert if this worker already has an open
+  // check-in (double-click, re-submitted form, etc). Not race-proof on its
+  // own — the DB has a matching unique index (idx_site_checkins_one_open_per_worker)
+  // as the real guarantee; a 23505 from that is treated as a harmless no-op below.
+  const { data: existing } = await supabase
+    .from('site_checkins')
+    .select('id')
+    .eq('ptw_id', ptw.id)
+    .eq('worker_name', name)
+    .is('checked_out_at', null)
+    .maybeSingle();
+  if (existing) {
+    revalidatePath(`/checkin/${token}`);
+    return;
+  }
 
   const { error } = await supabase.from('site_checkins').insert({
     ptw_id: ptw.id,
-    worker_name: workerName.trim(),
+    worker_name: name,
   });
-  if (error) throw new Error(error.message);
+  if (error && error.code !== '23505') throw new Error(error.message);
 
   revalidatePath(`/checkin/${token}`);
   revalidatePath('/dashboard/site-status');

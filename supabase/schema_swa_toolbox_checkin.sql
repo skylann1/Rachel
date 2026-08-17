@@ -38,7 +38,13 @@ CREATE TABLE IF NOT EXISTS public.site_checkins (
 );
 
 CREATE INDEX IF NOT EXISTS idx_toolbox_meetings_ptw_date ON public.toolbox_meetings(ptw_id, meeting_date);
-CREATE INDEX IF NOT EXISTS idx_site_checkins_ptw_open ON public.site_checkins(ptw_id) WHERE checked_out_at IS NULL;
+
+-- Guards against duplicate check-ins at the database level (double-click,
+-- double-tap, or a retried request all race the same insert) — at most one
+-- OPEN check-in per worker per PTW. The app layer also checks before
+-- inserting, but only this constraint is race-proof.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_checkins_one_open_per_worker
+  ON public.site_checkins(ptw_id, worker_name) WHERE checked_out_at IS NULL;
 
 ALTER TABLE public.toolbox_meetings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_checkins ENABLE ROW LEVEL SECURITY;
