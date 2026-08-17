@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren } from 'lucide-react';
+import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen } from 'lucide-react';
 
 const menuUtama = [
   { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard, permission: { module: 'dashboard', action: 'view' } },
@@ -15,6 +15,7 @@ const menuUtama = [
   { name: 'Status Lapangan', href: '/dashboard/site-status', icon: Siren, permission: { module: 'siteOps', action: 'view' } },
   { name: 'Arsip Proyek', href: '/dashboard/archive', icon: Archive, permission: { module: 'approval', action: 'view' } },
   { name: 'Dokumen Vendor', href: '/dashboard/vendor-docs', icon: ClipboardList, permission: { module: 'vendorDocs', action: 'view' } },
+  { name: 'Panduan Alur K3', href: '/dashboard/panduan', icon: BookOpen, permission: { module: 'dashboard', action: 'view' } },
 ];
 
 const masterData = [

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight, BookOpen } from "lucide-react";
 import { logout } from "@/app/vendor/login/actions";
 
 const menuUtama = [
@@ -12,6 +12,7 @@ const menuUtama = [
   { name: 'Proyek Aktif', href: '/vendor/dashboard/projects', icon: Briefcase },
   { name: 'Inbox Temuan K3', href: '/vendor/dashboard/inspection', icon: AlertTriangle },
   { name: 'Laporan Insiden', href: '/vendor/dashboard/incident', icon: AlertTriangle, danger: true },
+  { name: 'Panduan Alur K3', href: '/vendor/dashboard/panduan', icon: BookOpen },
 ];
 
 const masterData = [
