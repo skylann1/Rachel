@@ -65,6 +65,16 @@ export const allPermissionModules = [
       { key: 'approve_pm', label: 'Approval Tahap PM (PTW Authority)' },
       { key: 'review_issuer', label: 'Review Tahap PTW Issuer' },
       { key: 'numbering_hsse', label: 'Penomoran & Penerbitan PTW (HSSE)' },
+      { key: 'resume_work', label: 'Membatalkan Stop Work Authority (Resume PTW)' },
+    ]
+  },
+  {
+    id: 'siteOps',
+    title: 'Toolbox Meeting & Kehadiran Lapangan',
+    description: 'Status toolbox meeting harian dan siapa saja yang sedang check-in di lokasi kerja lewat halaman QR check-in.',
+    items: [
+      { key: 'view', label: 'Melihat Status Kehadiran & Toolbox Meeting' },
+      { key: 'manage', label: 'Mencatat Toolbox Meeting dari Dashboard' },
     ]
   },
   {

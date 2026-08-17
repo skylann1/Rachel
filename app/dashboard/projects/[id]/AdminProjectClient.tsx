@@ -6,20 +6,23 @@ import { useRouter } from 'next/navigation';
 import {
   Briefcase, MapPin, Calendar, AlertTriangle, Building2,
   FileSignature, ShieldAlert, Stamp, ArrowLeft, CheckCircle2, XCircle, X, Loader2, Check,
-  Users, Activity, FileText, MessageSquare, ChevronDown, ChevronUp, History, Sparkles
+  Users, Activity, FileText, MessageSquare, ChevronDown, ChevronUp, History, Sparkles, QrCode, Siren,
+  ClipboardList, LogIn, Clock
 } from 'lucide-react';
 import { ProjectDiscussion } from '@/components/project-discussion';
-import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, rejectPtw } from '@/app/dashboard/approval/actions';
+import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, rejectPtw, resumePtw } from '@/app/dashboard/approval/actions';
 import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
+import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { EXPIRY_TONE } from '@/lib/document-expiry';
 import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
+import { buildCheckinUrl } from '@/lib/site-ops';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const PDFViewer = dynamic(
@@ -201,6 +204,7 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
 
 export default function AdminProjectClient({
   project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, permissions,
+  siteCheckins, toolboxMeetings,
 }: {
   project: any, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
   /** worker_id / equipment_id -> 'expired' | 'expiring' | 'valid' | 'unknown', computed server-side against live master data. */
@@ -210,6 +214,10 @@ export default function AdminProjectClient({
   documentLogs?: any[],
   /** roles.permissions milik user saat ini — sumber kebenaran gerbang approve/reject, lihat utils/permissions.ts. */
   permissions?: Record<string, string[]> | null,
+  /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
+  siteCheckins?: any[],
+  /** Riwayat toolbox meeting (toolbox_meetings) lintas semua PTW proyek ini, terbaru dulu. */
+  toolboxMeetings?: any[],
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -220,11 +228,33 @@ export default function AdminProjectClient({
   const [hseLoading, setHseLoading] = useState(false);
   const [hseAnomalies, setHseAnomalies] = useState<{ id: number; auto_comment: string }[] | null>(null);
   const [hseError, setHseError] = useState<string | null>(null);
+  const [qrModalToken, setQrModalToken] = useState<string | null>(null);
+  const [resumingId, setResumingId] = useState<string | null>(null);
+
+  const canResumeWork = !!permissions?.['ptw']?.includes('resume_work');
+
+  const handleResumePtw = async (ptwId: string) => {
+    setResumingId(ptwId);
+    try {
+      await resumePtw(ptwId);
+      router.refresh();
+    } catch (e) {
+      alert('Error: ' + (e as Error).message);
+    } finally {
+      setResumingId(null);
+    }
+  };
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
   // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda) — lihat lib/project-stage.ts
   const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
   const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
+
+  // Tab "Status Lapangan" — check-in/toolbox meeting lintas semua tipe PTW proyek ini.
+  const ptwTitleById = Object.fromEntries(ptws.map(p => [p.id, PTW_TYPES.find(t => t.id === p.ptw_type)?.title.split('(')[0].trim() || p.ptw_type]));
+  const openSiteCheckins = (siteCheckins || []).filter(c => !c.checked_out_at);
+  const closedSiteCheckins = (siteCheckins || []).filter(c => c.checked_out_at);
+  const openCheckinsCount = openSiteCheckins.length;
 
   const prosedurRevisions = prosedur?.content?.revisions || [];
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
@@ -235,9 +265,11 @@ export default function AdminProjectClient({
   // PTW tahap proyek: hijau hanya kalau SEMUA tipe PTW yang diajukan sudah Aktif.
   const ptwEffectiveStatuses = ptws.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date));
   const ptwAnyExpired = ptwEffectiveStatuses.some(s => s === PTW_STATUS.expired);
+  const ptwAnyStopped = ptwEffectiveStatuses.some(s => s === PTW_STATUS.stoppedSwa);
   const ptwAllAktif = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.aktif);
   const ptwAnyRejected = ptws.some(p => p.status === PTW_STATUS.draft && p.rejection_note);
-  const ptwStatus = ptwAnyExpired ? 'Expired'
+  const ptwStatus = ptwAnyStopped ? 'Stopped'
+    : ptwAnyExpired ? 'Expired'
     : ptwAllAktif ? 'Approved'
     : ptwAnyRejected ? 'Rejected'
     : ptws.length > 0 ? 'Pending' : 'Draft';
@@ -249,6 +281,7 @@ export default function AdminProjectClient({
       case 'Pending': return 'bg-amber-400 text-white border-amber-400';
       case 'Rejected': return 'bg-rose-500 text-white border-rose-500';
       case 'Expired': return 'bg-slate-400 text-white border-slate-400';
+      case 'Stopped': return 'bg-red-600 text-white border-red-600';
       default: return 'bg-slate-100 text-slate-400 border-slate-200';
     }
   };
@@ -260,6 +293,7 @@ export default function AdminProjectClient({
     if (status === 'Pending') return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded font-bold uppercase">{detailedStatus || 'Menunggu Review'}</span>;
     if (status === 'Rejected') return <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Ditolak / Revisi</span>;
     if (status === 'Expired') return <span className="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Kedaluwarsa</span>;
+    if (status === 'Stopped') return <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Stop Work</span>;
     return <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Belum Dibuat</span>;
   };
 
@@ -439,6 +473,13 @@ export default function AdminProjectClient({
         />
       )}
 
+      {qrModalToken && (
+        <CheckinQrModal
+          url={buildCheckinUrl(qrModalToken, typeof window !== 'undefined' ? window.location.origin : undefined)}
+          onClose={() => setQrModalToken(null)}
+        />
+      )}
+
       {/* Top Nav & Header */}
       <div>
         <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-primary transition-colors mb-4">
@@ -489,6 +530,10 @@ export default function AdminProjectClient({
         </button>
         <button onClick={() => setActiveTab('tim')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'tim' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
            <Users className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Tim Lapangan</span>
+        </button>
+        <button onClick={() => setActiveTab('lapangan')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'lapangan' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <Siren className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Status Lapangan</span>
+           {openCheckinsCount > 0 && <span className="ml-0.5 text-[10px] font-black bg-emerald-500 text-white rounded-full w-4 h-4 flex items-center justify-center">{openCheckinsCount}</span>}
         </button>
         <button onClick={() => setActiveTab('diskusi')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'diskusi' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
            <MessageSquare className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Diskusi</span>
@@ -1029,19 +1074,43 @@ export default function AdminProjectClient({
                     ) : (
                       ptws.map(row => {
                         const rowEffective = getEffectivePtwStatus(row.status, row.valid_to ?? project.end_date);
-                        const rowIsReference = rowEffective === PTW_STATUS.aktif || rowEffective === PTW_STATUS.expired;
+                        const rowIsStopped = rowEffective === PTW_STATUS.stoppedSwa;
+                        const rowIsReference = rowEffective === PTW_STATUS.aktif || rowEffective === PTW_STATUS.expired || rowIsStopped;
                         const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
 
                         return rowIsReference ? (
-                          <div key={row.id} className="bg-white border border-emerald-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-full -z-10 transition-transform group-hover:scale-110"></div>
-                             <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
-                                <Stamp className="w-6 h-6" />
+                          <div key={row.id} className={`bg-white border rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group ${rowIsStopped ? 'border-red-200' : 'border-emerald-100'}`}>
+                             <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-full -z-10 transition-transform group-hover:scale-110 ${rowIsStopped ? 'bg-red-50' : 'bg-emerald-50'}`}></div>
+                             <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${rowIsStopped ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                {rowIsStopped ? <Siren className="w-6 h-6" /> : <Stamp className="w-6 h-6" />}
                              </div>
                              <h3 className="font-bold text-slate-800 text-lg">{rowTitle}</h3>
-                             <p className="text-sm text-slate-500 mt-1 mb-6">
-                               {rowEffective === PTW_STATUS.expired ? 'Surat Izin Kerja Aman (SIKA) yang telah kedaluwarsa.' : 'Surat Izin Kerja Aman (SIKA) yang telah aktif.'}
+                             <p className="text-sm text-slate-500 mt-1 mb-3">
+                               {rowIsStopped ? 'Dihentikan lewat Stop Work Authority dari lapangan.' : rowEffective === PTW_STATUS.expired ? 'Surat Izin Kerja Aman (SIKA) yang telah kedaluwarsa.' : 'Surat Izin Kerja Aman (SIKA) yang telah aktif.'}
                              </p>
+                             {rowIsStopped && (
+                               <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-xs text-red-800 space-y-1">
+                                 <p><strong>Dilaporkan oleh:</strong> {row.stopped_by_name}</p>
+                                 <p><strong>Alasan:</strong> {row.stopped_reason}</p>
+                                 {canResumeWork && (
+                                   <button
+                                     disabled={resumingId === row.id}
+                                     onClick={() => handleResumePtw(row.id)}
+                                     className="w-full mt-2 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                                   >
+                                     {resumingId === row.id ? 'Memproses...' : 'Aktifkan Kembali PTW'}
+                                   </button>
+                                 )}
+                               </div>
+                             )}
+                             {row.field_token && !rowIsStopped && (
+                               <button
+                                 onClick={() => setQrModalToken(row.field_token)}
+                                 className="w-full mb-2 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors"
+                               >
+                                 <QrCode className="w-4 h-4" /> QR Check-in Lapangan
+                               </button>
+                             )}
                              <BlobProvider document={
                                <PtwPDF
                                  projectId={project.id}
@@ -1126,6 +1195,111 @@ export default function AdminProjectClient({
                 </div>
               )}
             </div>
+         </div>
+      )}
+
+      {/* --- TAB CONTENT: STATUS LAPANGAN --- */}
+      {activeTab === 'lapangan' && (
+         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {ptws.filter(p => p.field_token).length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl border border-slate-200 border-dashed shadow-sm text-center">
+                <Siren className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 text-sm">Belum ada PTW aktif dengan QR Check-in untuk proyek ini.</p>
+              </div>
+            ) : (
+              <>
+                {/* QR per tipe PTW */}
+                <div className="bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
+                  <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2"><QrCode className="w-5 h-5 text-primary" /> QR Check-in per Izin Kerja</h2>
+                  <p className="text-slate-500 mb-5 text-sm">Tampilkan/cetak QR ini di lokasi kerja — siapa pun bisa scan untuk toolbox meeting, check-in/out, dan Stop Work Authority tanpa login.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {ptws.filter(p => p.field_token).map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setQrModalToken(p.field_token)}
+                        className="flex items-center justify-between gap-2 p-4 border border-slate-200 rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                      >
+                        <div>
+                          <div className="font-bold text-sm text-slate-800">{ptwTitleById[p.id]}</div>
+                          <div className="text-xs text-slate-400">{p.ptw_number || 'Belum bernomor'}</div>
+                        </div>
+                        <QrCode className="w-5 h-5 text-primary shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sedang check-in */}
+                <div className="bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
+                  <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-primary" /> Sedang Check-in di Lokasi
+                    <span className="text-xs font-black bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">{openCheckinsCount}</span>
+                  </h2>
+                  <p className="text-slate-500 mb-5 text-sm">Pekerja yang check-in lewat QR dan belum check-out.</p>
+                  {openSiteCheckins.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                      <LogIn className="w-10 h-10 text-slate-300 mb-2" />
+                      <p className="text-sm text-slate-400">Tidak ada yang sedang check-in saat ini.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {openSiteCheckins.map((c: any) => (
+                        <div key={c.id} className="flex items-center justify-between gap-2 p-3 border border-slate-100 rounded-xl">
+                          <div>
+                            <p className="font-bold text-sm text-slate-800">{c.worker_name}</p>
+                            <p className="text-xs text-slate-400">{ptwTitleById[c.ptw_id]}</p>
+                          </div>
+                          <span className="flex items-center gap-1 text-xs text-slate-500"><Clock className="w-3.5 h-3.5" /> Sejak {new Date(c.checked_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {closedSiteCheckins.length > 0 && (
+                    <details className="mt-4">
+                      <summary className="text-xs font-bold text-slate-400 cursor-pointer hover:text-slate-600">Riwayat check-out ({closedSiteCheckins.length})</summary>
+                      <div className="space-y-2 mt-3">
+                        {closedSiteCheckins.map((c: any) => (
+                          <div key={c.id} className="flex items-center justify-between gap-2 p-3 border border-slate-100 rounded-xl bg-slate-50/50 text-slate-500">
+                            <div>
+                              <p className="font-bold text-sm">{c.worker_name}</p>
+                              <p className="text-xs text-slate-400">{ptwTitleById[c.ptw_id]}</p>
+                            </div>
+                            <span className="text-xs">
+                              {new Date(c.checked_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} – {new Date(c.checked_out_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+
+                {/* Riwayat toolbox meeting */}
+                <div className="bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
+                  <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-primary" /> Riwayat Toolbox Meeting</h2>
+                  <p className="text-slate-500 mb-5 text-sm">Briefing keselamatan harian yang dicatat sebelum pekerja bisa check-in.</p>
+                  {(!toolboxMeetings || toolboxMeetings.length === 0) ? (
+                    <div className="flex flex-col items-center justify-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                      <ClipboardList className="w-10 h-10 text-slate-300 mb-2" />
+                      <p className="text-sm text-slate-400">Belum ada toolbox meeting tercatat.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {toolboxMeetings.map((m: any) => (
+                        <div key={m.id} className="p-4 border border-slate-100 rounded-xl">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                            <span className="text-xs font-bold text-primary uppercase tracking-wider">{ptwTitleById[m.ptw_id]}</span>
+                            <span className="text-xs text-slate-400">{new Date(m.meeting_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                          </div>
+                          <p className="text-sm text-slate-700">{m.topics}</p>
+                          <p className="text-xs text-slate-500 mt-1">Dipimpin oleh <strong>{m.conducted_by_name}</strong> · {(m.attendees || []).length} peserta hadir</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
          </div>
       )}
 

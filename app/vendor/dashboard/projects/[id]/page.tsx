@@ -19,7 +19,8 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       jsa ( id, status, rejection_note, reviewer_id, reviewed_at, approver_id, approved_at, jsa_steps ( id, step_number, pekerjaan, bahaya, risiko, tindakan ) ),
       ptw ( id, status, rejection_note, ptw_number, workers, equipment, ptw_type, hazards, apd, gas_tests,
             created_at, authority_id, authority_approved_at, issuer_id, issuer_approved_at, hsse_id,
-            valid_from, valid_to, work_start, work_end, hot_work_types, gas_test_frequency ),
+            valid_from, valid_to, work_start, work_end, hot_work_types, gas_test_frequency,
+            field_token, stopped_at, stopped_reason, stopped_by_name ),
       procedures ( id, status, content )
     `)
     .eq('id', projectId)
@@ -44,12 +45,25 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
     await Promise.all(ptws.map(async (p) => [p.id, await getPtwSignatories(supabase, p, vendorPic)] as const))
   );
 
+  // Tab "Status Lapangan": check-in dan toolbox meeting lintas semua tipe PTW proyek ini.
+  const ptwIds = ptws.map(p => p.id);
+  const [{ data: siteCheckins }, { data: toolboxMeetings }] = await Promise.all([
+    ptwIds.length > 0
+      ? supabase.from('site_checkins').select('*').in('ptw_id', ptwIds).order('checked_in_at', { ascending: false })
+      : Promise.resolve({ data: [] as any[] }),
+    ptwIds.length > 0
+      ? supabase.from('toolbox_meetings').select('*').in('ptw_id', ptwIds).order('meeting_date', { ascending: false }).order('created_at', { ascending: false })
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
   return (
     <VendorProjectClient
       project={project}
       currentUserId={user?.id || ''}
       jsaSignatories={jsaSignatories}
       ptwSignatories={ptwSignatories}
+      siteCheckins={siteCheckins ?? []}
+      toolboxMeetings={toolboxMeetings ?? []}
     />
   );
 }

@@ -524,3 +524,47 @@ export async function rejectPtw(ptwId: string, note: string) {
   }
   revalidatePath('/dashboard/approval');
 }
+
+/**
+ * Cabut Stop Work Authority yang dipicu dari halaman lapangan (/checkin/[token])
+ * dan kembalikan PTW ke status Aktif. Sengaja hanya bisa dilakukan lewat
+ * dashboard internal oleh pemegang izin `ptw.resume_work` — memulai kembali
+ * pekerjaan yang sempat dihentikan butuh penilaian, bukan sekadar klik ulang
+ * dari lapangan.
+ */
+export async function resumePtw(ptwId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { data: current } = await supabase.from('ptw').select('status').eq('id', ptwId).single();
+  if (current?.status !== PTW_STATUS.stoppedSwa) throw new Error("PTW tidak sedang dalam status Stop Work Authority.");
+  await requirePermission(supabase, user.id, { module: 'ptw', action: 'resume_work' }, "Anda tidak memiliki izin untuk mengaktifkan kembali PTW ini.");
+
+  const { error } = await supabase
+    .from('ptw')
+    .update({ status: PTW_STATUS.aktif, stopped_at: null, stopped_reason: null, stopped_by_name: null })
+    .eq('id', ptwId);
+  if (error) throw new Error(error.message);
+
+  const { data: ptw } = await supabase.from('ptw').select('project_id, ptw_number, projects ( name, vendor_id )').eq('id', ptwId).single();
+  const proj: any = Array.isArray(ptw?.projects) ? ptw?.projects[0] : ptw?.projects;
+
+  if (ptw?.project_id) {
+    await logDocumentEvent(supabase, {
+      docType: 'ptw', docId: ptwId, projectId: ptw.project_id, actorId: user.id,
+      action: 'Stop Work Authority Dicabut — PTW Aktif Kembali',
+    });
+  }
+  if (proj?.vendor_id) {
+    await createNotification({
+      userId: proj.vendor_id,
+      type: 'approval',
+      title: `PTW Aktif Kembali`,
+      message: `Stop Work Authority untuk PTW ${ptw?.ptw_number ?? ''} pada proyek "${proj.name}" telah dicabut. Pekerjaan dapat dilanjutkan.`,
+      link: `/vendor/dashboard/projects/${ptw?.project_id}`,
+    });
+  }
+  revalidatePath('/dashboard/approval');
+  revalidatePath(`/dashboard/projects/${ptw?.project_id}`);
+}

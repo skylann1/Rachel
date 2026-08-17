@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive } from 'lucide-react';
+import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren } from 'lucide-react';
 
 const menuUtama = [
   { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard, permission: { module: 'dashboard', action: 'view' } },
@@ -12,6 +12,7 @@ const menuUtama = [
   { name: 'Laporan Insiden', href: '/dashboard/incident', icon: AlertTriangle, permission: { module: 'incident', action: 'view' } },
   { name: 'Kelola Proyek', href: '/dashboard/approval', icon: FileSignature, permission: { module: 'approval', action: 'view' } },
   { name: 'Proyek Berjalan', href: '/dashboard/ongoing', icon: Rocket, permission: { module: 'approval', action: 'view' } },
+  { name: 'Status Lapangan', href: '/dashboard/site-status', icon: Siren, permission: { module: 'siteOps', action: 'view' } },
   { name: 'Arsip Proyek', href: '/dashboard/archive', icon: Archive, permission: { module: 'approval', action: 'view' } },
   { name: 'Dokumen Vendor', href: '/dashboard/vendor-docs', icon: ClipboardList, permission: { module: 'vendorDocs', action: 'view' } },
 ];

@@ -7,12 +7,12 @@ import { PTW_STATUS } from '@/lib/ptw-status';
 export default async function OngoingProjectsPage() {
   const projects = await getAllProjectsWithRelations();
 
-  // A project is ongoing if ANY of its PTWs is active (fieldwork can be under
-  // way with one permit type even while another type is still pending) and
-  // project status is not completed.
+  // A project is ongoing if ANY of its PTWs is active or paused by a Stop
+  // Work Authority (fieldwork can be under way with one permit type even
+  // while another type is still pending) and project status is not completed.
   const ongoingProjects = projects.filter(project => {
     const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
-    return ptws.some(p => p.status === PTW_STATUS.aktif) && project.status !== 'Completed';
+    return ptws.some(p => p.status === PTW_STATUS.aktif || p.status === PTW_STATUS.stoppedSwa) && project.status !== 'Completed';
   });
 
   return (
@@ -35,14 +35,15 @@ export default async function OngoingProjectsPage() {
           ongoingProjects.map(project => {
             const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
             const activeNumbers = ptws.filter(p => p.status === PTW_STATUS.aktif).map(p => p.ptw_number).filter(Boolean);
+            const isStopped = ptws.some(p => p.status === PTW_STATUS.stoppedSwa);
             return (
               <div key={project.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col">
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                     <Briefcase className="w-5 h-5" />
                   </div>
-                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider">
-                    {activeNumbers.length > 0 ? activeNumbers.join(', ') : 'PTW Aktif'}
+                  <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider ${isStopped ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    {isStopped ? 'Stop Work' : activeNumbers.length > 0 ? activeNumbers.join(', ') : 'PTW Aktif'}
                   </span>
                 </div>
                 

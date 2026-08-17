@@ -13,6 +13,7 @@ export const PTW_STATUS = {
   menungguPenomoranHSSE: 'Menunggu Penomoran HSSE',
   aktif: 'PTW Aktif',
   expired: 'Expired',
+  stoppedSwa: 'Dihentikan (SWA)',
 } as const;
 
 /** Status yang berarti PTW sedang menunggu tindakan pihak internal. */
