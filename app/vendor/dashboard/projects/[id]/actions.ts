@@ -3,11 +3,35 @@
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 
+/**
+ * Diskusi proyek dipakai dua portal sekaligus, jadi aksesnya tidak bisa
+ * disamakan begitu saja dengan kepemilikan vendor. Yang boleh: user internal
+ * (mereka memang memantau semua proyek) dan vendor pemilik proyek itu.
+ * Tanpa penyaringan ini, vendor mana pun bisa membaca atau menulis di ruang
+ * diskusi proyek vendor lain — id proyek terpampang di URL.
+ */
+async function canAccessProjectDiscussion(supabase: any, userId: string, projectId: string) {
+  const { data: profile } = await supabase.from('profiles').select('type').eq('id', userId).single();
+  if (profile?.type === 'internal') return true;
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', projectId)
+    .eq('vendor_id', userId)
+    .maybeSingle();
+  return !!project;
+}
+
 export async function getProjectDiscussions(projectId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
+    return [];
+  }
+
+  if (!(await canAccessProjectDiscussion(supabase, user.id, projectId))) {
     return [];
   }
 
@@ -31,6 +55,10 @@ export async function postDiscussionMessage(projectId: string, message: string) 
 
   if (!user) {
     throw new Error('Unauthorized');
+  }
+
+  if (!(await canAccessProjectDiscussion(supabase, user.id, projectId))) {
+    return { error: 'Anda tidak memiliki akses ke diskusi proyek ini.' };
   }
 
   // Get user role/profile to attach to the message

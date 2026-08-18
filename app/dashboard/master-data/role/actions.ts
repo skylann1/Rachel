@@ -1,10 +1,30 @@
 'use server';
 
 import { createAdminClient } from '@/utils/supabase/admin';
+import { createClient } from '@/utils/supabase/server';
+import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
+
+/**
+ * Server Action adalah endpoint POST tersendiri — gate di layout.tsx hanya
+ * mencegah halamannya dirender, bukan action-nya dipanggil. Setiap aksi di
+ * bawah memakai admin client (bypass RLS), jadi izinnya wajib dicek di sini.
+ * Sejalan dengan requireManageAccount() di master-data/account/actions.ts.
+ */
+async function requireManageRole() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 'Unauthorized';
+  const allowed = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_role');
+  if (!allowed) return 'Anda tidak memiliki izin untuk mengelola role.';
+  return null;
+}
 
 export async function addRole(formData: FormData) {
   try {
+    const permError = await requireManageRole();
+    if (permError) return { error: permError };
+
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
     const type = formData.get('type') as string;
@@ -44,6 +64,9 @@ export async function addRole(formData: FormData) {
 
 export async function updateRole(id: string, formData: FormData) {
   try {
+    const permError = await requireManageRole();
+    if (permError) return { error: permError };
+
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
     const type = formData.get('type') as string;
@@ -80,6 +103,9 @@ export async function updateRole(id: string, formData: FormData) {
 
 export async function deleteRole(id: string) {
   try {
+    const permError = await requireManageRole();
+    if (permError) return { error: permError };
+
     const adminClient = createAdminClient();
 
     // Pastikan tidak ada profil yang menggunakan role ini

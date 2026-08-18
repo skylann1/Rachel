@@ -83,12 +83,17 @@ export async function saveMaterial(payload: {
   let materialId = payload.id;
 
   if (materialId) {
-    const { error } = await supabase
+    // .select() wajib: update tanpa baris yang cocok tidak menghasilkan error,
+    // sehingga id milik vendor lain akan lolos ke delete/insert dokumen di
+    // bawah dan menimpa dokumen vendor tersebut.
+    const { data, error } = await supabase
       .from('vendor_materials')
       .update(row)
       .eq('id', materialId)
-      .eq('vendor_id', user.id);
+      .eq('vendor_id', user.id)
+      .select('id');
     if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error('Material tidak ditemukan.');
   } else {
     const { data, error } = await supabase
       .from('vendor_materials')

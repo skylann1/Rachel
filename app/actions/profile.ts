@@ -3,31 +3,12 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 
-export async function updateUserMetadata(metadata: Record<string, any>) {
-  const supabase = await createClient();
-  
-  // Verify user is authenticated
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return { error: 'Unauthorized' };
-  }
-
-  // Update user metadata in Supabase
-  const { data, error } = await supabase.auth.updateUser({
-    data: metadata
-  });
-
-  if (error) {
-    console.error("Error updating user metadata:", error);
-    return { error: error.message };
-  }
-
-  // Revalidate both paths to ensure UI updates
-  revalidatePath('/dashboard/profile');
-  revalidatePath('/vendor/dashboard/profile');
-
-  return { success: true };
-}
+/**
+ * Catatan: tidak ada action generic "update metadata apa saja" di sini dengan
+ * sengaja. user_metadata ikut menentukan routing portal di middleware, jadi
+ * menulisnya harus lewat action spesifik di bawah (updateInternalProfile /
+ * updateVendorProfile) yang hanya menyentuh field profil, bukan type/role.
+ */
 
 export async function changePassword(data: {
   currentPassword: string;

@@ -81,7 +81,11 @@ export async function savePtw(
   let ptwId = existing?.id;
 
   if (existing) {
-    const { error } = await supabase
+    // .select() dipakai supaya update yang tidak mengenai baris (ditolak RLS,
+    // atau PTW sudah lewat tahap yang boleh disunting vendor) ketahuan —
+    // tanpa itu Postgres tidak mengembalikan error dan alur di bawah tetap
+    // mencatat log "Diajukan Ulang" serta menotifikasi approver seolah sukses.
+    const { data: updated, error } = await supabase
       .from('ptw')
       .update({
         workers,
@@ -93,11 +97,15 @@ export async function savePtw(
         status: PTW_STATUS.menungguApprovalPM,
         rejection_note: null
       })
-      .eq('id', existing.id);
+      .eq('id', existing.id)
+      .select('id');
 
     if (error) {
       console.error(error);
       throw new Error(error.message);
+    }
+    if (!updated || updated.length === 0) {
+      throw new Error('PTW ini tidak dapat diubah lagi — kemungkinan sudah masuk tahap approval berikutnya.');
     }
   } else {
     const { data: created, error } = await supabase

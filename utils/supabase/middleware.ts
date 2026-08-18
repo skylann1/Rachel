@@ -55,10 +55,18 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/auth/login";
       return NextResponse.redirect(url);
     }
-  } else {
-    // User is logged in, extract metadata
-    const type = user.user_metadata?.type; // 'internal' or 'external'
-    const role = user.user_metadata?.role; // 'admin', 'vendor', 'hse', etc.
+  } else if (isAuthPath || isVendorPath || isDashboardPath) {
+    // Tipe portal dibaca dari tabel `profiles`, bukan user_metadata: metadata
+    // bisa ditulis sendiri oleh user lewat supabase.auth.updateUser() dari
+    // browser, sehingga vendor bisa mengaku 'internal' dan lolos gate ini.
+    // `profiles` adalah sumber kebenaran yang sama dengan yang dipakai kedua
+    // login action. Query hanya dijalankan untuk path yang memang di-gate.
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('type')
+      .eq('id', user.id)
+      .single();
+    const type = profile?.type; // 'internal' atau 'external'
 
     // 1. Cross-Portal Blocking
     if (type === 'external') {
@@ -89,6 +97,15 @@ export async function updateSession(request: NextRequest) {
       }
       
       // 2. Dynamic permission checks are now handled in the page/layout components
+    } else {
+      // Profil tidak ditemukan / tipe tidak dikenal: jangan biarkan lolos ke
+      // kedua portal. Halaman login sengaja dibiarkan lewat supaya tidak
+      // terjadi redirect loop.
+      if (isDashboardPath || (isAuthPath && !isAuthLogin) || (isVendorPath && !isVendorLogin)) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/login";
+        return NextResponse.redirect(url);
+      }
     }
   }
 

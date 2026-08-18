@@ -4,7 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
 import { JSA_STATUS, JSA_STAGE_PERMISSION, JSA_PENDING_STATUSES } from "@/lib/jsa-status";
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from "@/lib/procedure-status";
-import { getUserPermissionsForUser } from "@/utils/permissions";
+import { getUserPermissionsForUser, hasPermissionForUser } from "@/utils/permissions";
 
 export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan';
 export type UrgencyType = 'High' | 'Medium' | 'Low';
@@ -255,6 +255,26 @@ export async function getMyTasks(): Promise<TaskItem[]> {
 
 export async function delegateMonitoringTask(projectId: string, assigneeId: string, notes: string) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  // Disposisi = menyerahkan tugas pengawasan sendiri, jadi pemanggil harus
+  // memang inspector proyek tersebut (sama seperti syarat munculnya tombol
+  // Disposisi di UI). Pemegang inspection:manage boleh mendisposisikan proyek
+  // siapa pun. Tanpa ini, user internal mana pun bisa mengganti pengawas
+  // proyek apa pun cukup dengan memanggil Server Action ini langsung.
+  const { data: project } = await supabase
+    .from('projects')
+    .select('assigned_inspector')
+    .eq('id', projectId)
+    .single();
+  if (!project) throw new Error('Proyek tidak ditemukan.');
+
+  if (project.assigned_inspector !== user.id) {
+    const canManage = await hasPermissionForUser(supabase, user.id, 'inspection', 'manage');
+    if (!canManage) throw new Error('Anda tidak memiliki izin untuk mendisposisikan pengawasan proyek ini.');
+  }
+
   const { error } = await supabase
     .from('projects')
     .update({ assigned_inspector: assigneeId })

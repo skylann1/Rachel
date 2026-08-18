@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { PTW_STATUS } from "@/lib/ptw-status";
+import { PTW_STATUS, getEffectivePtwStatus } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { createNotification, notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
 import { todayDateString } from "@/lib/site-ops";
@@ -18,16 +18,23 @@ async function resolvePtwByToken(token: string) {
   const supabase = createAdminClient();
   const { data: ptw } = await supabase
     .from('ptw')
-    .select('id, project_id, status, workers, projects ( id, name, vendor_id, assigned_inspector )')
+    .select('id, project_id, status, valid_to, workers, projects ( id, name, end_date, vendor_id, assigned_inspector )')
     .eq('field_token', token)
     .maybeSingle();
   if (!ptw) throw new Error("Token check-in tidak valid.");
-  return { supabase, ptw, project: (Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects) as any };
+  const project = (Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects) as any;
+  // Status tersimpan hanya berubah jadi 'Expired' saat /dashboard/approval
+  // dibuka (lihat catatan di lib/ptw-status.ts), sedangkan token QR ini tidak
+  // punya masa berlaku sendiri. Tanpa status efektif, PTW yang sudah lewat
+  // masa berlakunya masih bisa dipakai check-in selama belum ada internal
+  // user yang membuka halaman approval.
+  const effectiveStatus = getEffectivePtwStatus(ptw.status, ptw.valid_to ?? project?.end_date);
+  return { supabase, ptw, project, effectiveStatus };
 }
 
 export async function logToolboxMeeting(token: string, params: { topics: string; attendees: { name: string }[]; conductedByName: string }) {
-  const { supabase, ptw, project } = await resolvePtwByToken(token);
-  if (ptw.status !== PTW_STATUS.aktif) throw new Error("PTW tidak sedang aktif — toolbox meeting tidak bisa dicatat.");
+  const { supabase, ptw, project, effectiveStatus } = await resolvePtwByToken(token);
+  if (effectiveStatus !== PTW_STATUS.aktif) throw new Error("PTW tidak sedang aktif — toolbox meeting tidak bisa dicatat.");
   if (!params.topics?.trim()) throw new Error("Topik toolbox meeting wajib diisi.");
   if (!params.conductedByName?.trim()) throw new Error("Nama pemimpin briefing wajib diisi.");
 
@@ -51,8 +58,8 @@ export async function logToolboxMeeting(token: string, params: { topics: string;
 }
 
 export async function checkInWorker(token: string, workerName: string) {
-  const { supabase, ptw } = await resolvePtwByToken(token);
-  if (ptw.status !== PTW_STATUS.aktif) throw new Error("PTW tidak sedang aktif — check-in tidak bisa dilakukan.");
+  const { supabase, ptw, effectiveStatus } = await resolvePtwByToken(token);
+  if (effectiveStatus !== PTW_STATUS.aktif) throw new Error("PTW tidak sedang aktif — check-in tidak bisa dilakukan.");
   const name = workerName?.trim();
   if (!name) throw new Error("Nama pekerja wajib diisi.");
 
@@ -98,8 +105,8 @@ export async function checkOutWorker(token: string, checkinId: string) {
 }
 
 export async function triggerStopWork(token: string, params: { reporterName: string; reason: string }) {
-  const { supabase, ptw, project } = await resolvePtwByToken(token);
-  if (ptw.status !== PTW_STATUS.aktif) throw new Error("PTW tidak sedang aktif — Stop Work tidak berlaku.");
+  const { supabase, ptw, project, effectiveStatus } = await resolvePtwByToken(token);
+  if (effectiveStatus !== PTW_STATUS.aktif) throw new Error("PTW tidak sedang aktif — Stop Work tidak berlaku.");
   if (!params.reporterName?.trim()) throw new Error("Nama pelapor wajib diisi.");
   if (!params.reason?.trim()) throw new Error("Alasan Stop Work wajib diisi.");
 

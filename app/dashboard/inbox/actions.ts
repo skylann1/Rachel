@@ -103,12 +103,20 @@ export async function updateNotificationPreferences(mutedTypes: NotificationType
 // =====================================================================
 // MUTATIONS
 // =====================================================================
+// Kepemilikan disaring eksplisit di setiap mutasi berikut, tidak hanya
+// mengandalkan RLS notifications: satu policy yang salah konfigurasi
+// (atau penggantian ke admin client di kemudian hari) akan langsung
+// membuat id notifikasi milik orang lain bisa dibaca/dihapus.
 export async function markNotificationAsRead(notificationId: string) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   await supabase
     .from('notifications')
     .update({ is_read: true })
-    .eq('id', notificationId);
+    .eq('id', notificationId)
+    .eq('user_id', user.id);
 }
 
 export async function markAllNotificationsAsRead() {
@@ -125,28 +133,40 @@ export async function markAllNotificationsAsRead() {
 
 export async function deleteNotification(notificationId: string) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   await supabase
     .from('notifications')
     .delete()
-    .eq('id', notificationId);
+    .eq('id', notificationId)
+    .eq('user_id', user.id);
 }
 
 export async function markManyAsRead(notificationIds: string[]) {
   if (notificationIds.length === 0) return;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   await supabase
     .from('notifications')
     .update({ is_read: true })
-    .in('id', notificationIds);
+    .in('id', notificationIds)
+    .eq('user_id', user.id);
 }
 
 export async function deleteMany(notificationIds: string[]) {
   if (notificationIds.length === 0) return;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   await supabase
     .from('notifications')
     .delete()
-    .in('id', notificationIds);
+    .in('id', notificationIds)
+    .eq('user_id', user.id);
 }
 
 // =====================================================================

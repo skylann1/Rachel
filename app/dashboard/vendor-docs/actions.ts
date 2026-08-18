@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
+import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 
 export async function getAllVendorDocuments() {
@@ -31,6 +32,13 @@ export async function updateDocumentStatus(id: string, newStatus: string) {
 
   if (!user) {
     throw new Error('Unauthorized');
+  }
+
+  // Tombol Approve/Reject memang hanya dirender saat punya izin, tapi Server
+  // Action tetap bisa dipanggil langsung — izinnya wajib dicek di server juga.
+  const allowed = await hasPermissionForUser(supabase, user.id, 'vendorDocs', 'approve');
+  if (!allowed) {
+    return { error: 'Anda tidak memiliki izin untuk memverifikasi dokumen vendor.' };
   }
 
   const { data, error } = await supabase

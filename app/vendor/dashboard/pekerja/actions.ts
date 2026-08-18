@@ -92,12 +92,17 @@ export async function saveWorker(payload: {
   let workerId = payload.id;
 
   if (workerId) {
-    const { error } = await supabase
+    // .select() wajib: update yang tidak mengenai baris mana pun tidak
+    // mengembalikan error, sehingga id milik vendor lain akan lolos ke
+    // delete/insert kompetensi di bawah dan menimpa data vendor tersebut.
+    const { data, error } = await supabase
       .from('vendor_workers')
       .update(row)
       .eq('id', workerId)
-      .eq('vendor_id', user.id);
+      .eq('vendor_id', user.id)
+      .select('id');
     if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error('Pekerja tidak ditemukan.');
   } else {
     const { data, error } = await supabase
       .from('vendor_workers')

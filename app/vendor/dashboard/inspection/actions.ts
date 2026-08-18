@@ -36,22 +36,32 @@ export async function getVendorInspections() {
 
 export async function submitVendorResponse(inspectionId: string, formData: FormData) {
   const supabase = await createClient();
-  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
   const vendor_response = formData.get("vendor_response") as string;
   const vendor_evidence_url = formData.get("vendor_evidence_url") as string;
 
-  const { error } = await supabase
+  // target_vendor disamakan dengan pemanggil — tanpa ini vendor mana pun bisa
+  // menutup/menimpa temuan milik vendor lain hanya dengan menebak id-nya.
+  // .select() dipakai supaya update yang tidak mengenai baris ikut ketahuan.
+  const { data: updated, error } = await supabase
     .from('inspections')
     .update({
       vendor_response,
       vendor_evidence_url,
       status: 'In Progress' // change status to In Progress (or Closed if auto)
     })
-    .eq('id', inspectionId);
+    .eq('id', inspectionId)
+    .eq('target_vendor', user.id)
+    .select('id');
 
   if (error) {
     console.error(error);
     throw new Error(error.message);
+  }
+  if (!updated || updated.length === 0) {
+    throw new Error('Temuan tidak ditemukan atau bukan ditujukan untuk Anda.');
   }
 
   const { data: inspection } = await supabase
