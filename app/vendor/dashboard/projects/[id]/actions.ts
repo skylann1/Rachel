@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/utils/supabase/server';
+import { createClient, getCallerVendorOrgId } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { isPgn, isPgsol } from '@/lib/roles';
 
@@ -15,11 +15,12 @@ async function canAccessProjectDiscussion(supabase: any, userId: string, project
   const { data: profile } = await supabase.from('profiles').select('type').eq('id', userId).single();
   if (isPgn(profile?.type) || isPgsol(profile?.type)) return true;
 
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
   const { data: project } = await supabase
     .from('projects')
     .select('id')
     .eq('id', projectId)
-    .eq('vendor_id', userId)
+    .eq('vendor_id', vendorOrgId)
     .maybeSingle();
   return !!project;
 }

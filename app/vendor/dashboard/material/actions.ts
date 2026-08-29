@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { AssetDocumentItem } from "@/lib/asset-document";
 
@@ -20,6 +20,7 @@ export async function getMaterials(): Promise<MaterialItem[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const { data, error } = await supabase
     .from('vendor_materials')
@@ -27,7 +28,7 @@ export async function getMaterials(): Promise<MaterialItem[]> {
       id, name, brand, type_serial, dimension, quantity, unit, photo_url,
       vendor_material_documents ( id, doc_name, issuer, valid_to, document_url )
     `)
-    .eq('vendor_id', user.id)
+    .eq('vendor_id', vendorOrgId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -68,9 +69,10 @@ export async function saveMaterial(payload: {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const row = {
-    vendor_id: user.id,
+    vendor_id: vendorOrgId,
     name: payload.name,
     brand: payload.brand || null,
     type_serial: payload.type_serial || null,
@@ -90,7 +92,7 @@ export async function saveMaterial(payload: {
       .from('vendor_materials')
       .update(row)
       .eq('id', materialId)
-      .eq('vendor_id', user.id)
+      .eq('vendor_id', vendorOrgId)
       .select('id');
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('Material tidak ditemukan.');
@@ -132,8 +134,9 @@ export async function deleteMaterial(id: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
-  const { error } = await supabase.from('vendor_materials').delete().eq('id', id).eq('vendor_id', user.id);
+  const { error } = await supabase.from('vendor_materials').delete().eq('id', id).eq('vendor_id', vendorOrgId);
   if (error) throw new Error(error.message);
   revalidatePath('/vendor/dashboard/material');
 }

@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { EditableVendorProfile } from "./EditableVendorProfile";
 import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from "@/lib/ptw-status";
@@ -31,17 +31,18 @@ export default async function VendorProfilePage() {
     .single();
 
   // Real stats for the summary panel — scoped to this vendor's own projects
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
   const { count: activeProjects } = await supabase
     .from('projects')
     .select('*', { count: 'exact', head: true })
-    .eq('vendor_id', user.id)
+    .eq('vendor_id', vendorOrgId)
     .neq('status', 'Selesai')
     .neq('status', 'Ditolak');
 
   const { data: vendorProjectIds } = await supabase
     .from('projects')
     .select('id')
-    .eq('vendor_id', user.id);
+    .eq('vendor_id', vendorOrgId);
   const projectIds = (vendorProjectIds || []).map(p => p.id);
 
   let ptwApproved = 0;

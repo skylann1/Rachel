@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/utils/supabase/server';
+import { createClient, getCallerVendorOrgId } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 export async function saveDocumentMetadata(data: {
@@ -14,11 +14,12 @@ export async function saveDocumentMetadata(data: {
   if (!user) {
     throw new Error('Unauthorized');
   }
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const { error } = await supabase
     .from('vendor_documents')
     .insert({
-      vendor_id: user.id,
+      vendor_id: vendorOrgId,
       name: data.nama,
       type: data.jenis,
       file_url: data.file_url,
@@ -40,11 +41,12 @@ export async function getVendorDocuments() {
   if (!user) {
     return [];
   }
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const { data, error } = await supabase
     .from('vendor_documents')
     .select('*')
-    .eq('vendor_id', user.id)
+    .eq('vendor_id', vendorOrgId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -62,13 +64,14 @@ export async function deleteVendorDocument(id: string) {
   if (!user) {
     throw new Error('Unauthorized');
   }
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   // 1. Dapatkan file_url dari database sebelum dihapus
   const { data: doc } = await supabase
     .from('vendor_documents')
     .select('file_url')
     .eq('id', id)
-    .eq('vendor_id', user.id)
+    .eq('vendor_id', vendorOrgId)
     .single();
 
   if (doc?.file_url) {
@@ -86,7 +89,7 @@ export async function deleteVendorDocument(id: string) {
     .from('vendor_documents')
     .delete()
     .eq('id', id)
-    .eq('vendor_id', user.id);
+    .eq('vendor_id', vendorOrgId);
 
   if (error) {
     console.error('Error deleting document:', error);

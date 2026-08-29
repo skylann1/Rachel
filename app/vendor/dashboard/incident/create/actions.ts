@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 
 export async function submitIncident(formData: FormData) {
@@ -88,11 +88,12 @@ export async function getVendorProjects() {
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) return [];
-  
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
+
   const { data, error } = await supabase
     .from('projects')
     .select('id, name')
-    .eq('vendor_id', user.id);
+    .eq('vendor_id', vendorOrgId);
     
   if (error) {
     console.error(error);

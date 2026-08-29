@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { AssetDocumentItem } from "@/lib/asset-document";
 
@@ -24,6 +24,7 @@ export async function getEquipment(): Promise<EquipmentItem[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const { data, error } = await supabase
     .from('vendor_equipment')
@@ -32,7 +33,7 @@ export async function getEquipment(): Promise<EquipmentItem[]> {
       photo_url, certificate_number, certificate_expiry,
       vendor_equipment_documents ( id, doc_name, issuer, valid_to, document_url )
     `)
-    .eq('vendor_id', user.id)
+    .eq('vendor_id', vendorOrgId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -79,9 +80,10 @@ export async function saveEquipment(payload: {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const row = {
-    vendor_id: user.id,
+    vendor_id: vendorOrgId,
     name: payload.name,
     category: payload.category,
     brand: payload.brand || null,
@@ -103,7 +105,7 @@ export async function saveEquipment(payload: {
       .from('vendor_equipment')
       .update(row)
       .eq('id', equipmentId)
-      .eq('vendor_id', user.id)
+      .eq('vendor_id', vendorOrgId)
       .select('id');
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('Peralatan tidak ditemukan.');
@@ -146,8 +148,9 @@ export async function deleteEquipment(id: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
-  const { error } = await supabase.from('vendor_equipment').delete().eq('id', id).eq('vendor_id', user.id);
+  const { error } = await supabase.from('vendor_equipment').delete().eq('id', id).eq('vendor_id', vendorOrgId);
   if (error) throw new Error(error.message);
   revalidatePath('/vendor/dashboard/peralatan');
 }

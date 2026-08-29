@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { getNotifications } from "@/app/dashboard/inbox/actions";
 import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from "@/lib/ptw-status";
 import { JSA_STATUS, isJsaPending } from "@/lib/jsa-status";
@@ -35,6 +35,7 @@ export async function getVendorDashboardData() {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, needsAction: 0 } };
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   // Fetch projects
   const { data: projectsData, error: projectsError } = await supabase
@@ -47,7 +48,7 @@ export async function getVendorDashboardData() {
       jsa ( status, rejection_note ),
       ptw ( status, rejection_note, valid_to )
     `)
-    .eq('vendor_id', user.id)
+    .eq('vendor_id', vendorOrgId)
     .order('created_at', { ascending: false });
 
   if (projectsError) {
@@ -165,13 +166,14 @@ export async function getVendorChartsData(): Promise<VendorDashboardData> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return EMPTY_CHARTS_DATA;
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const now = new Date();
 
   const [{ data: projects }, { data: inspections }, incidents] = await Promise.all([
     supabase.from('projects')
       .select('start_date, procedures ( status ), jsa ( status ), ptw ( status )')
-      .eq('vendor_id', user.id),
+      .eq('vendor_id', vendorOrgId),
     supabase.from('inspections')
       .select('status, finding_type, created_at')
       .eq('target_vendor', user.id),

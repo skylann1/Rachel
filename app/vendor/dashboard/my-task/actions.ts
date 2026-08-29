@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { JSA_STATUS } from "@/lib/jsa-status";
 import { PTW_STATUS } from "@/lib/ptw-status";
@@ -49,6 +49,7 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const tasks: VendorTaskItem[] = [];
 
@@ -60,7 +61,7 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
       jsa ( status, rejection_note, created_at ),
       ptw ( id, status, ptw_type, rejection_note, created_at )
     `)
-    .eq('vendor_id', user.id);
+    .eq('vendor_id', vendorOrgId);
 
   (projects || []).forEach((project: any) => {
     const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;

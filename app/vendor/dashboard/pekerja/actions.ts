@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export interface CompetencyItem {
@@ -28,6 +28,7 @@ export async function getWorkers(): Promise<WorkerItem[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const { data, error } = await supabase
     .from('vendor_workers')
@@ -35,7 +36,7 @@ export async function getWorkers(): Promise<WorkerItem[]> {
       id, full_name, position, ktp_number, bpjs_number, education, id_card_url, status,
       vendor_worker_competencies ( id, category, title, valid_from, valid_to, document_url )
     `)
-    .eq('vendor_id', user.id)
+    .eq('vendor_id', vendorOrgId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -77,9 +78,10 @@ export async function saveWorker(payload: {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const row = {
-    vendor_id: user.id,
+    vendor_id: vendorOrgId,
     full_name: payload.full_name,
     position: payload.position,
     ktp_number: payload.ktp_number || null,
@@ -99,7 +101,7 @@ export async function saveWorker(payload: {
       .from('vendor_workers')
       .update(row)
       .eq('id', workerId)
-      .eq('vendor_id', user.id)
+      .eq('vendor_id', vendorOrgId)
       .select('id');
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('Pekerja tidak ditemukan.');
@@ -145,8 +147,9 @@ export async function deleteWorker(id: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
-  const { error } = await supabase.from('vendor_workers').delete().eq('id', id).eq('vendor_id', user.id);
+  const { error } = await supabase.from('vendor_workers').delete().eq('id', id).eq('vendor_id', vendorOrgId);
   if (error) throw new Error(error.message);
   revalidatePath('/vendor/dashboard/pekerja');
 }
