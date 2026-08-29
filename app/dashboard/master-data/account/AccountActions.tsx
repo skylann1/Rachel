@@ -16,7 +16,7 @@ interface Account {
   status: string;
 }
 
-export default function AccountActions({ account, roles }: { account: Account, roles: any[] }) {
+export default function AccountActions({ account, roles, lockedType }: { account: Account, roles: any[], lockedType?: 'pgn' | 'pgsol' | 'vendor' }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isConfirmSuspendOpen, setIsConfirmSuspendOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -100,11 +100,12 @@ export default function AccountActions({ account, roles }: { account: Account, r
         </button>
       </div>
 
-      <EditAccountModal 
-        isOpen={isEditModalOpen} 
-        onClose={() => setIsEditModalOpen(false)} 
-        account={account} 
+      <EditAccountModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        account={account}
         roles={roles}
+        lockedType={lockedType}
       />
 
       {/* Suspend Confirmation Modal */}

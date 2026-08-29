@@ -4,14 +4,21 @@ import { useState, useEffect } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { updateAccount } from './actions';
 
+const TYPE_LABELS: Record<'pgn' | 'pgsol' | 'vendor', string> = {
+  pgn: 'PGN',
+  pgsol: 'PGSOL',
+  vendor: 'Vendor',
+};
+
 interface EditAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
   account: any;
   roles: any[];
+  lockedType?: 'pgn' | 'pgsol' | 'vendor';
 }
 
-export default function EditAccountModal({ isOpen, onClose, account, roles }: EditAccountModalProps) {
+export default function EditAccountModal({ isOpen, onClose, account, roles, lockedType }: EditAccountModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [type, setType] = useState(account.type);
@@ -93,23 +100,32 @@ export default function EditAccountModal({ isOpen, onClose, account, roles }: Ed
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Tipe Akun</label>
-                <select 
-                  name="type" 
-                  value={type}
-                  onChange={(e) => {
-                    const newType = e.target.value;
-                    setType(newType);
-                    const newRoles = roles.filter(r => r.type === newType);
-                    if (!newRoles.find(r => r.name === role)) {
-                       setRole(newRoles.length > 0 ? newRoles[0].name : '');
-                    }
-                  }}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm bg-white"
-                >
-                  <option value="pgn">PGN</option>
-                  <option value="pgsol">PGSOL</option>
-                  <option value="vendor">Vendor</option>
-                </select>
+                {lockedType ? (
+                  <>
+                    <input type="hidden" name="type" value={type} />
+                    <p className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm cursor-not-allowed">
+                      {TYPE_LABELS[lockedType]}
+                    </p>
+                  </>
+                ) : (
+                  <select
+                    name="type"
+                    value={type}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setType(newType);
+                      const newRoles = roles.filter(r => r.type === newType);
+                      if (!newRoles.find(r => r.name === role)) {
+                         setRole(newRoles.length > 0 ? newRoles[0].name : '');
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm bg-white"
+                  >
+                    <option value="pgn">PGN</option>
+                    <option value="pgsol">PGSOL</option>
+                    <option value="vendor">Vendor</option>
+                  </select>
+                )}
               </div>
               
               <div>

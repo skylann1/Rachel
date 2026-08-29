@@ -4,16 +4,23 @@ import { useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { addAccount } from './actions';
 
+const TYPE_LABELS: Record<'pgn' | 'pgsol' | 'vendor', string> = {
+  pgn: 'PGN',
+  pgsol: 'PGSOL',
+  vendor: 'Vendor',
+};
+
 interface AddAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
   roles: any[];
+  lockedType?: 'pgn' | 'pgsol' | 'vendor';
 }
 
-export default function AddAccountModal({ isOpen, onClose, roles }: AddAccountModalProps) {
+export default function AddAccountModal({ isOpen, onClose, roles, lockedType }: AddAccountModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [type, setType] = useState('pgn');
+  const [type, setType] = useState<string>(lockedType || 'pgn');
 
   if (!isOpen) return null;
 
@@ -96,16 +103,25 @@ export default function AddAccountModal({ isOpen, onClose, roles }: AddAccountMo
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Tipe Akun</label>
-                <select 
-                  name="type" 
-                  value={type}
-                  onChange={(e) => setType(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm bg-white"
-                >
-                  <option value="pgn">PGN</option>
-                  <option value="pgsol">PGSOL</option>
-                  <option value="vendor">Vendor</option>
-                </select>
+                {lockedType ? (
+                  <>
+                    <input type="hidden" name="type" value={type} />
+                    <p className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm cursor-not-allowed">
+                      {TYPE_LABELS[lockedType]}
+                    </p>
+                  </>
+                ) : (
+                  <select
+                    name="type"
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm bg-white"
+                  >
+                    <option value="pgn">PGN</option>
+                    <option value="pgsol">PGSOL</option>
+                    <option value="vendor">Vendor</option>
+                  </select>
+                )}
               </div>
               
               <div>
