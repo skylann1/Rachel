@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isPgn, isPgsol, isVendor } from "@/lib/roles";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -33,13 +34,15 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthPath = request.nextUrl.pathname.startsWith("/auth");
   const isVendorPath = request.nextUrl.pathname.startsWith("/vendor");
+  const isPgsolPath = request.nextUrl.pathname.startsWith("/pgsol");
   const isDashboardPath = request.nextUrl.pathname.startsWith("/dashboard");
+  const isDashboardApprovalPath = request.nextUrl.pathname.startsWith("/dashboard/approval");
 
   const isAuthLogin = request.nextUrl.pathname === "/auth/login";
   const isVendorLogin = request.nextUrl.pathname === "/vendor/login";
+  const isPgsolLogin = request.nextUrl.pathname === "/pgsol/login";
 
   if (!user) {
-    // Blocks unauthenticated users from accessing protected routes
     if (isAuthPath && !isAuthLogin) {
       const url = request.nextUrl.clone();
       url.pathname = "/auth/login";
@@ -50,58 +53,69 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/vendor/login";
       return NextResponse.redirect(url);
     }
+    if (isPgsolPath && !isPgsolLogin) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/pgsol/login";
+      return NextResponse.redirect(url);
+    }
     if (isDashboardPath) {
       const url = request.nextUrl.clone();
       url.pathname = "/auth/login";
       return NextResponse.redirect(url);
     }
-  } else if (isAuthPath || isVendorPath || isDashboardPath) {
+  } else if (isAuthPath || isVendorPath || isPgsolPath || isDashboardPath) {
     // Tipe portal dibaca dari tabel `profiles`, bukan user_metadata: metadata
     // bisa ditulis sendiri oleh user lewat supabase.auth.updateUser() dari
-    // browser, sehingga vendor bisa mengaku 'internal' dan lolos gate ini.
-    // `profiles` adalah sumber kebenaran yang sama dengan yang dipakai kedua
+    // browser, sehingga vendor bisa mengaku 'pgn' dan lolos gate ini.
+    // `profiles` adalah sumber kebenaran yang sama dengan yang dipakai ketiga
     // login action. Query hanya dijalankan untuk path yang memang di-gate.
     const { data: profile } = await supabase
       .from('profiles')
       .select('type')
       .eq('id', user.id)
       .single();
-    const type = profile?.type; // 'internal' atau 'external'
+    const type = profile?.type; // 'pgn' | 'pgsol' | 'vendor'
 
-    // 1. Cross-Portal Blocking
-    if (type === 'external') {
-      // Vendors cannot access internal dashboard or auth login
-      if (isDashboardPath || isAuthPath) {
+    if (isVendor(type)) {
+      if (isDashboardPath || isAuthPath || isPgsolPath) {
         const url = request.nextUrl.clone();
         url.pathname = "/vendor/dashboard";
         return NextResponse.redirect(url);
       }
-      // If they go to vendor login, redirect to vendor dashboard
       if (isVendorLogin) {
         const url = request.nextUrl.clone();
         url.pathname = "/vendor/dashboard";
         return NextResponse.redirect(url);
       }
-    } else if (type === 'internal') {
-      // Internal cannot access vendor paths
-      if (isVendorPath) {
+    } else if (isPgsol(type)) {
+      // Pengecualian: user PGSOL boleh masuk /dashboard/approval (halaman
+      // yang sama dipakai pgsol_reviewer hari ini) meski home-nya /pgsol.
+      if ((isDashboardPath && !isDashboardApprovalPath) || isVendorPath || isAuthPath) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/pgsol/dashboard";
+        return NextResponse.redirect(url);
+      }
+      if (isPgsolLogin) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/pgsol/dashboard";
+        return NextResponse.redirect(url);
+      }
+    } else if (isPgn(type)) {
+      if (isVendorPath || isPgsolPath) {
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard";
         return NextResponse.redirect(url);
       }
-      // If they go to auth login, redirect to dashboard
       if (isAuthLogin) {
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard";
         return NextResponse.redirect(url);
       }
-      
-      // 2. Dynamic permission checks are now handled in the page/layout components
     } else {
       // Profil tidak ditemukan / tipe tidak dikenal: jangan biarkan lolos ke
-      // kedua portal. Halaman login sengaja dibiarkan lewat supaya tidak
-      // terjadi redirect loop.
-      if (isDashboardPath || (isAuthPath && !isAuthLogin) || (isVendorPath && !isVendorLogin)) {
+      // portal mana pun. Halaman login masing-masing sengaja dibiarkan
+      // lewat supaya tidak terjadi redirect loop.
+      if (isDashboardPath || (isAuthPath && !isAuthLogin) || (isVendorPath && !isVendorLogin) || (isPgsolPath && !isPgsolLogin)) {
         const url = request.nextUrl.clone();
         url.pathname = "/auth/login";
         return NextResponse.redirect(url);
