@@ -15,6 +15,10 @@
 INSERT INTO public.organizations (id, kind, name)
 SELECT id, 'vendor', company_name FROM public.vendor_profiles;
 
+-- Nama constraint di bawah ini asumsi konvensi penamaan default Postgres.
+-- Verifikasi dulu lewat `\d vendor_profiles` (atau tab constraints di
+-- Supabase Table Editor) sebelum menjalankan file ini — sesuaikan namanya
+-- kalau berbeda.
 ALTER TABLE public.vendor_profiles DROP CONSTRAINT vendor_profiles_id_fkey;
 ALTER TABLE public.vendor_profiles
   ADD CONSTRAINT vendor_profiles_org_id_fkey
