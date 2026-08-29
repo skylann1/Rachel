@@ -86,6 +86,7 @@ export const allPermissionModules = [
       { key: 'manage_vendor', label: 'Mengelola Data Vendor' },
       { key: 'view_account', label: 'Melihat Data Akun' },
       { key: 'manage_account', label: 'Mengelola Data Akun' },
+      { key: 'manage_org_staff', label: 'Mengelola Staff Organisasi Sendiri' },
       { key: 'manage_role', label: 'Mengelola Role & Permission' },
       { key: 'view_project', label: 'Melihat Master Proyek' },
       { key: 'manage_project', label: 'Mengelola Master Proyek' },
