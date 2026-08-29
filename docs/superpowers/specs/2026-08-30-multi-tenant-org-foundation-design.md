@@ -138,48 +138,67 @@ ALTER TABLE public.vendor_profiles
 Beberapa profile vendor (banyak user) bisa berbagi `org_id` yang sama, dan
 `org_id` itulah yang dipakai untuk `JOIN vendor_profiles`.
 
-### `projects.vendor_org_id`
+### `vendor_id` di tabel lain: dipakai ulang apa adanya, bukan diganti
 
-```sql
-ALTER TABLE public.projects ADD COLUMN vendor_org_id UUID REFERENCES public.organizations(id);
-```
-
-`projects.vendor_id` (kolom lama, FK ke `profiles.id`) **dipertahankan** —
-sekarang berarti "user vendor yang membuat proyek ini", bukan lagi acuan
-akses. Akses baca/tulis proyek vendor pindah ke `vendor_org_id`.
+Kunci penyederhanaan: `projects.vendor_id`, `vendor_workers.vendor_id`,
+`vendor_equipment.vendor_id`, `vendor_materials.vendor_id`, dan
+`vendor_documents.vendor_id` **semuanya sudah** `REFERENCES
+public.vendor_profiles(id)` (bukan `profiles(id)` langsung). Karena
+`vendor_profiles.id` dipakai ulang jadi id organisasi (lihat bagian di
+atas) tanpa nilainya berubah, kolom-kolom `vendor_id` ini **otomatis**
+berisi id organisasi yang valid begitu migrasi `vendor_profiles` selesai —
+tidak perlu kolom baru, tidak perlu backfill, tidak perlu ganti FK sama
+sekali di tabel-tabel ini. Yang berubah cuma *makna* nilainya (dulu = id
+satu user vendor, sekarang = id company vendor), dan cara RLS
+membandingkannya (lihat helper di bawah).
 
 ### Helper SQL untuk RLS
 
 ```sql
-CREATE OR REPLACE FUNCTION public.is_member_of_vendor_org(target_org_id UUID)
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND org_id = target_org_id
-  );
+CREATE OR REPLACE FUNCTION public.current_vendor_org_id()
+RETURNS UUID AS $$
+  SELECT org_id FROM public.profiles WHERE id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 ```
 
-Semua policy yang tadinya `p.vendor_id = auth.uid()` (lewat join ke
-`projects`) diganti pola:
+Semua policy yang tadinya membandingkan `vendor_id = auth.uid()` —
+langsung (`projects`, `vendor_workers`, `vendor_equipment`,
+`vendor_materials`, `vendor_documents`) maupun lewat join (`procedures`,
+`jsa`, `jsa_steps`, `ptw`, `inspections`, `incidents`, `toolbox_meetings`,
+`site_checkins`, `vendor_worker_competencies`, `vendor_equipment_documents`,
+`vendor_material_documents`) — diganti **satu-satu kata**:
+`auth.uid()` → `public.current_vendor_org_id()`. Contoh langsung:
 
 ```sql
-EXISTS (
-  SELECT 1 FROM public.projects p
-  WHERE p.id = project_id AND public.is_member_of_vendor_org(p.vendor_org_id)
-)
+-- sebelum
+USING (vendor_id = auth.uid())
+-- sesudah
+USING (vendor_id = public.current_vendor_org_id())
 ```
 
-Ini mencakup semua policy vendor di: `procedures`, `jsa`, `jsa_steps`, `ptw`,
-`inspections`, `incidents`, `vendor_documents`, dan tabel master data vendor
-(workers/equipment/materials) — file-file yang perlu diaudit: `schema.sql`,
-`schema_update_rls_policies.sql`, `schema_update_incidents_rls.sql`,
-`schema_update_inspections.sql`, `schema_vendor_workers_equipment.sql`,
-`schema_ptw_vendor_update_policy.sql`, `schema_update_vendor_documents.sql`,
-`schema_jsa_dual_approval.sql`.
+Contoh lewat join (pola `EXISTS (... p.vendor_id = auth.uid())`):
 
-Policy langsung di `projects` sendiri (`vendor_id = auth.uid()`) juga
-diganti pola serupa memakai `vendor_org_id` langsung (tanpa perlu join).
+```sql
+-- sebelum
+EXISTS (SELECT 1 FROM public.projects p WHERE p.id = project_id AND p.vendor_id = auth.uid())
+-- sesudah
+EXISTS (SELECT 1 FROM public.projects p WHERE p.id = project_id AND p.vendor_id = public.current_vendor_org_id())
+```
+
+Karena `vendor_id` di semua tabel ini sudah = id organisasi (lihat bagian
+sebelumnya), tidak ada tabel yang butuh kolom/join tambahan — cuma
+pergantian sisi kanan perbandingan. Daftar lengkap policy yang kena
+substitusi ini (nama policy + file) didaftar per-task di implementation
+plan.
+
+Kode aplikasi (TS) yang melakukan filter setara —
+`.eq('vendor_id', user.id)` atau insert `vendor_id: user.id` — di
+`app/vendor/dashboard/**/*actions.ts` dan beberapa `page.tsx` (±22 titik di
+±10 file, ditemukan lewat `grep -rn ".eq('vendor_id'" app/vendor`) juga
+harus diganti dari `user.id` (id user login) menjadi id organisasi vendor
+milik user itu (`profiles.org_id`), lewat helper baru
+`getCallerVendorOrgId(supabase)` di `utils/supabase/server.ts` atau file
+sejenis — didetailkan di implementation plan.
 
 ### Migrasi data (urutan wajib)
 
@@ -203,7 +222,7 @@ semua backfill yang masih bergantung pada label lama selesai.
    dengan **id yang sama** dengan `vendor_profiles.id` yang sudah ada
    (id lama itu tadinya = id user vendor, sekarang dipakai ulang langsung
    sebagai id organisasi — jadi tidak perlu UPDATE id di `vendor_profiles`
-   maupun re-mapping apa pun):
+   maupun tabel lain yang mereferensikannya):
    ```sql
    INSERT INTO organizations (id, kind, name)
    SELECT id, 'vendor', company_name FROM vendor_profiles;
@@ -212,7 +231,8 @@ semua backfill yang masih bergantung pada label lama selesai.
    `profiles(id)`, tambah constraint baru menunjuk `organizations(id)`
    (lihat DDL di bagian "`vendor_profiles` → jadi identitas company" di
    atas). Karena id tidak berubah nilainya, langkah ini murni ganti target
-   FK, tanpa UPDATE data.
+   FK — `projects.vendor_id` dkk. (FK ke `vendor_profiles(id)`) tidak perlu
+   disentuh sama sekali, PK yang mereka rujuk tetap sama persis.
 7. `UPDATE profiles p SET org_id = p.id WHERE p.id IN (SELECT id FROM
    vendor_profiles) AND p.type = 'external'` — profile vendor asli
    (satu-satunya user di company itu sejauh ini) diarahkan ke org yang id-nya
@@ -222,9 +242,11 @@ semua backfill yang masih bergantung pada label lama selesai.
    user_type RENAME VALUE 'external' TO 'vendor';` — file/statement
    terpisah, dijalankan setelah semua `UPDATE ... WHERE type = 'internal'/
    'external'` di atas selesai.
-9. `UPDATE projects SET vendor_org_id = (SELECT org_id FROM profiles WHERE
-   id = projects.vendor_id)`.
-10. Terapkan ulang semua RLS policy vendor memakai `is_member_of_vendor_org`.
+9. Buat fungsi `current_vendor_org_id()` dan terapkan ulang semua RLS
+   policy yang membandingkan `vendor_id`/`p.vendor_id = auth.uid()`
+   memakainya, sesuai daftar di bagian "Helper SQL untuk RLS" di atas.
+10. Perbarui `is_internal_user()` / `is_external_user()` (lihat bagian
+    berikut) dan `handle_new_user()` supaya memakai label enum baru.
 
 **Catatan runtime Postgres:** `ALTER TYPE ... RENAME VALUE` dan
 `ALTER TYPE ... ADD VALUE` tidak boleh dijalankan di transaksi yang sama
@@ -233,6 +255,44 @@ langkah 2 dan langkah 8 masing-masing harus jadi file/statement terpisah
 dari langkah-langkah di sekitarnya, sesuai konvensi migrasi yang sudah ada
 di repo (tiap `schema_*.sql` dijalankan manual satu per satu oleh user di
 Supabase SQL editor).
+
+### `is_internal_user()` / `is_external_user()` / `handle_new_user()`
+
+Ketiga fungsi `SECURITY DEFINER` ini dipakai di banyak policy lewat nama
+(bukan didefinisikan ulang per tabel), jadi cukup di-`CREATE OR REPLACE`
+sekali untuk mengubah perilaku semua policy yang memanggilnya:
+
+```sql
+CREATE OR REPLACE FUNCTION public.is_internal_user()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND type IN ('pgn', 'pgsol'));
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.is_external_user()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND type = 'vendor');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+`is_internal_user()` sengaja mencakup **kedua** `pgn` dan `pgsol` — ini
+yang menjaga semua policy "Internal users can view/update all X" (dipakai
+di procedures/jsa/ptw/incidents/vendor_documents/toolbox_meetings/dst.)
+tetap berlaku persis seperti sekarang untuk staff PGSOL, sesuai Non-Goal
+"approval PGSOL/PGN tetap jalan seperti sekarang".
+
+`handle_new_user()` (trigger `on_auth_user_created`, definisi aktif di
+`schema_fix_handle_new_user_role.sql`) melakukan
+`(new.raw_user_meta_data->>'type')::public.user_type` dengan default
+literal `'external'` — literal ini juga harus di-`CREATE OR REPLACE`
+memakai `'vendor'` setelah rename, kalau tidak pembuatan akun baru gagal
+dengan error enum. Cabang `IF new_type = 'external' THEN ... ELSE ...`
+menjadi `IF new_type = 'vendor' THEN ... ELSE ...` — cabang `ELSE` (insert
+`internal_profiles`) tetap dipakai bersama oleh `pgn` maupun `pgsol`, tidak
+perlu cabang ketiga.
 
 ## Portal & Routing
 
