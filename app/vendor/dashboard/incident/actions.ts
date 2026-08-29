@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 
 export interface VendorIncidentItem {
   id: string;
@@ -20,11 +20,12 @@ export async function getVendorIncidents(): Promise<VendorIncidentItem[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
 
   const { data, error } = await supabase
     .from('incidents')
     .select('id, title, type, incident_date, location, status, chronology, immediate_action, rca_root_cause, rca_corrective, rca_preventive, projects!inner(vendor_id)')
-    .eq('projects.vendor_id', user.id)
+    .eq('projects.vendor_id', vendorOrgId)
     .order('incident_date', { ascending: false });
 
   if (error) {
