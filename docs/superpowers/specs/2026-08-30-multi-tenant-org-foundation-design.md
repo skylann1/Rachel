@@ -77,11 +77,11 @@ di sini.
 - Tahap "review internal vendor" baru di alur dokumen.
 - Halaman UI untuk admin memilih approver per proyek.
 - Portal PGSOL Fase 1 cuma berisi: login, lihat profil sendiri, dan halaman
-  kelola staff org (kalau login sebagai admin PGSOL). Belum ada halaman
-  approval JSA di portal ini — approver PGSOL di Fase 1 tetap approve lewat
-  mekanisme yang sudah ada (mereka masuk portal PGSOL tapi actionnya masih
-  memanggil server action approval JSA yang sudah ada, dipindah routingnya
-  supaya bisa diakses dari portal baru).
+  kelola staff org (kalau login sebagai admin PGSOL). Tidak ada UI approval
+  baru yang dibangun — untuk review JSA, user PGSOL diberi akses langsung ke
+  `/dashboard/approval` (halaman yang sudah ada, dipakai `pgsol_reviewer`
+  hari ini juga), bukan direplikasi di bawah `/pgsol/`. Lihat detail
+  pengecualian middleware di bagian Portal & Routing.
 
 ## Data Model
 
@@ -299,21 +299,26 @@ perlu cabang ketiga.
 `utils/supabase/middleware.ts` diperluas dari 2 cabang jadi 3, dibaca dari
 `profiles.type` (`pgn` / `pgsol` / `vendor`):
 
-| type | home | login | blocked dari |
-|------|------|-------|--------------|
-| pgn | `/dashboard` | `/auth/login` | `/vendor/*`, `/pgsol/*` |
-| pgsol | `/pgsol/dashboard` | `/pgsol/login` | `/dashboard/*`, `/vendor/*` |
-| vendor | `/vendor/dashboard` | `/vendor/login` | `/dashboard/*`, `/pgsol/*` |
+| type | home | login | juga boleh akses | blocked dari |
+|------|------|-------|-------------------|--------------|
+| pgn | `/dashboard` | `/auth/login` | — | `/vendor/*`, `/pgsol/*` |
+| pgsol | `/pgsol/dashboard` | `/pgsol/login` | `/dashboard/approval/**` | sisa `/dashboard/*`, `/vendor/*` |
+| vendor | `/vendor/dashboard` | `/vendor/login` | — | `/dashboard/*`, `/pgsol/*` |
+
+User `pgsol` diberi pengecualian eksplisit ke path berawalan
+`/dashboard/approval` — halaman ini **tidak diduplikasi**; ini persis
+halaman yang dipakai `pgsol_reviewer` hari ini (server action `reviewJsa`/
+`approveJsa`/dst. di `app/dashboard/approval/actions.ts` tidak berubah),
+cuma sekarang bisa diakses dari akun dengan `type='pgsol'` juga, bukan
+cuma `type='pgn'`. Konten & visibilitas halaman itu sendiri (semua dokumen
+yang butuh review, terlepas tahap) sama seperti yang sudah dilihat
+`pgsol_reviewer` sekarang — tidak ada perubahan exposure data.
 
 Struktur route baru `app/pgsol/` mengikuti pola `app/vendor/` yang sudah
 ada (layout + login page + dashboard shell), bukan meniru `app/dashboard/`
 yang jauh lebih besar — Fase 1 cuma butuh: halaman login, layout dasar
-dengan nav, halaman profil, dan halaman kelola staff (kalau admin PGSOL).
-
-Approver PGSOL yang sekarang approve JSA lewat `/dashboard/approval` pindah
-login ke `/pgsol/login`, tapi **link approval JSA-nya diarahkan ke rute baru
-di bawah `/pgsol/`** yang memanggil server action approval JSA yang sudah
-ada (tidak ditulis ulang) — cukup dipindah titik masuknya, bukan logicnya.
+dengan nav (termasuk link ke `/dashboard/approval`), halaman profil, dan
+halaman kelola staff (kalau admin PGSOL).
 
 ## Admin & Permission Model
 
