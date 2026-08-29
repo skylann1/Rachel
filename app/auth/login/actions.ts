@@ -25,8 +25,8 @@ export async function login(formData: FormData) {
     .eq('id', authData.user.id)
     .single();
 
-  if (profile?.type !== 'internal') {
-    // Kalau bukan internal, sign out paksa dan tolak
+  if (profile?.type !== 'pgn') {
+    // Kalau bukan pgn, sign out paksa dan tolak
     await supabase.auth.signOut();
     const debugMsg = `Data profil: ${JSON.stringify(profile) || 'Kosong'}. Error: ${profileError?.message || 'Tidak ada error DB'}`;
     redirect(`/auth/login?error=Akses ditolak. ${debugMsg}`);

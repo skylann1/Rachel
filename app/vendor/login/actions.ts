@@ -25,8 +25,8 @@ export async function login(formData: FormData) {
     .eq('id', authData.user.id)
     .single();
 
-  if (profile?.type !== 'external') {
-    // Kalau bukan external, sign out paksa dan tolak
+  if (profile?.type !== 'vendor') {
+    // Kalau bukan vendor, sign out paksa dan tolak
     await supabase.auth.signOut();
     redirect("/vendor/login?error=Akses ditolak. Akun ini bukan akun Vendor.");
   }

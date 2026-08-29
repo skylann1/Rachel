@@ -133,10 +133,12 @@ export default function RolePermissionPage() {
                           {role.is_system && (
                             <span className="bg-slate-100 text-slate-500 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold">System</span>
                           )}
-                          {role.type === 'external' ? (
-                            <span className="bg-indigo-100 text-indigo-700 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold">External</span>
+                          {role.type === 'vendor' ? (
+                            <span className="bg-indigo-100 text-indigo-700 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold">Vendor</span>
+                          ) : role.type === 'pgsol' ? (
+                            <span className="bg-sky-100 text-sky-700 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold">PGSOL</span>
                           ) : (
-                            <span className="bg-emerald-100 text-emerald-700 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold">Internal</span>
+                            <span className="bg-emerald-100 text-emerald-700 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold">PGN</span>
                           )}
                         </div>
                         <div className="text-xs text-slate-500 mt-1 line-clamp-1">{role.description}</div>

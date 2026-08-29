@@ -73,13 +73,14 @@ export default function AddRoleModal({ isOpen, onClose, onSuccess }: { isOpen: b
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Tipe Role <span className="text-rose-500">*</span></label>
-              <select 
-                name="type" 
+              <select
+                name="type"
                 required
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm bg-white"
               >
-                <option value="internal">Internal (PGN)</option>
-                <option value="external">External (Vendor)</option>
+                <option value="pgn">PGN</option>
+                <option value="pgsol">PGSOL</option>
+                <option value="vendor">Vendor</option>
               </select>
             </div>
 

@@ -10,7 +10,7 @@ export default function RolePermissionsClient({ role, allModules }: { role: any,
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(role.name);
   const [description, setDescription] = useState(role.description || '');
-  const [type, setType] = useState(role.type || 'internal');
+  const [type, setType] = useState(role.type || 'pgn');
   const [permissions, setPermissions] = useState<Record<string, string[]>>(role.permissions || {});
   const router = useRouter();
 
@@ -97,14 +97,15 @@ export default function RolePermissionsClient({ role, allModules }: { role: any,
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Tipe Role</label>
-              <select 
+              <select
                 value={type}
                 onChange={e => setType(e.target.value)}
                 disabled={role.is_system}
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none disabled:bg-slate-100"
               >
-                <option value="internal">Internal (PGN)</option>
-                <option value="external">External (Vendor)</option>
+                <option value="pgn">PGN</option>
+                <option value="pgsol">PGSOL</option>
+                <option value="vendor">Vendor</option>
               </select>
             </div>
             <div>

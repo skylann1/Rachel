@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { isPgn, isPgsol } from '@/lib/roles';
 
 /**
  * Diskusi proyek dipakai dua portal sekaligus, jadi aksesnya tidak bisa
@@ -12,7 +13,7 @@ import { revalidatePath } from 'next/cache';
  */
 async function canAccessProjectDiscussion(supabase: any, userId: string, projectId: string) {
   const { data: profile } = await supabase.from('profiles').select('type').eq('id', userId).single();
-  if (profile?.type === 'internal') return true;
+  if (isPgn(profile?.type) || isPgsol(profile?.type)) return true;
 
   const { data: project } = await supabase
     .from('projects')
