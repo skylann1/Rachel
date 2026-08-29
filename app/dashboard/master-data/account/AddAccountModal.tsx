@@ -13,7 +13,7 @@ interface AddAccountModalProps {
 export default function AddAccountModal({ isOpen, onClose, roles }: AddAccountModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [type, setType] = useState('external');
+  const [type, setType] = useState('pgn');
 
   if (!isOpen) return null;
 
@@ -102,8 +102,9 @@ export default function AddAccountModal({ isOpen, onClose, roles }: AddAccountMo
                   onChange={(e) => setType(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm bg-white"
                 >
-                  <option value="external">External (Vendor)</option>
-                  <option value="internal">Internal (PGN)</option>
+                  <option value="pgn">PGN</option>
+                  <option value="pgsol">PGSOL</option>
+                  <option value="vendor">Vendor</option>
                 </select>
               </div>
               
@@ -124,7 +125,7 @@ export default function AddAccountModal({ isOpen, onClose, roles }: AddAccountMo
               </div>
             </div>
 
-            {type === 'internal' ? (
+            {type !== 'vendor' ? (
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Nomor Induk Pegawai (NIP)</label>
                 <input 
