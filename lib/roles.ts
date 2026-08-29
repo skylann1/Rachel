@@ -9,6 +9,8 @@ export const ROLE_LABELS: Record<string, string> = {
   ptw_authority: 'PTW Authority',
   ptw_issuer: 'PTW Issuer',
   vendor: 'Vendor',
+  vendor_admin: 'Admin Vendor',
+  pgsol_admin: 'Admin PGSOL',
 };
 
 /**
@@ -27,4 +29,21 @@ export function getRoleLabel(role: string | null | undefined): string {
     .filter(Boolean)
     .map(kata => kata.charAt(0).toUpperCase() + kata.slice(1))
     .join(' ');
+}
+
+/**
+ * `profiles.type` sekarang ada 3 nilai (pgn/pgsol/vendor) — helper ini
+ * menggantikan perbandingan string literal langsung yang tersebar di kode,
+ * supaya kalau nanti ada perubahan lagi cukup diubah di satu tempat.
+ */
+export function isPgn(type: string | null | undefined): boolean {
+  return type === 'pgn';
+}
+
+export function isPgsol(type: string | null | undefined): boolean {
+  return type === 'pgsol';
+}
+
+export function isVendor(type: string | null | undefined): boolean {
+  return type === 'vendor';
 }
