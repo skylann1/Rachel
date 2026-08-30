@@ -28,9 +28,14 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
   if (rolesError) console.error('Gagal memuat daftar role:', rolesError.message);
   const availableRoles = roles || [];
 
+  // Nama perusahaan sekarang dibaca dari `organizations` lewat
+  // `profiles.org_id`, bukan lagi dari embed `vendor_profiles` — FK
+  // vendor_profiles.id -> profiles.id sudah dilepas (lihat
+  // schema_org_backfill_vendor.sql), jadi PostgREST tidak bisa lagi
+  // menyimpulkan relasi profiles <-> vendor_profiles.
   let query = supabase.from('profiles').select(`
     *,
-    vendor_profiles(company_name),
+    organizations(name),
     internal_profiles(nip)
   `, { count: 'exact' });
 
@@ -64,7 +69,7 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
     type: p.type, // 'internal' or 'external'
     verified: !!p.email_confirmed_at,
     status: p.status || 'Active', // Read from DB now
-    companyName: Array.isArray(p.vendor_profiles) ? p.vendor_profiles[0]?.company_name : p.vendor_profiles?.company_name || null,
+    companyName: (Array.isArray(p.organizations) ? p.organizations[0]?.name : p.organizations?.name) || null,
     nip: Array.isArray(p.internal_profiles) ? p.internal_profiles[0]?.nip : p.internal_profiles?.nip || null,
     lastLogin: p.last_sign_in_at
       ? new Date(p.last_sign_in_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })

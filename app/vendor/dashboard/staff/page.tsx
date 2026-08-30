@@ -27,7 +27,10 @@ export default async function VendorStaffPage(props: { searchParams?: Promise<{ 
   const { data: roles } = await supabase.from('roles').select('name, is_system, type').eq('type', 'vendor').order('name');
   const availableRoles = roles || [];
 
-  let query = supabase.from('profiles').select(`*, vendor_profiles(company_name), internal_profiles(nip)`, { count: 'exact' }).eq('org_id', orgId);
+  // Nama perusahaan dibaca dari `organizations` lewat `profiles.org_id`:
+  // relasi profiles <-> vendor_profiles sudah tidak ada lagi sejak FK
+  // vendor_profiles.id dipindah ke organizations (schema_org_backfill_vendor.sql).
+  let query = supabase.from('profiles').select(`*, organizations(name), internal_profiles(nip)`, { count: 'exact' }).eq('org_id', orgId);
   if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
   if (role) query = query.eq('role', role);
   if (status === 'active') query = query.eq('status', 'Active');
@@ -40,7 +43,7 @@ export default async function VendorStaffPage(props: { searchParams?: Promise<{ 
   const accounts = (profiles || []).map(p => ({
     id: p.id, name: p.full_name, email: p.email || 'Menunggu Sinkronisasi', role: p.role, type: p.type,
     verified: !!p.email_confirmed_at, status: p.status || 'Active',
-    companyName: Array.isArray(p.vendor_profiles) ? p.vendor_profiles[0]?.company_name : p.vendor_profiles?.company_name || null,
+    companyName: (Array.isArray(p.organizations) ? p.organizations[0]?.name : p.organizations?.name) || null,
     nip: Array.isArray(p.internal_profiles) ? p.internal_profiles[0]?.nip : p.internal_profiles?.nip || null,
     lastLogin: p.last_sign_in_at ? new Date(p.last_sign_in_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Belum Pernah Login',
     registeredAt: new Date(p.created_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' }),
