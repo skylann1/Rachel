@@ -11,6 +11,21 @@
 -- (lib/procedure-status.ts, lib/jsa-status.ts, lib/ptw-status.ts) — bukan
 -- vokabuler baru.
 
+-- PERINGATAN CUTOVER: begitu tabel ini ada, approval tidak lagi memakai
+-- permission sebagai gerbang melainkan keberadaan baris di sini. Tabelnya
+-- kosong tepat setelah migrasi, jadi SEMUA dokumen yang sedang berjalan
+-- langsung tidak bisa di-approve sampai admin mengisi assignment-nya
+-- (fail-closed, disengaja). Lihat README_stage_assignment_migration_order.md
+-- untuk langkah pengisian pra/pasca-cutover.
+--
+-- KETERBATASAN YANG DIKETAHUI: kunci baris ini TIDAK memuat identitas dokumen —
+-- hanya (project_id, doc_type, stage_key, assignee_id). Semua dokumen dengan
+-- doc_type sama pada satu proyek karena itu berbagi baris assignment yang sama.
+-- Saat ini hanya PTW yang bisa punya lebih dari satu dokumen per proyek (beberapa
+-- ptw_type), dan itu aman selama tipe-tipe itu diajukan BERURUTAN; kalau dua tipe
+-- mengambang di tahap yang sama secara bersamaan, keduanya keliru berbagi state
+-- keputusan. Perbaikannya butuh kolom identitas dokumen di tabel ini (masuk ke
+-- UNIQUE constraint di bawah) — di luar cakupan Fase 2.
 CREATE TABLE public.stage_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE NOT NULL,
