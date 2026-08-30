@@ -299,58 +299,66 @@ export async function approveJsa(jsaId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const { data: current } = await supabase
-    .from('jsa')
-    .select('status, reviewer_id')
-    .eq('id', jsaId)
-    .single();
+  const { data: current } = await supabase.from('jsa').select('status, reviewer_id, project_id').eq('id', jsaId).single();
+  if (!current?.project_id) throw new Error("JSA ini tidak terhubung ke proyek.");
 
-  let updatePayload: any = {};
+  let stageKey = '';
   let nextStatus = '';
 
-  if (current?.status === JSA_STATUS.reviewPgsol) {
-    // Tahap 1 — verifikasi teknis oleh Satker Pemberi Kerja (PGSOL).
-    await requirePermission(supabase, user.id, JSA_STAGE_PERMISSION[JSA_STATUS.reviewPgsol], "Anda tidak memiliki izin untuk mereview JSA pada tahap ini.");
-    updatePayload = {
-      reviewer_id: user.id,
-      reviewed_at: new Date().toISOString(),
-      status: JSA_STATUS.approvalPgn,
-    };
+  if (current.status === JSA_STATUS.reviewPgsol) {
+    stageKey = 'jsa.review_pgsol';
     nextStatus = JSA_STATUS.approvalPgn;
-  } else if (current?.status === JSA_STATUS.approvalPgn) {
-    // Tahap 2 — otorisasi formal oleh Satker Penanggung Jawab (PGN).
-    await requirePermission(supabase, user.id, JSA_STAGE_PERMISSION[JSA_STATUS.approvalPgn], "Anda tidak memiliki izin untuk menyetujui JSA pada tahap ini.");
-    // Pemisahan wewenang: reviewer dan approver wajib dua orang berbeda.
+  } else if (current.status === JSA_STATUS.approvalPgn) {
+    stageKey = 'jsa.approve_pgn';
+    nextStatus = JSA_STATUS.approved;
+    // Pemisahan wewenang: reviewer dan approver wajib dua orang berbeda,
+    // terlepas dari siapa yang di-assign ke tahap ini.
     if (current.reviewer_id && current.reviewer_id === user.id) {
       throw new Error("JSA harus disetujui oleh orang yang berbeda dari yang melakukan review. Silakan minta Approver PGN lain untuk menyetujui.");
     }
-    updatePayload = {
-      approver_id: user.id,
-      approved_at: new Date().toISOString(),
-      status: JSA_STATUS.approved,
-    };
-    nextStatus = JSA_STATUS.approved;
   } else {
     throw new Error("JSA tidak dalam tahap yang bisa disetujui.");
   }
 
-  const { error } = await supabase.from('jsa').update(updatePayload).eq('id', jsaId);
-  if (error) throw new Error(error.message);
+  const rows = await getStageAssignments(supabase, current.project_id, 'jsa', stageKey);
+  const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
+  if (!myRow) throw new Error("Anda tidak ditugaskan untuk tahap JSA ini pada proyek ini.");
+
+  await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
+
+  // Re-fetch (bukan patch lokal dari `rows` yang sudah basi) — dua approver
+  // terakhir yang approve nyaris bersamaan sama-sama melihat snapshot awal
+  // yang belum mencatat approval satu sama lain kalau ini pakai patch lokal,
+  // sehingga dokumen bisa macet permanen walau di DB semua baris sudah
+  // approved. Lihat ruling di ledger Task 5 untuk detail race-nya.
+  const freshRows = await getStageAssignments(supabase, current.project_id, 'jsa', stageKey);
+  const stageComplete = isStageFullyApproved(freshRows);
 
   const { data: jsa } = await supabase.from('jsa').select('project_id, projects ( name, vendor_id )').eq('id', jsaId).single();
   const proj: any = Array.isArray(jsa?.projects) ? jsa?.projects[0] : jsa?.projects;
 
-  if (jsa?.project_id) {
+  if (!stageComplete) {
+    revalidatePath('/dashboard/approval');
+    return;
+  }
+
+  const updatePayload: any = stageKey === 'jsa.review_pgsol'
+    ? { reviewer_id: user.id, reviewed_at: new Date().toISOString(), status: JSA_STATUS.approvalPgn }
+    : { approver_id: user.id, approved_at: new Date().toISOString(), status: JSA_STATUS.approved };
+
+  const { error } = await supabase.from('jsa').update(updatePayload).eq('id', jsaId);
+  if (error) throw new Error(error.message);
+
+  if (current.project_id) {
     await logDocumentEvent(supabase, {
-      docType: 'jsa', docId: jsaId, projectId: jsa.project_id, actorId: user.id,
+      docType: 'jsa', docId: jsaId, projectId: current.project_id, actorId: user.id,
       action: nextStatus === JSA_STATUS.approved ? 'Disetujui PGN' : 'Direview PGSOL',
     });
   }
 
-  // Setelah review PGSOL selesai, giliran PGN yang harus bertindak.
   if (nextStatus === JSA_STATUS.approvalPgn) {
-    await notifyUsersByPermission({
-      ...JSA_STAGE_PERMISSION[JSA_STATUS.approvalPgn],
+    await notifyAssignees({
+      projectId: current.project_id, docType: 'jsa', stageKey: 'jsa.approve_pgn',
       type: 'action_required',
       title: 'JSA Menunggu Persetujuan PGN',
       message: `JSA untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu persetujuan Anda.`,
@@ -377,16 +385,33 @@ export async function rejectJsa(jsaId: string, note: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const { data: current } = await supabase.from('jsa').select('status').eq('id', jsaId).single();
+  const { data: current } = await supabase.from('jsa').select('status, project_id').eq('id', jsaId).single();
+  if (!current?.project_id) throw new Error("JSA ini tidak terhubung ke proyek.");
+
+  let stageKey = '';
   let penolak = '';
-  if (current?.status === JSA_STATUS.reviewPgsol) {
-    await requirePermission(supabase, user.id, JSA_STAGE_PERMISSION[JSA_STATUS.reviewPgsol], "Anda tidak memiliki izin untuk menolak JSA pada tahap ini.");
+  if (current.status === JSA_STATUS.reviewPgsol) {
+    stageKey = 'jsa.review_pgsol';
     penolak = 'PGSOL';
-  } else if (current?.status === JSA_STATUS.approvalPgn) {
-    await requirePermission(supabase, user.id, JSA_STAGE_PERMISSION[JSA_STATUS.approvalPgn], "Anda tidak memiliki izin untuk menolak JSA pada tahap ini.");
+  } else if (current.status === JSA_STATUS.approvalPgn) {
+    stageKey = 'jsa.approve_pgn';
     penolak = 'PGN';
   } else {
     throw new Error("JSA tidak dalam tahap yang bisa ditolak.");
+  }
+
+  const rows = await getStageAssignments(supabase, current.project_id, 'jsa', stageKey);
+  const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
+  if (!myRow) throw new Error("Anda tidak ditugaskan untuk tahap JSA ini pada proyek ini.");
+
+  await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
+  await resetStageAssignments(supabase, current.project_id, 'jsa', stageKey);
+  if (stageKey === 'jsa.approve_pgn') {
+    // Penolakan PGN mengembalikan dokumen sampai ke tahap review PGSOL (di
+    // bawah), sehingga tahap review_pgsol akan berjalan lagi juga — reset
+    // baris assignment-nya supaya konsisten dengan status dokumen yang
+    // restart penuh, bukan cuma tahap approve_pgn.
+    await resetStageAssignments(supabase, current.project_id, 'jsa', 'jsa.review_pgsol');
   }
 
   // Kembali ke awal: vendor harus memperbaiki, lalu direview ulang dari tahap PGSOL.
@@ -395,15 +420,12 @@ export async function rejectJsa(jsaId: string, note: string) {
     .update({
       status: JSA_STATUS.reviewPgsol,
       rejection_note: note,
-      reviewer_id: null,
-      reviewed_at: null,
-      approver_id: null,
-      approved_at: null,
+      reviewer_id: null, reviewed_at: null,
+      approver_id: null, approved_at: null,
     })
     .eq('id', jsaId);
   if (error) throw new Error(error.message);
 
-  // Notify vendor
   const { data: jsa } = await supabase.from('jsa').select('project_id, projects ( name, vendor_id )').eq('id', jsaId).single();
   const proj: any = Array.isArray(jsa?.projects) ? jsa?.projects[0] : jsa?.projects;
   if (jsa?.project_id) {
