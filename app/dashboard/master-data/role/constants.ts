@@ -52,6 +52,7 @@ export const allPermissionModules = [
       { key: 'view', label: 'Melihat Daftar JSA' },
       { key: 'create', label: 'Membuat Pengajuan JSA Baru' },
       { key: 'review_pgsol', label: 'Review JSA — Tahap PGSOL' },
+      { key: 'manage_assignment_pgsol', label: 'Menunjuk Reviewer PGSOL per Proyek' },
       { key: 'approve_pgn', label: 'Approve JSA — Tahap PGN' },
       { key: 'delete', label: 'Menghapus Data JSA' },
     ]
