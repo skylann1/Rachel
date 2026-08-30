@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -133,13 +133,22 @@ export async function updateVendorProfile(data: {
   }
 
   // 3. Update Vendor Profiles Table
+  //
+  // vendor_profiles.id = id ORGANISASI vendor (schema_org_backfill_vendor.sql),
+  // bukan id user yang login — memakai user.id di sini akan mengenai 0 baris
+  // untuk setiap staff selain akun vendor lama hasil migrasi.
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) {
+    return { error: 'Organisasi vendor Anda tidak ditemukan.' };
+  }
+
   const { error: vendorProfileError } = await supabase
     .from('vendor_profiles')
-    .update({ 
+    .update({
       company_name: data.companyName,
       address: data.address
     })
-    .eq('id', user.id);
+    .eq('id', vendorOrgId);
 
   if (vendorProfileError) {
     console.error("Error updating vendor_profiles table:", vendorProfileError);

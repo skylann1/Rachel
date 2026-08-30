@@ -24,14 +24,20 @@ export default async function VendorProfilePage() {
     .eq('id', user.id)
     .single();
 
-  const { data: vendorProfile } = await supabase
-    .from('vendor_profiles')
-    .select('company_name, address')
-    .eq('id', user.id)
-    .single();
+  // Semua data ber-scope company dibaca lewat id ORGANISASI vendor, bukan
+  // id user yang login (vendor_profiles.id / projects.vendor_id /
+  // inspections.target_vendor semuanya menunjuk organizations(id) sekarang).
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
+
+  const { data: vendorProfile } = vendorOrgId
+    ? await supabase
+        .from('vendor_profiles')
+        .select('company_name, address')
+        .eq('id', vendorOrgId)
+        .single()
+    : { data: null };
 
   // Real stats for the summary panel — scoped to this vendor's own projects
-  const vendorOrgId = await getCallerVendorOrgId(supabase);
   const { count: activeProjects } = await supabase
     .from('projects')
     .select('*', { count: 'exact', head: true })
@@ -75,7 +81,7 @@ export default async function VendorProfilePage() {
   const { data: inspections } = await supabase
     .from('inspections')
     .select('status, finding_type')
-    .eq('target_vendor', user.id);
+    .eq('target_vendor', vendorOrgId);
 
   const anomaliCount = (inspections || []).filter(i => ANOMALI_TYPES.includes(i.finding_type)).length;
   const positifCount = (inspections || []).filter(i => POSITIF_TYPES.includes(i.finding_type)).length;

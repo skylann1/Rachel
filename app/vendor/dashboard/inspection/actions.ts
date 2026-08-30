@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { createNotification, notifyUsersByRole } from "@/app/dashboard/inbox/actions";
 
 export async function getVendorInspections() {
@@ -8,6 +8,11 @@ export async function getVendorInspections() {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) return [];
+
+  // inspections.target_vendor menunjuk vendor_profiles(id), yang sejak
+  // schema_org_backfill_vendor.sql berisi id ORGANISASI vendor.
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) return [];
 
   const { data, error } = await supabase
     .from('inspections')
@@ -23,7 +28,7 @@ export async function getVendorInspections() {
       vendor_evidence_url,
       created_at
     `)
-    .eq('target_vendor', user.id)
+    .eq('target_vendor', vendorOrgId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -39,11 +44,17 @@ export async function submitVendorResponse(inspectionId: string, formData: FormD
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
+  const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) throw new Error('Organisasi vendor Anda tidak ditemukan.');
+
   const vendor_response = formData.get("vendor_response") as string;
   const vendor_evidence_url = formData.get("vendor_evidence_url") as string;
 
-  // target_vendor disamakan dengan pemanggil — tanpa ini vendor mana pun bisa
-  // menutup/menimpa temuan milik vendor lain hanya dengan menebak id-nya.
+  // target_vendor dicocokkan dengan ORGANISASI pemanggil (bukan id user-nya —
+  // kolom ini menunjuk vendor_profiles(id) = organizations(id)): tanpa ini
+  // vendor mana pun bisa menutup/menimpa temuan milik company lain hanya
+  // dengan menebak id-nya, sementara staff lain di company yang sama tetap
+  // boleh menindaklanjuti temuan company-nya sendiri.
   // .select() dipakai supaya update yang tidak mengenai baris ikut ketahuan.
   const { data: updated, error } = await supabase
     .from('inspections')
@@ -53,7 +64,7 @@ export async function submitVendorResponse(inspectionId: string, formData: FormD
       status: 'In Progress' // change status to In Progress (or Closed if auto)
     })
     .eq('id', inspectionId)
-    .eq('target_vendor', user.id)
+    .eq('target_vendor', vendorOrgId)
     .select('id');
 
   if (error) {

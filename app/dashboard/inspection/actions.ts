@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { createNotification } from "@/app/dashboard/inbox/actions";
+import { createNotification, notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 import { hasPermissionForUser } from "@/utils/permissions";
 
 export async function getInspections() {
@@ -93,8 +93,10 @@ export async function createInspection(formData: FormData) {
     });
 
     if (target_vendor) {
-      await createNotification({
-        userId: target_vendor,
+      // target_vendor adalah id ORGANISASI vendor (FK ke vendor_profiles(id)),
+      // bukan id user — notifikasi dikirim ke seluruh staff company itu.
+      await notifyOrgMembers({
+        orgId: target_vendor,
         type: 'warning',
         title: `Temuan K3 Baru: ${finding_type}`,
         message: `Temuan baru "${title}" dilaporkan di lokasi "${location}" dengan prioritas ${priority}.`,
@@ -187,17 +189,22 @@ export async function validateInspection(inspectionId: string, approved: boolean
     notes: notes || (approved ? 'Bukti perbaikan sesuai dan disetujui.' : 'Bukti perbaikan belum sesuai, perlu diperbaiki ulang.')
   });
 
-  const notifyUserId = inspection?.target_vendor || inspection?.reported_by;
-  if (notifyUserId) {
-    await createNotification({
-      userId: notifyUserId,
-      type: approved ? 'approval' : 'warning',
-      title: approved ? 'Temuan K3 Ditutup' : 'Perbaikan Ditolak — Perlu Ditindaklanjuti Ulang',
-      message: approved
-        ? `Perbaikan untuk temuan "${inspection?.title}" di lokasi "${inspection?.location}" telah divalidasi dan ditutup.`
-        : `Bukti perbaikan untuk temuan "${inspection?.title}" di lokasi "${inspection?.location}" ditolak. ${notes ? `Catatan: ${notes}` : 'Mohon lengkapi ulang perbaikan.'}`,
-      link: `/vendor/dashboard/inspection`,
-    });
+  // target_vendor adalah id ORGANISASI vendor, sedangkan reported_by adalah
+  // id user — keduanya UUID tapi menunjuk tabel berbeda, jadi tidak boleh
+  // dilebur ke satu variabel "userId" seperti sebelumnya.
+  const notifyPayload = {
+    type: (approved ? 'approval' : 'warning') as 'approval' | 'warning',
+    title: approved ? 'Temuan K3 Ditutup' : 'Perbaikan Ditolak — Perlu Ditindaklanjuti Ulang',
+    message: approved
+      ? `Perbaikan untuk temuan "${inspection?.title}" di lokasi "${inspection?.location}" telah divalidasi dan ditutup.`
+      : `Bukti perbaikan untuk temuan "${inspection?.title}" di lokasi "${inspection?.location}" ditolak. ${notes ? `Catatan: ${notes}` : 'Mohon lengkapi ulang perbaikan.'}`,
+    link: `/vendor/dashboard/inspection`,
+  };
+
+  if (inspection?.target_vendor) {
+    await notifyOrgMembers({ orgId: inspection.target_vendor, ...notifyPayload });
+  } else if (inspection?.reported_by) {
+    await createNotification({ userId: inspection.reported_by, ...notifyPayload });
   }
 }
 

@@ -196,6 +196,49 @@ export async function createNotification({
 }
 
 /**
+ * Kirim notifikasi ke SELURUH anggota satu organisasi.
+ *
+ * Dipakai untuk kolom yang menyimpan id ORGANISASI vendor, bukan id user —
+ * mis. `inspections.target_vendor`, yang menunjuk `vendor_profiles(id)` =
+ * `organizations(id)` sejak schema_org_backfill_vendor.sql. Memasukkan id
+ * organisasi ke `notifications.user_id` (FK ke `profiles(id)`) akan gagal
+ * atau menghasilkan notifikasi yang tidak pernah dibaca siapa pun, karena
+ * satu company vendor sekarang bisa punya banyak staff.
+ */
+export async function notifyOrgMembers({
+  orgId,
+  type,
+  title,
+  message,
+  link,
+}: {
+  orgId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  link?: string;
+}) {
+  const supabase = await createClient();
+
+  const { data: members } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('org_id', orgId);
+
+  if (!members || members.length === 0) return;
+
+  await supabase.from('notifications').insert(
+    members.map(m => ({
+      user_id: m.id,
+      type,
+      title,
+      message,
+      link: link || null,
+    }))
+  );
+}
+
+/**
  * Send notification to ALL users with a specific role.
  * Used for broadcast notifications (e.g., "New PTW needs approval" → all PM users).
  *

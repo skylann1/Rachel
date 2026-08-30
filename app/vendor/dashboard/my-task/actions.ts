@@ -165,8 +165,9 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
   // 5. Temuan K3 yang masih terbuka
   const { data: inspections } = await supabase
     .from('inspections')
+    // target_vendor menunjuk vendor_profiles(id) = id organisasi vendor
     .select('id, title, created_at, projects ( name )')
-    .eq('target_vendor', user.id)
+    .eq('target_vendor', vendorOrgId)
     .eq('status', 'Open');
 
   (inspections || []).forEach((insp: any) => {

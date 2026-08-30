@@ -175,8 +175,9 @@ export async function getVendorChartsData(): Promise<VendorDashboardData> {
       .select('start_date, procedures ( status ), jsa ( status ), ptw ( status )')
       .eq('vendor_id', vendorOrgId),
     supabase.from('inspections')
+      // target_vendor menunjuk vendor_profiles(id) = id organisasi vendor
       .select('status, finding_type, created_at')
-      .eq('target_vendor', user.id),
+      .eq('target_vendor', vendorOrgId),
     getVendorIncidents(),
   ]);
 
