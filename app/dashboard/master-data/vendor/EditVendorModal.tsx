@@ -51,7 +51,11 @@ export default function EditVendorModal({ isOpen, onClose, vendor }: { isOpen: b
           )}
 
           <form id="edit-vendor-form" onSubmit={handleSubmit} className="space-y-6">
-            
+            {/* Satu organisasi vendor bisa punya banyak staff, jadi id profil
+                PIC dikirim eksplisit — `vendor.id` sendiri adalah id
+                ORGANISASI, bukan id user. */}
+            <input type="hidden" name="picId" value={vendor.profiles?.id || ''} />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Left Column - Akun Login */}
               <div className="space-y-4">
