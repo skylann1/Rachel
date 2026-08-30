@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Save, Briefcase, MapPin, Calendar, Building2, Activity, Users } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import AssignmentPanel from './AssignmentPanel';
-import { getStageAssignments, getEligibleAssignees, PGN_STAGE_KEYS } from '@/lib/stage-assignments';
+import { getStageAssignments, getEligibleAssignees, PGN_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
 
 const STAGE_LABELS: Record<string, string> = {
   'procedure.review': 'Review Prosedur Kerja (PM)',
@@ -12,14 +12,6 @@ const STAGE_LABELS: Record<string, string> = {
   'ptw.approve_pm': 'Approval PTW — PTW Authority (PM)',
   'ptw.review_issuer': 'Review PTW — PTW Issuer',
   'ptw.numbering_hsse': 'Penomoran PTW (HSSE)',
-};
-
-const STAGE_PERMISSION_LOOKUP: Record<string, { module: string; action: string }> = {
-  'procedure.review': { module: 'procedure', action: 'review' },
-  'jsa.approve_pgn': { module: 'jsa', action: 'approve_pgn' },
-  'ptw.approve_pm': { module: 'ptw', action: 'approve_pm' },
-  'ptw.review_issuer': { module: 'ptw', action: 'review_issuer' },
-  'ptw.numbering_hsse': { module: 'ptw', action: 'numbering_hsse' },
 };
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -46,10 +38,20 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
 
   const vendorList = vendors || [];
 
+  // Kandidat assignment harus dibatasi ke org admin yang sedang login. Role
+  // `admin` (PGN) memegang seluruh permission, jadi tanpa batas org daftar
+  // kandidat tiap tahap akan tercampur lintas organisasi. Diambil dari profil
+  // pengguna sendiri — persis cara writeStageAssignment menentukan "org milik
+  // admin yang menugaskan".
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', user?.id).single();
+  const actorOrgId = actorProfile?.org_id ?? '';
+
   const slots = await Promise.all(PGN_STAGE_KEYS.map(async (stageKey) => {
     const docType = stageKey.split('.')[0];
+    const permission = STAGE_KEY_PERMISSION[stageKey];
     const [candidates, assignments] = await Promise.all([
-      getEligibleAssignees(supabase, STAGE_PERMISSION_LOOKUP[stageKey].module, STAGE_PERMISSION_LOOKUP[stageKey].action),
+      getEligibleAssignees(supabase, permission.module, permission.action, actorOrgId),
       getStageAssignments(supabase, projectId, docType, stageKey),
     ]);
     return {

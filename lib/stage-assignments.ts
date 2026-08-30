@@ -39,19 +39,44 @@ export async function getStageAssignments(
   return data || [];
 }
 
-/** Kandidat yang boleh ditunjuk ke satu stage_key: role-nya harus punya permission {module}.{action} yang bersangkutan. */
+/**
+ * Kandidat yang boleh ditunjuk ke satu stage_key: role-nya harus punya
+ * permission {module}.{action} yang bersangkutan DAN dia harus satu organisasi
+ * dengan admin yang menugaskan (`orgId`). Filter org wajib: role `admin` (PGN)
+ * memegang seluruh permission, jadi tanpa `.eq('org_id', ...)` admin PGN ikut
+ * muncul di daftar kandidat milik PGSOL — dan sebaliknya. writeStageAssignment
+ * menolak lintas-org, jadi kandidat lintas-org hanya akan jadi pilihan yang
+ * pasti gagal saat disimpan.
+ */
 export async function getEligibleAssignees(
-  supabase: any, module: string, action: string
+  supabase: any, module: string, action: string, orgId: string
 ): Promise<{ id: string; full_name: string }[]> {
+  if (!orgId) return [];
   const roleNames = await getRoleNamesWithPermission(supabase, module, action);
   if (roleNames.length === 0) return [];
   const { data } = await supabase
     .from('profiles')
     .select('id, full_name')
+    .eq('org_id', orgId)
     .in('role', roleNames)
     .order('full_name');
   return data || [];
 }
+
+/**
+ * Satu-satunya sumber kebenaran pemetaan stage_key → permission
+ * {module}.{action}. Dipakai writeStageAssignment untuk memastikan orang yang
+ * ditunjuk memang berwenang di tahap itu; halaman assignment sebaiknya ikut
+ * memakai ini alih-alih menyalin tabelnya sendiri.
+ */
+export const STAGE_KEY_PERMISSION: Record<string, { module: string; action: string }> = {
+  'procedure.review': { module: 'procedure', action: 'review' },
+  'jsa.review_pgsol': { module: 'jsa', action: 'review_pgsol' },
+  'jsa.approve_pgn': { module: 'jsa', action: 'approve_pgn' },
+  'ptw.approve_pm': { module: 'ptw', action: 'approve_pm' },
+  'ptw.review_issuer': { module: 'ptw', action: 'review_issuer' },
+  'ptw.numbering_hsse': { module: 'ptw', action: 'numbering_hsse' },
+};
 
 /**
  * Menyimpan daftar assignee untuk satu (project, doc_type, stage_key) —
@@ -80,10 +105,25 @@ export async function writeStageAssignment(
   if (!actorProfile?.org_id) return { error: 'Organisasi Anda tidak ditemukan.' };
 
   if (assigneeIds.length > 0) {
-    const { data: assigneeProfiles } = await supabase.from('profiles').select('id, org_id').in('id', assigneeIds);
+    const permission = STAGE_KEY_PERMISSION[stageKey];
+    if (!permission) return { error: 'Tahap ini tidak dikenali.' };
+
+    const { data: assigneeProfiles } = await supabase.from('profiles').select('id, role, org_id').in('id', assigneeIds);
     const invalid = (assigneeProfiles || []).some((p: any) => p.org_id !== actorProfile.org_id);
     if (invalid || (assigneeProfiles || []).length !== assigneeIds.length) {
       return { error: 'Semua orang yang ditunjuk harus berasal dari organisasi Anda sendiri.' };
+    }
+
+    // Assignment MEMPERSEMPIT kumpulan pemegang permission jadi orang tertentu
+    // untuk satu proyek — bukan menggantikan sistem permission. Tanpa cek ini,
+    // seorang admin bisa menunjuk siapa pun di org-nya (mis. staff biasa) ke
+    // tahap approval, dan orang itu langsung bisa menyetujui dokumen lewat
+    // requireAssignedApprover di app/dashboard/approval/actions.ts — yang hanya
+    // memeriksa keberadaan baris assignment 'pending', bukan permission lagi.
+    const eligibleRoles = new Set(await getRoleNamesWithPermission(supabase, permission.module, permission.action));
+    const ineligible = (assigneeProfiles || []).find((p: any) => !eligibleRoles.has(p.role));
+    if (ineligible) {
+      return { error: `Salah satu orang yang dipilih memiliki role ('${ineligible.role ?? '-'}') yang tidak berwenang untuk tahap ini.` };
     }
   }
 
