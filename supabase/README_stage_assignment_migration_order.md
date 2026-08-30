@@ -1,5 +1,9 @@
 # Urutan Migrasi Fase 2 — Per-Project Approver Assignment
 
+> **Mau sekali paste-jalankan saja?** Pakai
+> `supabase/RUN_ALL_migrations_2026-08-30.sql` — gabungan Fase 1 + Fase 2
+> jadi satu file. Bagian di bawah ini tetap berguna sebagai referensi.
+
 Jalankan di Supabase SQL editor, SATU PER SATU, setelah semua migrasi
 Fase 1 (`supabase/README_org_migration_order.md`) sudah dijalankan:
 

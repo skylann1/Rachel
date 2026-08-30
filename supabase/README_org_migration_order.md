@@ -1,5 +1,14 @@
 # Urutan Migrasi Fase 1 — Fondasi Multi-Tenant
 
+> **Mau sekali paste-jalankan saja?** Pakai
+> `supabase/RUN_ALL_migrations_2026-08-30.sql` — gabungan file ini +
+> seluruh migrasi Fase 2 jadi satu file, dengan `BEGIN;`/`COMMIT;` di
+> titik-titik yang wajib jadi transaksi terpisah. Cek dulu peringatan
+> di bagian atas file itu (nama constraint FK `vendor_profiles`) sebelum
+> menjalankannya. Bagian di bawah ini tetap berguna sebagai referensi isi
+> & alasan tiap langkah, dan sebagai jalur mundur kalau mau jalankan
+> satu-satu.
+
 Jalankan file-file ini di Supabase SQL editor, SATU PER SATU, PERSIS
 urutan ini (lompat urutan akan gagal — beberapa file sengaja harus jadi
 transaksi sendiri, lihat komentar di tiap file):
