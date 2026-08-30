@@ -53,6 +53,38 @@ async function assertSameOrg(adminAuthClient: ReturnType<typeof createAdminClien
   return null;
 }
 
+/**
+ * Membatasi role apa yang boleh diberikan aktor org ter-scope.
+ *
+ * Tanpa ini, `role` diambil mentah dari form: pemegang `manage_org_staff`
+ * (admin vendor/PGSOL) bisa memanggil updateAccount pada akunnya SENDIRI
+ * — assertSameOrg lolos otomatis — dengan role 'admin', dan
+ * getUserPermissionsForUser() (utils/permissions.ts) memberi akses penuh
+ * ke SETIAP profil ber-role 'admin' terlepas dari tipenya. Satu request,
+ * langsung jadi superadmin lintas organisasi.
+ *
+ * Dua lapis penolakan:
+ *  1. 'admin' tidak pernah boleh diberikan dari jalur org-scoped (role ini
+ *     mem-bypass seluruh sistem pengecekan permission).
+ *  2. role lain harus punya `roles.type` yang sama dengan tipe organisasi
+ *     aktor — admin vendor cuma boleh memberi role bertipe 'vendor', dst.
+ */
+async function assertAssignableRole(
+  adminAuthClient: ReturnType<typeof createAdminClient>,
+  actor: AccountActor,
+  role: string
+): Promise<string | null> {
+  if (actor.crossOrg) return null;
+  if (role === 'admin') {
+    return 'Role admin tidak dapat diberikan dari halaman ini.';
+  }
+  const { data: roleRow } = await adminAuthClient.from('roles').select('type').eq('name', role).single();
+  if (!roleRow || !actor.orgKind || roleRow.type !== actor.orgKind) {
+    return 'Role ini tidak tersedia untuk organisasi Anda.';
+  }
+  return null;
+}
+
 export async function addAccount(formData: FormData) {
   try {
     const { error: permError, actor } = await requireAccountAccess();
@@ -82,6 +114,9 @@ export async function addAccount(formData: FormData) {
     }
 
     const adminAuthClient = createAdminClient();
+
+    const roleError = await assertAssignableRole(adminAuthClient, actor, role);
+    if (roleError) return { error: roleError };
 
     // Resolusi org: superadmin bikin org vendor baru (companyName wajib di
     // atas); admin ter-scope selalu memakai org miliknya sendiri.
@@ -128,8 +163,17 @@ export async function addAccount(formData: FormData) {
     }
 
     if (data.user) {
+      // Tautan org WAJIB berhasil: setiap policy RLS org-scoped gagal-tertutup
+      // pada org_id NULL, jadi kegagalan yang cuma di-console.error akan
+      // menghasilkan akun yang tidak bisa melihat apa pun tanpa pesan error.
+      // Akun auth yang baru dibuat dihapus lagi supaya email-nya tidak
+      // "terkunci" oleh akun setengah jadi.
       const { error: orgLinkError } = await adminAuthClient.from('profiles').update({ org_id: orgId }).eq('id', data.user.id);
-      if (orgLinkError) console.error('Error linking profile to org:', orgLinkError);
+      if (orgLinkError) {
+        console.error('Error linking profile to org:', orgLinkError);
+        await adminAuthClient.auth.admin.deleteUser(data.user.id);
+        return { error: 'Gagal menautkan akun baru ke organisasi. Akun dibatalkan, silakan coba lagi.' };
+      }
 
       if (type === 'vendor') {
         // vendor_profiles.id sekarang = id organisasi (lihat
@@ -137,7 +181,11 @@ export async function addAccount(formData: FormData) {
         // kalau memang org baru; staff tambahan berbagi org yang sama.
         if (actor.crossOrg) {
           const { error: vendorError } = await adminAuthClient.from('vendor_profiles').upsert({ id: orgId, company_name: companyName });
-          if (vendorError) console.error('Error creating vendor profile:', vendorError);
+          if (vendorError) {
+            console.error('Error creating vendor profile:', vendorError);
+            await adminAuthClient.auth.admin.deleteUser(data.user.id);
+            return { error: 'Gagal membuat data perusahaan vendor. Akun dibatalkan, silakan coba lagi.' };
+          }
         }
       } else {
         const { error: internalError } = await adminAuthClient.from('internal_profiles').upsert({ id: data.user.id, nip: nip });
@@ -173,6 +221,9 @@ export async function updateAccount(id: string, formData: FormData) {
       return { error: 'Field utama wajib diisi' };
     }
 
+    const roleError = await assertAssignableRole(adminAuthClient, actor, role);
+    if (roleError) return { error: roleError };
+
     // 1. Update Auth Metadata
     const { error: authError } = await adminAuthClient.auth.admin.updateUserById(id, {
       user_metadata: {
@@ -203,15 +254,34 @@ export async function updateAccount(id: string, formData: FormData) {
     }
 
     // 3. Update Sub-profiles
+    //
+    // `vendor_profiles` adalah data PERUSAHAAN, bukan data per-user:
+    // id-nya = id organisasi (schema_org_backfill_vendor.sql), bukan id
+    // profil yang sedang diedit. Karena itu upsert-nya dikunci ke org_id
+    // target, dan cabang non-vendor TIDAK BOLEH menghapus baris company —
+    // projects.vendor_id punya ON DELETE CASCADE ke vendor_profiles(id),
+    // jadi menghapusnya di sini akan ikut menghapus seluruh proyek (dan
+    // semua turunannya) milik satu perusahaan hanya karena tipe satu user
+    // diubah. Menghapus perusahaan adalah operasi tingkat organisasi,
+    // di luar cakupan "edit satu akun".
+    const { data: targetProfile } = await adminAuthClient
+      .from('profiles')
+      .select('org_id')
+      .eq('id', id)
+      .single();
+
     if (type === 'vendor') {
-      await adminAuthClient.from('vendor_profiles').upsert({ id, company_name: companyName });
-      await adminAuthClient.from('internal_profiles').delete().eq('id', id); // Cleanup if type changed
+      if (targetProfile?.org_id && companyName) {
+        await adminAuthClient.from('vendor_profiles').upsert({ id: targetProfile.org_id, company_name: companyName });
+      }
+      await adminAuthClient.from('internal_profiles').delete().eq('id', id); // Cleanup per-user, aman
     } else {
       await adminAuthClient.from('internal_profiles').upsert({ id, nip: nip });
-      await adminAuthClient.from('vendor_profiles').delete().eq('id', id); // Cleanup if type changed
     }
 
     revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/vendor/dashboard/staff');
+    revalidatePath('/pgsol/dashboard/staff');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mengubah akun' };
@@ -239,6 +309,8 @@ export async function suspendAccount(id: string, isSuspended: boolean) {
     await adminAuthClient.from('profiles').update({ status: isSuspended ? 'Inactive' : 'Active' }).eq('id', id);
 
     revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/vendor/dashboard/staff');
+    revalidatePath('/pgsol/dashboard/staff');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mengubah status' };
@@ -289,6 +361,9 @@ export async function resetAccountPassword(id: string) {
       emailSent = !emailError;
     }
 
+    revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/vendor/dashboard/staff');
+    revalidatePath('/pgsol/dashboard/staff');
     return { success: true, password: randomPassword, emailSent };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mereset kata sandi' };
@@ -311,6 +386,8 @@ export async function deleteAccount(id: string) {
     }
 
     revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/vendor/dashboard/staff');
+    revalidatePath('/pgsol/dashboard/staff');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat menghapus akun' };
