@@ -332,3 +332,47 @@ export async function notifyUsersByPermission({
 
   await supabase.from('notifications').insert(notifications);
 }
+
+/**
+ * Send notification to all users assigned to a specific stage of a document in a project.
+ * Only notifies assignees with status 'pending' (not yet decided).
+ */
+export async function notifyAssignees({
+  projectId,
+  docType,
+  stageKey,
+  type,
+  title,
+  message,
+  link,
+}: {
+  projectId: string;
+  docType: string;
+  stageKey: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  link?: string;
+}) {
+  const supabase = await createClient();
+
+  const { data: assignees } = await supabase
+    .from('stage_assignments')
+    .select('assignee_id')
+    .eq('project_id', projectId)
+    .eq('doc_type', docType)
+    .eq('stage_key', stageKey)
+    .eq('status', 'pending');
+
+  if (!assignees || assignees.length === 0) return;
+
+  await supabase.from('notifications').insert(
+    assignees.map(a => ({
+      user_id: a.assignee_id,
+      type,
+      title,
+      message,
+      link: link || null,
+    }))
+  );
+}
