@@ -65,3 +65,34 @@ FOR SELECT USING (
     WHERE p.id = project_id AND p.vendor_id = public.current_vendor_org_id()
   )
 );
+
+-- Vendor perlu bisa me-reset baris assignment miliknya sendiri ke 'pending'
+-- saat submit ulang dokumen setelah ditolak (lihat resetStageAssignments di
+-- lib/stage-assignments.ts, dipanggil dari server action submit/resubmit
+-- Prosedur/JSA/PTW pada sesi vendor sendiri — bukan service-role). Tanpa
+-- policy UPDATE ini, UPDATE tersebut cocok nol baris di bawah RLS dan
+-- sukses tanpa efek (silent no-op), bukan error — tahap yang sudah ditolak
+-- jadi macet permanen meski kodenya terlihat benar.
+--
+-- WITH CHECK sengaja dikunci HANYA pada status='pending' DAN
+-- decided_at IS NULL — persis apa yang selalu ditulis oleh
+-- resetStageAssignments. Ini mencegah policy ini dipakai untuk memalsukan
+-- keputusan: vendor tidak bisa memakainya untuk men-set status menjadi
+-- 'approved' (atau nilai lain apa pun) lewat panggilan API langsung yang
+-- dimanipulasi, karena Postgres menolak UPDATE apa pun yang baris hasilnya
+-- gagal memenuhi predikat WITH CHECK ini.
+CREATE POLICY "Vendors can reset stage assignments for their own projects" ON public.stage_assignments
+FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1 FROM public.projects p
+    WHERE p.id = project_id AND p.vendor_id = public.current_vendor_org_id()
+  )
+)
+WITH CHECK (
+  status = 'pending' AND decided_at IS NULL
+  AND EXISTS (
+    SELECT 1 FROM public.projects p
+    WHERE p.id = project_id AND p.vendor_id = public.current_vendor_org_id()
+  )
+);
