@@ -204,8 +204,15 @@ export async function approveProcedure(procedureId: string) {
   const { error: markError } = await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
   if (markError) throw new Error(markError.message);
 
-  const updatedRows = rows.map(r => r.id === myRow.id ? { ...r, status: 'approved' as const } : r);
-  if (!isStageFullyApproved(updatedRows)) {
+  // Re-fetch fresh from the DB rather than patching the stale initial `rows`
+  // snapshot locally: if two of the last two pending assignees approve at
+  // nearly the same time, each request's local snapshot still shows the
+  // other assignee as pending even after both DB rows are `approved`, which
+  // would make both calls see isStageFullyApproved === false and leave the
+  // document stuck forever. Re-fetching narrows that race window instead of
+  // trusting data captured before either write landed.
+  const freshRows = await getStageAssignments(supabase, current.project_id, 'procedure', 'procedure.review');
+  if (!isStageFullyApproved(freshRows)) {
     revalidatePath('/dashboard/approval');
     return;
   }
