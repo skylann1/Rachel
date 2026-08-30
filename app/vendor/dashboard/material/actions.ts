@@ -21,6 +21,7 @@ export async function getMaterials(): Promise<MaterialItem[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) return [];
 
   const { data, error } = await supabase
     .from('vendor_materials')
@@ -70,6 +71,7 @@ export async function saveMaterial(payload: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) throw new Error('Organisasi vendor Anda tidak ditemukan.');
 
   const row = {
     vendor_id: vendorOrgId,
@@ -135,6 +137,7 @@ export async function deleteMaterial(id: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) throw new Error('Organisasi vendor Anda tidak ditemukan.');
 
   const { error } = await supabase.from('vendor_materials').delete().eq('id', id).eq('vendor_id', vendorOrgId);
   if (error) throw new Error(error.message);

@@ -15,6 +15,7 @@ export async function saveDocumentMetadata(data: {
     throw new Error('Unauthorized');
   }
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) throw new Error('Organisasi vendor Anda tidak ditemukan.');
 
   const { error } = await supabase
     .from('vendor_documents')
@@ -42,6 +43,7 @@ export async function getVendorDocuments() {
     return [];
   }
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) return [];
 
   const { data, error } = await supabase
     .from('vendor_documents')
@@ -65,6 +67,7 @@ export async function deleteVendorDocument(id: string) {
     throw new Error('Unauthorized');
   }
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) throw new Error('Organisasi vendor Anda tidak ditemukan.');
 
   // 1. Dapatkan file_url dari database sebelum dihapus
   const { data: doc } = await supabase

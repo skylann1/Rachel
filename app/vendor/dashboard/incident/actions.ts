@@ -21,6 +21,7 @@ export async function getVendorIncidents(): Promise<VendorIncidentItem[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) return [];
 
   const { data, error } = await supabase
     .from('incidents')

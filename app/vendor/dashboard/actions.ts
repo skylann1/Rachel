@@ -36,6 +36,7 @@ export async function getVendorDashboardData() {
 
   if (!user) return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, needsAction: 0 } };
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, needsAction: 0 } };
 
   // Fetch projects
   const { data: projectsData, error: projectsError } = await supabase
@@ -167,6 +168,7 @@ export async function getVendorChartsData(): Promise<VendorDashboardData> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return EMPTY_CHARTS_DATA;
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) return EMPTY_CHARTS_DATA;
 
   const now = new Date();
 

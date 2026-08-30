@@ -28,14 +28,18 @@ export default async function VendorProfilePage() {
   // id user yang login (vendor_profiles.id / projects.vendor_id /
   // inspections.target_vendor semuanya menunjuk organizations(id) sekarang).
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) {
+    // Profil tanpa org_id tidak akan lolos satu pun policy RLS org-scoped —
+    // lebih baik kembalikan user ke dashboard daripada menampilkan halaman
+    // profil yang seluruh angkanya nol tanpa penjelasan.
+    redirect('/vendor/dashboard');
+  }
 
-  const { data: vendorProfile } = vendorOrgId
-    ? await supabase
-        .from('vendor_profiles')
-        .select('company_name, address')
-        .eq('id', vendorOrgId)
-        .single()
-    : { data: null };
+  const { data: vendorProfile } = await supabase
+    .from('vendor_profiles')
+    .select('company_name, address')
+    .eq('id', vendorOrgId)
+    .single();
 
   // Real stats for the summary panel — scoped to this vendor's own projects
   const { count: activeProjects } = await supabase

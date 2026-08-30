@@ -89,6 +89,7 @@ export async function getVendorProjects() {
   
   if (!user) return [];
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) return [];
 
   const { data, error } = await supabase
     .from('projects')

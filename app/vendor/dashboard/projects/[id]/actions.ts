@@ -16,6 +16,7 @@ async function canAccessProjectDiscussion(supabase: any, userId: string, project
   if (isPgn(profile?.type) || isPgsol(profile?.type)) return true;
 
   const vendorOrgId = await getCallerVendorOrgId(supabase);
+  if (!vendorOrgId) return false;
   const { data: project } = await supabase
     .from('projects')
     .select('id')
