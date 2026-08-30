@@ -23,6 +23,9 @@ export default async function PgsolDashboardLayout({
           <Link href="/dashboard/approval" className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">
             Review JSA
           </Link>
+          <Link href="/pgsol/dashboard/projects" className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">
+            Proyek Saya
+          </Link>
           <Link href="/pgsol/dashboard/staff" className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100">
             Staff Organisasi
           </Link>
