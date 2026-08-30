@@ -8,6 +8,8 @@ import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from "@/lib/procedure-st
 import { PTW_STATUS, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { hasPermissionForUser } from "@/utils/permissions";
+import { getStageAssignments, isStageFullyApproved, resetStageAssignments } from '@/lib/stage-assignments';
+import { notifyAssignees } from '@/app/dashboard/inbox/actions';
 
 // =====================================================================
 // FETCH FUNCTIONS
@@ -191,9 +193,22 @@ export async function approveProcedure(procedureId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const { data: current } = await supabase.from('procedures').select('status').eq('id', procedureId).single();
+  const { data: current } = await supabase.from('procedures').select('status, project_id').eq('id', procedureId).single();
   if (current?.status !== PROCEDURE_STATUS.menungguReviewPM) throw new Error("Prosedur tidak dalam tahap yang bisa disetujui.");
-  await requirePermission(supabase, user.id, PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM], "Anda tidak memiliki izin untuk menyetujui Prosedur Kerja.");
+  if (!current.project_id) throw new Error("Prosedur ini tidak terhubung ke proyek.");
+
+  const rows = await getStageAssignments(supabase, current.project_id, 'procedure', 'procedure.review');
+  const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
+  if (!myRow) throw new Error("Anda tidak ditugaskan untuk mereview Prosedur Kerja proyek ini.");
+
+  const { error: markError } = await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
+  if (markError) throw new Error(markError.message);
+
+  const updatedRows = rows.map(r => r.id === myRow.id ? { ...r, status: 'approved' as const } : r);
+  if (!isStageFullyApproved(updatedRows)) {
+    revalidatePath('/dashboard/approval');
+    return;
+  }
 
   const { data: profile } = await supabase.from('internal_profiles').select('id').eq('id', user.id).single();
   const { error } = await supabase
@@ -202,7 +217,6 @@ export async function approveProcedure(procedureId: string) {
     .eq('id', procedureId);
   if (error) throw new Error(error.message);
 
-  // Notify: Get vendor (project owner) about approval
   const { data: proc } = await supabase.from('procedures').select('project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
   const proj: any = Array.isArray(proc?.projects) ? proc?.projects[0] : proc?.projects;
   if (proc?.project_id) {
@@ -228,32 +242,28 @@ export async function rejectProcedure(procedureId: string, note: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const { data: currentCheck } = await supabase.from('procedures').select('status').eq('id', procedureId).single();
+  const { data: currentCheck } = await supabase.from('procedures').select('status, project_id').eq('id', procedureId).single();
   if (currentCheck?.status !== PROCEDURE_STATUS.menungguReviewPM) throw new Error("Prosedur tidak dalam tahap yang bisa ditolak.");
-  await requirePermission(supabase, user.id, PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM], "Anda tidak memiliki izin untuk menolak Prosedur Kerja.");
+  if (!currentCheck.project_id) throw new Error("Prosedur ini tidak terhubung ke proyek.");
 
-  // Fetch current procedure to update its content JSON
+  const rows = await getStageAssignments(supabase, currentCheck.project_id, 'procedure', 'procedure.review');
+  const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
+  if (!myRow) throw new Error("Anda tidak ditugaskan untuk mereview Prosedur Kerja proyek ini.");
+
+  await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
+  await resetStageAssignments(supabase, currentCheck.project_id, 'procedure', 'procedure.review');
+
   const { data: proc } = await supabase.from('procedures').select('content, project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
 
   let updatedContent = proc?.content || {};
   let revisions = updatedContent.revisions || [];
-  
-  revisions.push({
-    revNo: revisions.length + 1,
-    date: new Date().toLocaleDateString('id-ID'),
-    note: note
-  });
-  
+  revisions.push({ revNo: revisions.length + 1, date: new Date().toLocaleDateString('id-ID'), note: note });
   updatedContent.revisions = revisions;
 
   const { error } = await supabase
     .from('procedures')
-    .update({
-      status: PROCEDURE_STATUS.draft,
-      content: updatedContent
-    })
+    .update({ status: PROCEDURE_STATUS.draft, content: updatedContent })
     .eq('id', procedureId);
-
   if (error) throw new Error(error.message);
 
   if (proc?.project_id) {
