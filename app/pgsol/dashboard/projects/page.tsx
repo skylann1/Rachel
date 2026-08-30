@@ -1,7 +1,14 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { hasPermission } from '@/utils/permissions';
 import { getPgsolProjects } from './actions';
 
 export default async function PgsolProjectsPage() {
+  // Gerbang yang sama dengan savePgsolAssignment — pgsol_reviewer biasa tidak
+  // boleh menelusuri daftar proyek untuk penunjukan (mengikuti pola halaman
+  // /pgsol/dashboard/staff).
+  if (!(await hasPermission('jsa', 'manage_assignment_pgsol'))) redirect('/pgsol/dashboard');
+
   const projects = await getPgsolProjects();
 
   return (

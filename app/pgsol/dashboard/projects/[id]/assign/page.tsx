@@ -1,16 +1,29 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
+import { hasPermission } from '@/utils/permissions';
 import { getStageAssignments, getEligibleAssignees } from '@/lib/stage-assignments';
 import AssignPgsolPanel from './AssignPgsolPanel';
 
 export default async function PgsolAssignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
+
+  // Gerbang yang sama dengan savePgsolAssignment — pgsol_reviewer biasa tidak
+  // boleh membuka layar penunjukan sama sekali (mengikuti pola halaman
+  // /pgsol/dashboard/staff).
+  if (!(await hasPermission('jsa', 'manage_assignment_pgsol'))) redirect('/pgsol/dashboard');
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', user?.id).single();
+  if (!actorProfile?.org_id) redirect('/pgsol/dashboard');
 
   const { data: project } = await supabase.from('projects').select('id, name').eq('id', projectId).single();
   const [candidates, assignments] = await Promise.all([
-    getEligibleAssignees(supabase, 'jsa', 'review_pgsol'),
+    // Dibatasi ke org PGSOL milik admin ini — tanpa itu admin PGN (yang
+    // memegang semua permission) ikut muncul sebagai kandidat reviewer PGSOL.
+    getEligibleAssignees(supabase, 'jsa', 'review_pgsol', actorProfile.org_id),
     getStageAssignments(supabase, projectId, 'jsa', 'jsa.review_pgsol'),
   ]);
 
