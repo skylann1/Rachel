@@ -1,9 +1,10 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
-import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from "@/lib/procedure-status";
+import { notifyAssignees } from "@/app/dashboard/inbox/actions";
+import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { logDocumentEvent } from "@/lib/document-logs";
+import { resetStageAssignments } from "@/lib/stage-assignments";
 
 export async function saveProsedur(projectId: string, payload: any) {
   const supabase = await createClient();
@@ -40,6 +41,14 @@ export async function saveProsedur(projectId: string, payload: any) {
     procedureId = created?.id;
   }
 
+  // Dokumen ini baru saja (kembali) masuk tahap `procedure.review`, tapi jalur
+  // ini BUKAN lewat rejectProcedure — jadi baris stage_assignments tahap itu
+  // bisa saja masih menyimpan keputusan ronde sebelumnya ('approved' dari
+  // siklus yang sudah selesai, misalnya). writeStageAssignment menolak
+  // menyunting baris non-'pending' dan approver tidak punya baris 'pending'
+  // untuk ditindaklanjuti, sehingga ronde baru macet permanen tanpa reset ini.
+  await resetStageAssignments(supabase, projectId, 'procedure', 'procedure.review');
+
   if (procedureId) {
     await logDocumentEvent(supabase, {
       docType: 'procedure', docId: procedureId, projectId, actorId: user?.id,
@@ -48,8 +57,10 @@ export async function saveProsedur(projectId: string, payload: any) {
   }
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
-  await notifyUsersByPermission({
-    ...PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM],
+  await notifyAssignees({
+    projectId,
+    docType: 'procedure',
+    stageKey: 'procedure.review',
     type: 'action_required',
     title: 'Prosedur Kerja Menunggu Review',
     message: `Prosedur kerja untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,

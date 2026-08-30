@@ -1,11 +1,12 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
+import { notifyAssignees } from "@/app/dashboard/inbox/actions";
 import { APPROVED_JSA } from "@/lib/project-stage";
-import { PTW_STATUS, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
+import { PTW_STATUS } from "@/lib/ptw-status";
 import type { PtwFormDetails } from "@/lib/ptw-types";
 import { logDocumentEvent } from "@/lib/document-logs";
+import { resetStageAssignments } from "@/lib/stage-assignments";
 
 /** Tanggal proyek, dipakai sebagai nilai awal masa berlaku PTW di form. */
 export async function getProjectPeriod(projectId: string) {
@@ -131,6 +132,22 @@ export async function savePtw(
     ptwId = created?.id;
   }
 
+  // PTW ini (baik tipe baru maupun pengajuan ulang) sekarang berada di tahap
+  // `ptw.approve_pm` tanpa melewati rejectPtw, jadi baris stage_assignments
+  // tahap itu bisa masih memuat keputusan dari ronde — atau dari tipe PTW —
+  // sebelumnya. Tanpa reset ini approver tidak punya baris 'pending' untuk
+  // ditindaklanjuti dan tahap macet permanen.
+  //
+  // KETERBATASAN YANG DIKETAHUI: stage_assignments belum menyimpan identitas
+  // dokumen (hanya project_id + doc_type + stage_key), jadi dua PTW dengan
+  // tipe berbeda pada satu proyek berbagi baris assignment yang sama. Reset di
+  // sini benar untuk pengajuan yang berurutan, tapi kalau tipe kedua diajukan
+  // saat tipe pertama MASIH mengambang di tahap yang sama, reset ini menghapus
+  // keputusan yang sudah dibuat untuk tipe pertama. Perbaikan penuhnya butuh
+  // perubahan skema (kolom identitas dokumen) — lihat catatan di
+  // supabase/README_stage_assignment_migration_order.md.
+  await resetStageAssignments(supabase, projectId, 'ptw', 'ptw.approve_pm');
+
   if (ptwId) {
     await logDocumentEvent(supabase, {
       docType: 'ptw', docId: ptwId, projectId, actorId: user?.id,
@@ -139,8 +156,10 @@ export async function savePtw(
   }
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
-  await notifyUsersByPermission({
-    ...PTW_STAGE_PERMISSION[PTW_STATUS.menungguApprovalPM],
+  await notifyAssignees({
+    projectId,
+    docType: 'ptw',
+    stageKey: 'ptw.approve_pm',
     type: 'action_required',
     title: 'PTW Menunggu Persetujuan',
     message: `PTW untuk proyek "${project?.name}" telah diajukan dan menunggu persetujuan Anda.`,

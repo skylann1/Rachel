@@ -1,10 +1,11 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
-import { JSA_STATUS, JSA_STAGE_PERMISSION } from "@/lib/jsa-status";
+import { notifyAssignees } from "@/app/dashboard/inbox/actions";
+import { JSA_STATUS } from "@/lib/jsa-status";
 import { APPROVED_PROCEDURE } from "@/lib/project-stage";
 import { logDocumentEvent } from "@/lib/document-logs";
+import { resetStageAssignments } from "@/lib/stage-assignments";
 
 export async function saveJsa(projectId: string, jsaData: any) {
   const supabase = await createClient();
@@ -45,6 +46,15 @@ export async function saveJsa(projectId: string, jsaData: any) {
     await supabase.from('jsa').update({ status: JSA_STATUS.reviewPgsol, rejection_note: null }).eq('id', jsaId);
   }
 
+  // JSA (kembali) berada di tahap `jsa.review_pgsol` tanpa melewati rejectJsa,
+  // jadi baris stage_assignments tahap itu bisa masih memuat keputusan ronde
+  // sebelumnya. Tanpa reset ini reviewer PGSOL tidak punya baris 'pending'
+  // untuk ditindaklanjuti dan admin pun tidak bisa mengganti assignee (
+  // writeStageAssignment menolak menyunting baris non-'pending').
+  // `jsa.approve_pgn` sengaja TIDAK direset di sini — sama seperti rejectJsa
+  // pada kasus penolakan PGSOL, tahap itu memang belum dimulai untuk ronde ini.
+  await resetStageAssignments(supabase, projectId, 'jsa', 'jsa.review_pgsol');
+
   // Delete existing steps
   await supabase.from('jsa_steps').delete().eq('jsa_id', jsaId);
 
@@ -79,8 +89,10 @@ export async function saveJsa(projectId: string, jsaData: any) {
   });
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
-  await notifyUsersByPermission({
-    ...JSA_STAGE_PERMISSION[JSA_STATUS.reviewPgsol],
+  await notifyAssignees({
+    projectId,
+    docType: 'jsa',
+    stageKey: 'jsa.review_pgsol',
     type: 'action_required',
     title: 'JSA Menunggu Review PGSOL',
     message: `JSA untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,
