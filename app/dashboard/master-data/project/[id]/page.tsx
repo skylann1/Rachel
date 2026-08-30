@@ -3,6 +3,24 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Save, Briefcase, MapPin, Calendar, Building2, Activity, Users } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
+import AssignmentPanel from './AssignmentPanel';
+import { getStageAssignments, getEligibleAssignees, PGN_STAGE_KEYS } from '@/lib/stage-assignments';
+
+const STAGE_LABELS: Record<string, string> = {
+  'procedure.review': 'Review Prosedur Kerja (PM)',
+  'jsa.approve_pgn': 'Persetujuan JSA (PGN)',
+  'ptw.approve_pm': 'Approval PTW — PTW Authority (PM)',
+  'ptw.review_issuer': 'Review PTW — PTW Issuer',
+  'ptw.numbering_hsse': 'Penomoran PTW (HSSE)',
+};
+
+const STAGE_PERMISSION_LOOKUP: Record<string, { module: string; action: string }> = {
+  'procedure.review': { module: 'procedure', action: 'review' },
+  'jsa.approve_pgn': { module: 'jsa', action: 'approve_pgn' },
+  'ptw.approve_pm': { module: 'ptw', action: 'approve_pm' },
+  'ptw.review_issuer': { module: 'ptw', action: 'review_issuer' },
+  'ptw.numbering_hsse': { module: 'ptw', action: 'numbering_hsse' },
+};
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,6 +45,21 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
     .order('company_name');
 
   const vendorList = vendors || [];
+
+  const slots = await Promise.all(PGN_STAGE_KEYS.map(async (stageKey) => {
+    const docType = stageKey.split('.')[0];
+    const [candidates, assignments] = await Promise.all([
+      getEligibleAssignees(supabase, STAGE_PERMISSION_LOOKUP[stageKey].module, STAGE_PERMISSION_LOOKUP[stageKey].action),
+      getStageAssignments(supabase, projectId, docType, stageKey),
+    ]);
+    return {
+      stageKey,
+      label: STAGE_LABELS[stageKey],
+      candidates,
+      currentAssigneeIds: assignments.map(a => a.assignee_id),
+      locked: assignments.some(a => a.status !== 'pending'),
+    };
+  }));
 
   const statusOptions = [
     { value: 'Menunggu Review', label: 'Menunggu Review' },
@@ -169,6 +202,13 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
                    </div>
                  </div>
               </div>
+
+              {/* Seksi 4: Assignment Approval PGN */}
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-6 pt-6 border-t border-slate-100">
+                <Users className="w-5 h-5 text-primary" />
+                Assignment Approval PGN
+              </h2>
+              <AssignmentPanel projectId={project.id} slots={slots} />
 
             </div>
           </div>
