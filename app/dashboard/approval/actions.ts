@@ -218,11 +218,21 @@ export async function approveProcedure(procedureId: string) {
   }
 
   const { data: profile } = await supabase.from('internal_profiles').select('id').eq('id', user.id).single();
-  const { error } = await supabase
+  // .eq('status', current.status) jadi optimistic lock terakhir (pola yang sama
+  // dengan approvePtw): kalau seseorang menolak dokumen ini persis di sela-sela
+  // antara pembacaan status di atas dan update ini, penolakan itu akan diam-diam
+  // ditimpa oleh approve yang balapan. Dengan penjagaan ini update-nya tidak
+  // mengenai baris apa pun dan pemanggil mendapat pesan jelas.
+  const { data: updated, error } = await supabase
     .from('procedures')
     .update({ status: PROCEDURE_STATUS.approved, reviewed_by: profile?.id })
-    .eq('id', procedureId);
+    .eq('id', procedureId)
+    .eq('status', current.status)
+    .select('id');
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error("Prosedur ini baru saja diproses oleh pengguna lain. Muat ulang halaman untuk melihat status terbaru.");
+  }
 
   const { data: proc } = await supabase.from('procedures').select('project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
   const proj: any = Array.isArray(proc?.projects) ? proc?.projects[0] : proc?.projects;
@@ -346,8 +356,21 @@ export async function approveJsa(jsaId: string) {
     ? { reviewer_id: user.id, reviewed_at: new Date().toISOString(), status: JSA_STATUS.approvalPgn }
     : { approver_id: user.id, approved_at: new Date().toISOString(), status: JSA_STATUS.approved };
 
-  const { error } = await supabase.from('jsa').update(updatePayload).eq('id', jsaId);
+  // .eq('status', current.status) jadi optimistic lock terakhir (pola yang sama
+  // dengan approvePtw): kalau assignee lain menolak JSA ini persis di sela-sela
+  // antara pembacaan status di atas dan update ini, penolakan itu akan diam-diam
+  // ditimpa oleh approve yang balapan — JSA melompat maju padahal sudah harus
+  // kembali ke vendor.
+  const { data: updated, error } = await supabase
+    .from('jsa')
+    .update(updatePayload)
+    .eq('id', jsaId)
+    .eq('status', current.status)
+    .select('id');
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error("JSA ini baru saja diproses oleh pengguna lain. Muat ulang halaman untuk melihat status terbaru.");
+  }
 
   if (current.project_id) {
     await logDocumentEvent(supabase, {
