@@ -3,8 +3,8 @@
 import { createClient } from "@/utils/supabase/server";
 import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
 import { JSA_STATUS, JSA_STAGE_PERMISSION, JSA_PENDING_STATUSES } from "@/lib/jsa-status";
-import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from "@/lib/procedure-status";
-import { getUserPermissionsForUser, hasPermissionForUser } from "@/utils/permissions";
+import { PROCEDURE_STATUS } from "@/lib/procedure-status";
+import { hasPermissionForUser } from "@/utils/permissions";
 
 export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan';
 export type UrgencyType = 'High' | 'Medium' | 'Low';
@@ -50,123 +50,161 @@ export async function getMyTasks(): Promise<TaskItem[]> {
   const role = profile?.role || 'vendor';
   const tasks: TaskItem[] = [];
 
-  // roles.permissions milik user saat ini — dipakai untuk menentukan tugas
-  // Prosedur/JSA/PTW mana yang jadi tanggung jawabnya, bukan role slug yang
-  // di-hardcode. Lihat lib/procedure-status.ts, jsa-status.ts, ptw-status.ts.
-  const permissions = await getUserPermissionsForUser(supabase, user.id);
-  const can = (module: string, action: string) => {
-    const modulePerms = permissions?.[module];
-    return Array.isArray(modulePerms) && modulePerms.includes(action);
-  };
+  // 1. Fetch Procedures — hanya proyek yang stage_assignments-nya
+  // menugaskan user ini ke procedure.review dengan status pending.
+  {
+    const { data: myAssignments } = await supabase
+      .from('stage_assignments')
+      .select('project_id')
+      .eq('doc_type', 'procedure').eq('stage_key', 'procedure.review')
+      .eq('assignee_id', user.id).eq('status', 'pending');
+    const projectIds = (myAssignments || []).map((a: any) => a.project_id);
 
-  // 1. Fetch Procedures
-  if (can(PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM].module, PROCEDURE_STAGE_PERMISSION[PROCEDURE_STATUS.menungguReviewPM].action)) {
-    const { data: procedures } = await supabase
-      .from('procedures')
-      .select(`
-        id, status, created_at, project_id,
-        projects ( name, vendor_profiles ( company_name ) )
-      `)
-      .in('status', ['Submitted', PROCEDURE_STATUS.menungguReviewPM, PROCEDURE_STATUS.draft]);
+    if (projectIds.length > 0) {
+      const { data: procedures } = await supabase
+        .from('procedures')
+        .select(`
+          id, status, created_at, project_id,
+          projects ( name, vendor_profiles ( company_name ) )
+        `)
+        .in('project_id', projectIds)
+        .in('status', ['Submitted', PROCEDURE_STATUS.menungguReviewPM, PROCEDURE_STATUS.draft]);
 
-    if (procedures) {
-      procedures.forEach((proc: any) => {
-           const proj = Array.isArray(proc.projects) ? proc.projects[0] : proc.projects;
-           const vendor = proj?.vendor_profiles;
-           const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
-
-           tasks.push({
-             id: proc.id,
-             title: `Review Prosedur Kerja`,
-             type: 'Prosedur',
-             projectName: proj?.name || 'Unknown Project',
-             vendorName: companyName || 'Internal',
-             date: proc.created_at,
-             url: `/dashboard/projects/${proc.project_id}`,
-             status: proc.status,
-             urgency: getUrgency(proc.created_at),
-             timeInQueue: formatTimeInQueue(proc.created_at)
-           });
-      });
+      if (procedures) {
+        procedures.forEach((proc: any) => {
+          const proj = Array.isArray(proc.projects) ? proc.projects[0] : proc.projects;
+          const vendor = proj?.vendor_profiles;
+          const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
+          tasks.push({
+            id: proc.id, title: `Review Prosedur Kerja`, type: 'Prosedur',
+            projectName: proj?.name || 'Unknown Project', vendorName: companyName || 'Internal',
+            date: proc.created_at, url: `/dashboard/projects/${proc.project_id}`,
+            status: proc.status, urgency: getUrgency(proc.created_at),
+            timeInQueue: formatTimeInQueue(proc.created_at)
+          });
+        });
+      }
     }
   }
 
-  // 2. Fetch JSA — dua tahap: Review PGSOL, lalu Persetujuan PGN (orang berbeda)
-  if (can('jsa', 'review_pgsol') || can('jsa', 'approve_pgn')) {
-    const { data: jsas } = await supabase
-      .from('jsa')
-      .select(`
-        id, status, created_at, project_id, reviewer_id,
-        projects ( name, vendor_profiles ( company_name ) )
-      `)
-      .in('status', JSA_PENDING_STATUSES);
+  // 2. Fetch JSA — dua tahap: Review PGSOL, lalu Persetujuan PGN (orang
+  // berbeda). Ambil dulu stage_assignments pending user ini untuk kedua
+  // stage_key JSA, per proyek, baru cocokkan ke status JSA saat ini lewat
+  // JSA_STAGE_PERMISSION (dipakai murni untuk terjemahan status -> stage_key,
+  // bukan pengecekan permission).
+  {
+    const jsaStageKeys = Object.values(JSA_STAGE_PERMISSION).map(p => `${p.module}.${p.action}`);
+    const { data: myAssignments } = await supabase
+      .from('stage_assignments')
+      .select('project_id, stage_key')
+      .eq('doc_type', 'jsa').in('stage_key', jsaStageKeys)
+      .eq('assignee_id', user.id).eq('status', 'pending');
 
-    if (jsas) {
-      jsas.forEach((jsa: any) => {
-        const perm = JSA_STAGE_PERMISSION[jsa.status];
-        // Pemisahan wewenang: yang sudah mereview tidak boleh muncul lagi sebagai approver.
-        const sudahDireviewOlehSaya =
-          jsa.status === JSA_STATUS.approvalPgn && jsa.reviewer_id === user.id;
-        const isMyTask = !!perm && can(perm.module, perm.action) && !sudahDireviewOlehSaya;
+    const myStageKeysByProject = new Map<string, Set<string>>();
+    (myAssignments || []).forEach((a: any) => {
+      if (!myStageKeysByProject.has(a.project_id)) myStageKeysByProject.set(a.project_id, new Set());
+      myStageKeysByProject.get(a.project_id)!.add(a.stage_key);
+    });
+    const projectIds = Array.from(myStageKeysByProject.keys());
 
-        if (isMyTask) {
-           const proj = Array.isArray(jsa.projects) ? jsa.projects[0] : jsa.projects;
-           const vendor = proj?.vendor_profiles;
-           const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
+    if (projectIds.length > 0) {
+      const { data: jsas } = await supabase
+        .from('jsa')
+        .select(`
+          id, status, created_at, project_id, reviewer_id,
+          projects ( name, vendor_profiles ( company_name ) )
+        `)
+        .in('project_id', projectIds)
+        .in('status', JSA_PENDING_STATUSES);
 
-          tasks.push({
-            id: jsa.id,
-            title: jsa.status === JSA_STATUS.reviewPgsol
-              ? `Review JSA (PGSOL)`
-              : `Persetujuan JSA (PGN)`,
-            type: 'JSA',
-            projectName: proj?.name || 'Unknown Project',
-            vendorName: companyName || 'Internal',
-            date: jsa.created_at,
-            url: `/dashboard/projects/${jsa.project_id}`,
-            status: jsa.status,
-            urgency: getUrgency(jsa.created_at),
-            timeInQueue: formatTimeInQueue(jsa.created_at)
-          });
-        }
-      });
+      if (jsas) {
+        jsas.forEach((jsa: any) => {
+          const perm = JSA_STAGE_PERMISSION[jsa.status];
+          const stageKey = perm ? `${perm.module}.${perm.action}` : null;
+          const myStageKeys = myStageKeysByProject.get(jsa.project_id);
+          // Pemisahan wewenang: yang sudah mereview tidak boleh muncul lagi sebagai approver.
+          const sudahDireviewOlehSaya =
+            jsa.status === JSA_STATUS.approvalPgn && jsa.reviewer_id === user.id;
+          const isMyTask = !!stageKey && !!myStageKeys?.has(stageKey) && !sudahDireviewOlehSaya;
+
+          if (isMyTask) {
+             const proj = Array.isArray(jsa.projects) ? jsa.projects[0] : jsa.projects;
+             const vendor = proj?.vendor_profiles;
+             const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
+
+            tasks.push({
+              id: jsa.id,
+              title: jsa.status === JSA_STATUS.reviewPgsol
+                ? `Review JSA (PGSOL)`
+                : `Persetujuan JSA (PGN)`,
+              type: 'JSA',
+              projectName: proj?.name || 'Unknown Project',
+              vendorName: companyName || 'Internal',
+              date: jsa.created_at,
+              url: `/dashboard/projects/${jsa.project_id}`,
+              status: jsa.status,
+              urgency: getUrgency(jsa.created_at),
+              timeInQueue: formatTimeInQueue(jsa.created_at)
+            });
+          }
+        });
+      }
     }
   }
 
-  // 3. Fetch PTW
-  if (can('ptw', 'approve_pm') || can('ptw', 'review_issuer') || can('ptw', 'numbering_hsse')) {
-    const { data: ptws } = await supabase
-      .from('ptw')
-      .select(`
-        id, status, created_at, project_id,
-        projects ( name, vendor_profiles ( company_name ) )
-      `)
-      .in('status', PTW_PENDING_STATUSES);
+  // 3. Fetch PTW — tiga tahap, pola sama seperti JSA di atas.
+  {
+    const ptwStageKeys = Object.values(PTW_STAGE_PERMISSION).map(p => `${p.module}.${p.action}`);
+    const { data: myAssignments } = await supabase
+      .from('stage_assignments')
+      .select('project_id, stage_key')
+      .eq('doc_type', 'ptw').in('stage_key', ptwStageKeys)
+      .eq('assignee_id', user.id).eq('status', 'pending');
 
-    if (ptws) {
-      ptws.forEach((ptw: any) => {
-        const perm = PTW_STAGE_PERMISSION[ptw.status];
-        const isMyTask = !!perm && can(perm.module, perm.action);
+    const myStageKeysByProject = new Map<string, Set<string>>();
+    (myAssignments || []).forEach((a: any) => {
+      if (!myStageKeysByProject.has(a.project_id)) myStageKeysByProject.set(a.project_id, new Set());
+      myStageKeysByProject.get(a.project_id)!.add(a.stage_key);
+    });
+    const projectIds = Array.from(myStageKeysByProject.keys());
 
-        if (isMyTask) {
-           const proj = Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects;
-           const vendor = proj?.vendor_profiles;
-           const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
+    if (projectIds.length > 0) {
+      const { data: ptws } = await supabase
+        .from('ptw')
+        .select(`
+          id, status, created_at, project_id,
+          projects ( name, vendor_profiles ( company_name ) )
+        `)
+        .in('project_id', projectIds)
+        .in('status', PTW_PENDING_STATUSES);
 
-          tasks.push({
-            id: ptw.id,
-            title: `Approval Permit to Work (PTW)`,
-            type: 'PTW',
-            projectName: proj?.name || 'Unknown Project',
-            vendorName: companyName || 'Internal',
-            date: ptw.created_at,
-            url: `/dashboard/projects/${ptw.project_id}`,
-            status: ptw.status,
-            urgency: getUrgency(ptw.created_at),
-            timeInQueue: formatTimeInQueue(ptw.created_at)
-          });
-        }
-      });
+      if (ptws) {
+        ptws.forEach((ptw: any) => {
+          const perm = PTW_STAGE_PERMISSION[ptw.status];
+          const stageKey = perm ? `${perm.module}.${perm.action}` : null;
+          const myStageKeys = myStageKeysByProject.get(ptw.project_id);
+          const isMyTask = !!stageKey && !!myStageKeys?.has(stageKey);
+
+          if (isMyTask) {
+             const proj = Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects;
+             const vendor = proj?.vendor_profiles;
+             const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
+
+            tasks.push({
+              id: ptw.id,
+              title: `Approval Permit to Work (PTW)`,
+              type: 'PTW',
+              projectName: proj?.name || 'Unknown Project',
+              vendorName: companyName || 'Internal',
+              date: ptw.created_at,
+              url: `/dashboard/projects/${ptw.project_id}`,
+              status: ptw.status,
+              urgency: getUrgency(ptw.created_at),
+              timeInQueue: formatTimeInQueue(ptw.created_at)
+            });
+          }
+        });
+      }
     }
   }
 
