@@ -17,21 +17,59 @@ transaksi sendiri, lihat komentar di tiap file):
 6. `schema_org_fix_type_functions.sql`
 7. `schema_org_rls_vendor_scope.sql`
 8. `schema_org_roles.sql`
+9. `schema_org_fix_vendor_trigger_and_policies.sql` — memperbaiki
+   `handle_new_user()` (berhenti menyisipkan `vendor_profiles` pada id
+   auth user, yang sejak langkah 4 selalu melanggar FK dan menggagalkan
+   SELURUH pembuatan akun), menambah policy SELECT "anggota org boleh
+   membaca profil rekan satu org" di `profiles` (tanpa ini daftar staff
+   selalu berisi 1 baris), dan mengganti policy self-update
+   `vendor_profiles` supaya memakai id organisasi, bukan `auth.uid()`.
+   Butuh `current_vendor_org_id()` dari langkah 7 — jangan dijalankan
+   sebelum itu.
+
+## Alur menambah staff ke perusahaan vendor / PGSOL
+
+Setelah semua migrasi di atas dijalankan, alur resminya seperti ini
+(tidak ada lagi jalur SQL manual — jangan pakai `UPDATE profiles SET
+org_id = ...` untuk ini):
+
+1. **Akun pertama sebuah company vendor baru** dibuat oleh superadmin PGN
+   (pemegang permission `masterData.manage_account`) lewat
+   `/dashboard/master-data/account` → tombol "Tambah Akun", pilih tipe
+   `Vendor` dan isi **Nama Perusahaan**. Action `addAccount` yang membuat
+   baris `organizations` (`kind = 'vendor'`) baru sekaligus baris
+   `vendor_profiles` pada id organisasi itu, lalu menautkan
+   `profiles.org_id` akun baru ke organisasi tersebut.
+   (Alur lama lewat `/dashboard/master-data/vendor` → "Tambah Vendor"
+   melakukan hal yang persis sama.)
+2. Beri akun pertama itu role **`vendor_admin`** — role ini membawa
+   permission `masterData.manage_org_staff`.
+3. **Staff berikutnya di company yang sama** ditambahkan sendiri oleh
+   `vendor_admin` tersebut lewat `/vendor/dashboard/staff`. Halaman itu
+   memakai jalur org-scoped: `addAccount` memaksa `type` dan `org_id`
+   akun baru mengikuti milik aktor dan TIDAK pernah membuat organisasi
+   baru, jadi staff kedua otomatis berbagi `org_id` (dan karenanya
+   proyek/aset) dengan staff pertama.
+4. Pola yang sama berlaku untuk PGSOL: superadmin PGN membuat akun
+   pertama bertipe `PGSOL` dengan role **`pgsol_admin`**, lalu admin itu
+   menambah staff PGSOL lainnya lewat `/pgsol/dashboard/staff`.
+
+Role yang boleh diberikan oleh admin org ter-scope dibatasi server-side:
+hanya role dengan `roles.type` yang sama dengan tipe organisasi aktor,
+dan role `admin` tidak pernah boleh diberikan dari jalur ini.
 
 ## Verifikasi manual setelah semua file di atas dijalankan
 
 - [ ] Login sebagai akun vendor lama (pre-migrasi) — pastikan masih bisa
       melihat proyek miliknya seperti biasa.
-- [ ] Buat akun vendor staff KEDUA di company yang sama (lewat
-      `/dashboard/master-data/account`, pilih company yang sudah ada —
-      catatan: form saat ini hanya mendukung membuat company BARU;
-      menambah staff ke company existing dilakukan lewat
-      `/vendor/dashboard/staff` setelah staff pertamanya login dan
-      mengundang staff kedua, ATAU lewat SQL manual untuk pengujian awal:
-      `UPDATE profiles SET org_id = '<org id vendor lama>' WHERE id = '<user id staff baru>'`
-      setelah staff baru dibuat via `auth.admin.createUser`).
+- [ ] Buat akun vendor staff KEDUA di company yang sama, mengikuti alur
+      di bagian "Alur menambah staff" di atas (akun pertama diberi role
+      `vendor_admin`, lalu staff kedua dibuat dari
+      `/vendor/dashboard/staff`).
 - [ ] Login sebagai staff kedua ini — pastikan BISA melihat proyek yang
-      sama dengan staff pertama (ini bukti utama RLS org-scoping bekerja).
+      sama dengan staff pertama (ini bukti utama RLS org-scoping bekerja),
+      dan pastikan daftar di `/vendor/dashboard/staff` menampilkan KEDUA
+      akun (bukti policy SELECT dari langkah 9 aktif).
 - [ ] Login sebagai vendor company LAIN (company B) — pastikan TIDAK BISA
       mengakses proyek company A walau tahu id proyeknya (coba lewat URL
       langsung, bukan cuma dari daftar).
@@ -47,3 +85,7 @@ transaksi sendiri, lihat komentar di tiap file):
       "Akun ini bukan bagian dari organisasi Anda." (bukan cuma
       disembunyikan di UI — panggil action-nya, bukan cuma cek tombolnya
       tidak muncul).
+- [ ] Coba `updateAccount` dari akun `vendor_admin` terhadap akunnya
+      sendiri dengan `role = 'admin'` — pastikan ditolak dengan pesan
+      "Role admin tidak dapat diberikan dari halaman ini." (tanpa ini
+      admin org bisa mempromosikan dirinya jadi superadmin lintas org).
