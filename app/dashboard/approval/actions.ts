@@ -2,10 +2,10 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { createNotification, notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
-import { JSA_STATUS, JSA_STAGE_PERMISSION } from "@/lib/jsa-status";
-import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from "@/lib/procedure-status";
-import { PTW_STATUS, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
+import { createNotification } from "@/app/dashboard/inbox/actions";
+import { JSA_STATUS } from "@/lib/jsa-status";
+import { PROCEDURE_STATUS } from "@/lib/procedure-status";
+import { PTW_STATUS } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { hasPermissionForUser } from "@/utils/permissions";
 import { getStageAssignments, isStageFullyApproved, resetStageAssignments } from '@/lib/stage-assignments';
@@ -451,42 +451,59 @@ export async function approvePtw(ptwId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const { data: current } = await supabase.from('ptw').select('status, authority_id, issuer_id').eq('id', ptwId).single();
+  const { data: current } = await supabase.from('ptw').select('status, authority_id, issuer_id, project_id').eq('id', ptwId).single();
+  if (!current?.project_id) throw new Error("PTW ini tidak terhubung ke proyek.");
 
-  let updatePayload: any = {};
+  let stageKey = '';
+  let updatePayloadIfComplete: any = {};
 
-  if (current?.status === PTW_STATUS.menungguApprovalPM) {
-    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.menungguApprovalPM], "Anda tidak memiliki izin untuk menyetujui tahap ini.");
-    updatePayload = { authority_id: user.id, authority_approved_at: new Date().toISOString(), status: PTW_STATUS.reviewPtwIssuer };
-  } else if (current?.status === PTW_STATUS.reviewPtwIssuer) {
-    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.reviewPtwIssuer], "Anda tidak memiliki izin untuk menyetujui tahap ini.");
-    // Pemisahan wewenang, sama seperti reviewer/approver pada JSA: sejak
-    // permission bisa diberikan bebas per role, satu orang bisa saja memegang
-    // ketiga izin tahap PTW dan meloloskan izin kerja sendirian tanpa kontrol
-    // pihak kedua.
+  if (current.status === PTW_STATUS.menungguApprovalPM) {
+    stageKey = 'ptw.approve_pm';
+    updatePayloadIfComplete = { authority_id: user.id, authority_approved_at: new Date().toISOString(), status: PTW_STATUS.reviewPtwIssuer };
+  } else if (current.status === PTW_STATUS.reviewPtwIssuer) {
+    stageKey = 'ptw.review_issuer';
     requireDistinctApprover(current.authority_id, user.id, "PTW Authority (PM)");
-    updatePayload = { issuer_id: user.id, issuer_approved_at: new Date().toISOString(), status: PTW_STATUS.menungguPenomoranHSSE };
-  } else if (current?.status === PTW_STATUS.menungguPenomoranHSSE) {
-    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.menungguPenomoranHSSE], "Anda tidak memiliki izin untuk menerbitkan nomor PTW.");
+    updatePayloadIfComplete = { issuer_id: user.id, issuer_approved_at: new Date().toISOString(), status: PTW_STATUS.menungguPenomoranHSSE };
+  } else if (current.status === PTW_STATUS.menungguPenomoranHSSE) {
+    stageKey = 'ptw.numbering_hsse';
     requireDistinctApprover(current.authority_id, user.id, "PTW Authority (PM)");
     requireDistinctApprover(current.issuer_id, user.id, "PTW Issuer");
-    // Generate PTW number: PTW-YYYY-XXX
-    const year = new Date().getFullYear();
-    const { count } = await supabase.from('ptw').select('*', { count: 'exact', head: true }).like('ptw_number', `PTW-${year}-%`);
-    const nextNum = String((count || 0) + 1).padStart(3, '0');
-    updatePayload = { hsse_id: user.id, ptw_number: `PTW-${year}-${nextNum}`, status: PTW_STATUS.aktif };
   } else {
     throw new Error("PTW tidak dalam tahap yang bisa disetujui.");
   }
 
-  // .eq('status', current.status) membuat update ini optimistic-locked pada
-  // tahap yang barusan dibaca: dua approval bersamaan tidak bisa dua-duanya
-  // lolos, sehingga nomor PTW tidak diterbitkan dua kali dari satu antrean.
-  // Unique index pada ptw_number (schema_ptw_vendor_update_policy.sql) tetap
-  // jadi jaring pengaman terakhir untuk penomoran lintas-baris.
+  const rows = await getStageAssignments(supabase, current.project_id, 'ptw', stageKey);
+  const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
+  if (!myRow) throw new Error("Anda tidak ditugaskan untuk tahap PTW ini pada proyek ini.");
+
+  await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
+
+  // Re-fetch (bukan patch lokal dari `rows` yang sudah basi) — lihat catatan
+  // yang sama di Task 5/6: dua approver terakhir yang approve nyaris
+  // bersamaan bisa sama-sama melihat snapshot awal yang belum mencatat
+  // approval satu sama lain kalau ini pakai patch lokal, sehingga PTW bisa
+  // macet permanen walau di DB semua baris sudah approved.
+  const freshRows = await getStageAssignments(supabase, current.project_id, 'ptw', stageKey);
+  if (!isStageFullyApproved(freshRows)) {
+    revalidatePath('/dashboard/approval');
+    return;
+  }
+
+  if (stageKey === 'ptw.numbering_hsse') {
+    const year = new Date().getFullYear();
+    const { count } = await supabase.from('ptw').select('*', { count: 'exact', head: true }).like('ptw_number', `PTW-${year}-%`);
+    const nextNum = String((count || 0) + 1).padStart(3, '0');
+    updatePayloadIfComplete = { hsse_id: user.id, ptw_number: `PTW-${year}-${nextNum}`, status: PTW_STATUS.aktif };
+  }
+
+  // .eq('status', current.status) tetap jadi optimistic lock terakhir:
+  // kalau dua orang yang sama-sama assignee terakhir suatu tahap
+  // menyelesaikan approval mereka nyaris bersamaan, hanya satu yang boleh
+  // memajukan status dokumen (dan menomori PTW). Unique index pada
+  // ptw_number tetap jaring pengaman lapis kedua.
   const { data: updated, error } = await supabase
     .from('ptw')
-    .update(updatePayload)
+    .update(updatePayloadIfComplete)
     .eq('id', ptwId)
     .eq('status', current.status)
     .select('id');
@@ -495,14 +512,13 @@ export async function approvePtw(ptwId: string) {
     throw new Error("PTW ini baru saja diproses oleh pengguna lain. Muat ulang halaman untuk melihat status terbaru.");
   }
 
-  // Notify vendor about PTW status
   const { data: ptw } = await supabase.from('ptw').select('project_id, status, ptw_number, projects ( name, vendor_id )').eq('id', ptwId).single();
   const proj: any = Array.isArray(ptw?.projects) ? ptw?.projects[0] : ptw?.projects;
 
   if (ptw?.project_id) {
-    const stageAction = updatePayload.status === PTW_STATUS.aktif
-      ? `Nomor PTW Diterbitkan & Aktif (${updatePayload.ptw_number})`
-      : updatePayload.status === PTW_STATUS.reviewPtwIssuer
+    const stageAction = updatePayloadIfComplete.status === PTW_STATUS.aktif
+      ? `Nomor PTW Diterbitkan & Aktif (${updatePayloadIfComplete.ptw_number})`
+      : updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer
         ? 'Disetujui PTW Authority (PM)'
         : 'Disetujui PTW Issuer';
     await logDocumentEvent(supabase, {
@@ -517,38 +533,41 @@ export async function approvePtw(ptwId: string) {
       userId: proj.vendor_id,
       type: isPtwActive ? 'approval' : 'info',
       title: isPtwActive ? `PTW Diterbitkan: ${ptw?.ptw_number}` : `PTW: Tahap ${ptw?.status}`,
-      message: isPtwActive 
-        ? `Selamat! PTW ${ptw?.ptw_number} untuk proyek "${proj.name}" telah aktif. Pekerjaan bisa dimulai.` 
+      message: isPtwActive
+        ? `Selamat! PTW ${ptw?.ptw_number} untuk proyek "${proj.name}" telah aktif. Pekerjaan bisa dimulai.`
         : `PTW untuk proyek "${proj.name}" telah memasuki tahap ${ptw?.status}.`,
       link: `/vendor/dashboard/projects/${ptw?.project_id}`,
     });
   }
 
-  // If PTW is now active, also notify internal HSE team
-  if (updatePayload.status === PTW_STATUS.aktif) {
-    
-    // Auto-assign the JSA's PGSOL reviewer as default inspector for the project
+  if (updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer) {
+    await notifyAssignees({
+      projectId: ptw!.project_id, docType: 'ptw', stageKey: 'ptw.review_issuer',
+      type: 'action_required', title: 'PTW Menunggu Review Issuer',
+      message: `PTW untuk proyek "${proj?.name}" telah disetujui PTW Authority dan menunggu review Anda.`,
+      link: `/dashboard/projects/${ptw?.project_id}`,
+    });
+  } else if (updatePayloadIfComplete.status === PTW_STATUS.menungguPenomoranHSSE) {
+    await notifyAssignees({
+      projectId: ptw!.project_id, docType: 'ptw', stageKey: 'ptw.numbering_hsse',
+      type: 'action_required', title: 'PTW Menunggu Penomoran HSSE',
+      message: `PTW untuk proyek "${proj?.name}" telah direview PTW Issuer dan menunggu penomoran Anda.`,
+      link: `/dashboard/projects/${ptw?.project_id}`,
+    });
+  }
+
+  if (updatePayloadIfComplete.status === PTW_STATUS.aktif) {
     const { data: jsaData } = await supabase.from('jsa').select('reviewer_id').eq('project_id', ptw?.project_id).single();
     if (jsaData?.reviewer_id) {
-       await supabase.from('projects').update({ assigned_inspector: jsaData.reviewer_id }).eq('id', ptw?.project_id);
-
-       // Also notify the reviewer that they have a new monitoring task
-       await createNotification({
-         userId: jsaData.reviewer_id,
-         type: 'info',
-         title: 'Tugas Pengawasan Baru',
-         message: `PTW ${updatePayload.ptw_number} telah diterbitkan. Anda ditugaskan sebagai pengawas utama.`,
-         link: '/dashboard/my-task'
-       });
+      await supabase.from('projects').update({ assigned_inspector: jsaData.reviewer_id }).eq('id', ptw?.project_id);
+      await createNotification({
+        userId: jsaData.reviewer_id,
+        type: 'info',
+        title: 'Tugas Pengawasan Baru',
+        message: `PTW ${updatePayloadIfComplete.ptw_number} telah diterbitkan. Anda ditugaskan sebagai pengawas utama.`,
+        link: '/dashboard/my-task'
+      });
     }
-
-    await notifyUsersByPermission({
-      ...PTW_STAGE_PERMISSION[PTW_STATUS.menungguPenomoranHSSE],
-      type: 'info',
-      title: `PTW Aktif: ${updatePayload.ptw_number}`,
-      message: `PTW ${updatePayload.ptw_number} untuk proyek "${proj?.name}" telah diterbitkan dan aktif.`,
-      link: `/dashboard/ongoing`,
-    });
   }
   revalidatePath('/dashboard/approval');
 }
@@ -558,15 +577,33 @@ export async function rejectPtw(ptwId: string, note: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  const { data: current } = await supabase.from('ptw').select('status').eq('id', ptwId).single();
-  if (current?.status === PTW_STATUS.menungguApprovalPM) {
-    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.menungguApprovalPM], "Anda tidak memiliki izin untuk menolak tahap ini.");
-  } else if (current?.status === PTW_STATUS.reviewPtwIssuer) {
-    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.reviewPtwIssuer], "Anda tidak memiliki izin untuk menolak tahap ini.");
-  } else if (current?.status === PTW_STATUS.menungguPenomoranHSSE) {
-    await requirePermission(supabase, user.id, PTW_STAGE_PERMISSION[PTW_STATUS.menungguPenomoranHSSE], "Anda tidak memiliki izin untuk menolak tahap ini.");
+  const { data: current } = await supabase.from('ptw').select('status, project_id').eq('id', ptwId).single();
+  if (!current?.project_id) throw new Error("PTW ini tidak terhubung ke proyek.");
+
+  let stageKey = '';
+  if (current.status === PTW_STATUS.menungguApprovalPM) {
+    stageKey = 'ptw.approve_pm';
+  } else if (current.status === PTW_STATUS.reviewPtwIssuer) {
+    stageKey = 'ptw.review_issuer';
+  } else if (current.status === PTW_STATUS.menungguPenomoranHSSE) {
+    stageKey = 'ptw.numbering_hsse';
   } else {
     throw new Error("PTW tidak dalam tahap yang bisa ditolak.");
+  }
+
+  const rows = await getStageAssignments(supabase, current.project_id, 'ptw', stageKey);
+  const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
+  if (!myRow) throw new Error("Anda tidak ditugaskan untuk tahap PTW ini pada proyek ini.");
+
+  await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
+  await resetStageAssignments(supabase, current.project_id, 'ptw', stageKey);
+  // Penolakan di tahap manapun mengembalikan PTW sampai ke Draft (bukan cuma
+  // ke tahap sebelumnya seperti JSA), jadi ketiga tahap PTW harus direset
+  // supaya semuanya `pending` lagi saat vendor mengajukan ulang — meniru alur
+  // resubmission `savePtw` yang mengembalikan dokumen ke menungguApprovalPM.
+  const otherStageKeys = ['ptw.approve_pm', 'ptw.review_issuer', 'ptw.numbering_hsse'].filter(k => k !== stageKey);
+  for (const key of otherStageKeys) {
+    await resetStageAssignments(supabase, current.project_id, 'ptw', key);
   }
 
   const { error } = await supabase
