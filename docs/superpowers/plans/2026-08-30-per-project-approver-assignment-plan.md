@@ -622,8 +622,13 @@ export async function approveJsa(jsaId: string) {
 
   await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
 
-  const updatedRows = rows.map(r => r.id === myRow.id ? { ...r, status: 'approved' as const } : r);
-  const stageComplete = isStageFullyApproved(updatedRows);
+  // Re-fetch (bukan patch lokal dari `rows` yang sudah basi) — dua approver
+  // terakhir yang approve nyaris bersamaan sama-sama melihat snapshot awal
+  // yang belum mencatat approval satu sama lain kalau ini pakai patch lokal,
+  // sehingga dokumen bisa macet permanen walau di DB semua baris sudah
+  // approved. Lihat ruling di ledger Task 5 untuk detail race-nya.
+  const freshRows = await getStageAssignments(supabase, current.project_id, 'jsa', stageKey);
+  const stageComplete = isStageFullyApproved(freshRows);
 
   const { data: jsa } = await supabase.from('jsa').select('project_id, projects ( name, vendor_id )').eq('id', jsaId).single();
   const proj: any = Array.isArray(jsa?.projects) ? jsa?.projects[0] : jsa?.projects;
@@ -822,8 +827,13 @@ export async function approvePtw(ptwId: string) {
 
   await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
 
-  const updatedRows = rows.map(r => r.id === myRow.id ? { ...r, status: 'approved' as const } : r);
-  if (!isStageFullyApproved(updatedRows)) {
+  // Re-fetch (bukan patch lokal dari `rows` yang sudah basi) — lihat catatan
+  // yang sama di Task 5/6: dua approver terakhir yang approve nyaris
+  // bersamaan bisa sama-sama melihat snapshot awal yang belum mencatat
+  // approval satu sama lain kalau ini pakai patch lokal, sehingga PTW bisa
+  // macet permanen walau di DB semua baris sudah approved.
+  const freshRows = await getStageAssignments(supabase, current.project_id, 'ptw', stageKey);
+  if (!isStageFullyApproved(freshRows)) {
     revalidatePath('/dashboard/approval');
     return;
   }
