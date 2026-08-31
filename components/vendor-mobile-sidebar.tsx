@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { Menu, X, LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, BookOpen } from 'lucide-react';
+import { Menu, X, LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, BookOpen, UserCog } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
 const menuUtama = [
@@ -20,6 +20,7 @@ const masterData = [
   { name: 'Data Pekerja', href: '/vendor/dashboard/pekerja', icon: Users },
   { name: 'Data Peralatan', href: '/vendor/dashboard/peralatan', icon: Truck },
   { name: 'Data Material', href: '/vendor/dashboard/material', icon: Package },
+  { name: 'Staff Perusahaan', href: '/vendor/dashboard/staff', icon: UserCog },
 ];
 
 export function VendorMobileSidebar() {

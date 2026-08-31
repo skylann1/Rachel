@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight, BookOpen } from "lucide-react";
+import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight, BookOpen, UserCog } from "lucide-react";
 import { logout } from "@/app/vendor/login/actions";
 
 const menuUtama = [
@@ -20,6 +20,7 @@ const masterData = [
   { name: 'Data Pekerja', href: '/vendor/dashboard/pekerja', icon: Users },
   { name: 'Data Peralatan', href: '/vendor/dashboard/peralatan', icon: Truck },
   { name: 'Data Material', href: '/vendor/dashboard/material', icon: Package },
+  { name: 'Staff Perusahaan', href: '/vendor/dashboard/staff', icon: UserCog },
 ];
 
 export function VendorDesktopSidebar() {
