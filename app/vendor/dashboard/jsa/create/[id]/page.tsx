@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText, Sparkles,
 import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
+import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
@@ -51,11 +52,15 @@ export default function JSACreatePage() {
   const [gatekeeperLoading, setGatekeeperLoading] = useState(false);
   const [gatekeeperResult, setGatekeeperResult] = useState<{ score: number; summary: string } | null>(null);
   const [gatekeeperError, setGatekeeperError] = useState<string | null>(null);
+  const [docId, setDocId] = useState<string | null>(null);
 
   React.useEffect(() => {
     async function loadData() {
       if (projectId) {
-        const data = await getJsa(projectId);
+        const data = await getJsa(projectId as string);
+        if (data && data.jsa) {
+          setDocId(data.jsa.id);
+        }
         let finalSteps: any[] = [];
 
         if (data && data.procedureSteps && data.procedureSteps.length > 0) {
@@ -459,6 +464,9 @@ export default function JSACreatePage() {
         <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end"><button onClick={addStep} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-100 flex gap-2 items-center"><Plus className="w-4 h-4" /> Tambah Langkah</button></div>
 
       </div>
+
+      <VendorInternalReviewActions projectId={projectId as string} docType="jsa" docId={docId} />
+
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
         <h2 className="font-bold text-slate-800 mb-4">Preview PDF Analisa Keselamatan Kerja</h2>
         <div className="w-full bg-slate-500 rounded-xl overflow-hidden" style={{ height: '700px' }}>

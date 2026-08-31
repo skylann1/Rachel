@@ -9,6 +9,7 @@ import {
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
 import { saveProsedur, getProsedur } from './actions';
+import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
 
 // Mock list APD
 const apdList = [
@@ -63,12 +64,15 @@ export default function ProsedurKerjaForm() {
   // Section 4
   const [selectedApd, setSelectedApd] = useState<string[]>([]);
 
+  const [docId, setDocId] = useState<string | null>(null);
+
   // Fetch initial data
   useEffect(() => {
     async function loadData() {
       if (params.id) {
         const data = await getProsedur(params.id as string);
         if (data && data.content) {
+          setDocId(data.id);
           const content = data.content;
           setDocNo(content.docNo || '');
           setContractNo(content.contractNo || '');
@@ -511,6 +515,8 @@ export default function ProsedurKerjaForm() {
             )}
           </div>
         </section>
+
+        <VendorInternalReviewActions projectId={params.id as string} docType="procedure" docId={docId} />
 
         {/* Action Button & PDF Export */}
         <div className="pt-6 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">

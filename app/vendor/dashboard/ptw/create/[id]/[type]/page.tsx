@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle2, Users, Truck, Stamp, ShieldAlert, FileText, Ha
 import dynamic from 'next/dynamic';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import { savePtw, getPtw, getPtwList, getProjectPeriod } from '../actions';
+import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
@@ -71,6 +72,7 @@ export default function PTWCreatePage() {
   const [rosterPekerja, setRosterPekerja] = useState<WorkerItem[]>([]);
   const [rosterPeralatan, setRosterPeralatan] = useState<EquipmentItem[]>([]);
   const [isLoadingRoster, setIsLoadingRoster] = useState(true);
+  const [docId, setDocId] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (!typeDef) {
@@ -91,6 +93,7 @@ export default function PTWCreatePage() {
       setIsLoadingRoster(false);
 
       if (data) {
+        setDocId(data.id);
         // Merevisi PTW tipe ini yang sudah pernah diajukan.
         if (data.workers) setSelectedPekerja(data.workers.map((w: any) => w.id).filter(Boolean));
         if (data.equipment) setSelectedPeralatan(data.equipment.map((e: any) => e.id).filter(Boolean));
@@ -519,6 +522,8 @@ export default function PTWCreatePage() {
               )}
             </div>
           </div>
+
+          <VendorInternalReviewActions projectId={projectId as string} docType="ptw" docId={docId} />
 
         </div>
 
