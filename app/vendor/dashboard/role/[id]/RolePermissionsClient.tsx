@@ -10,7 +10,7 @@ export default function RolePermissionsClient({ role, allModules }: { role: any,
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(role.name);
   const [description, setDescription] = useState(role.description || '');
-  const [type, setType] = useState(role.type || 'pgn');
+  const [type, setType] = useState(role.type || 'vendor');
   const [permissions, setPermissions] = useState<Record<string, string[]>>(role.permissions || {});
   const router = useRouter();
 
@@ -61,7 +61,7 @@ export default function RolePermissionsClient({ role, allModules }: { role: any,
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Link 
-            href="/dashboard/master-data/role"
+            href="/vendor/dashboard/role"
             className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -102,30 +102,13 @@ export default function RolePermissionsClient({ role, allModules }: { role: any,
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Tipe Role</label>
-              <select
-                value={type}
-                onChange={e => {
-                  const newType = e.target.value;
-                  setType(newType);
-                  setPermissions(prev => {
-                    const newPerms: Record<string, string[]> = {};
-                    allModules.forEach(module => {
-                      const validKeys = module.items
-                        .filter((item: any) => !item.allowedTypes || item.allowedTypes.includes(newType))
-                        .map((item: any) => item.key);
-                      const filteredPerms = (prev[module.id] || []).filter(k => validKeys.includes(k));
-                      if (filteredPerms.length > 0) newPerms[module.id] = filteredPerms;
-                    });
-                    return newPerms;
-                  });
-                }}
-                disabled={role.is_system}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none disabled:bg-slate-100"
-              >
-                <option value="pgn">PGN</option>
-                <option value="pgsol">PGSOL</option>
-                <option value="vendor">Vendor</option>
-              </select>
+              <input
+                type="text"
+                disabled
+                value="Vendor"
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm bg-slate-100 text-slate-500 cursor-not-allowed outline-none"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">Role vendor tidak dapat mengubah tipe organisasi.</p>
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Deskripsi</label>
