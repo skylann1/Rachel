@@ -1,13 +1,16 @@
-/**
- * Alur persetujuan PTW — tiga tahap internal.
+﻿/**
+ * Alur persetujuan PTW — review internal vendor, lalu tiga tahap internal PGN/PGSOL.
  *
- *   Menunggu Approval PM -> Review PTW Issuer -> Menunggu Penomoran HSSE -> PTW Aktif
+ *   Review Internal Vendor -> Menunggu Approval PM -> Review PTW Issuer -> Menunggu Penomoran HSSE -> PTW Aktif
  *
+ * Review Internal Vendor tidak pernah nyampe PM — staff vendor sendiri
+ * (ditugaskan admin vendor per proyek, lihat Fase 3) harus menyetujui dulu.
  * Reject di tahap manapun mengembalikan status ke Draft; vendor merevisi
- * lalu mengajukan ulang (balik ke Menunggu Approval PM).
+ * lalu mengajukan ulang (balik ke Review Internal Vendor).
  */
 export const PTW_STATUS = {
   draft: 'Draft',
+  reviewInternalVendor: 'Review Internal Vendor',
   menungguApprovalPM: 'Menunggu Approval PM',
   reviewPtwIssuer: 'Review PTW Issuer',
   menungguPenomoranHSSE: 'Menunggu Penomoran HSSE',
@@ -16,7 +19,11 @@ export const PTW_STATUS = {
   stoppedSwa: 'Dihentikan (SWA)',
 } as const;
 
-/** Status yang berarti PTW sedang menunggu tindakan pihak internal. */
+/**
+ * Status yang berarti PTW sedang menunggu tindakan pihak INTERNAL
+ * (PGN/PGSOL) — dipakai untuk /dashboard/my-task. `reviewInternalVendor`
+ * SENGAJA tidak masuk sini: tahap itu menunggu staff vendor sendiri.
+ */
 export const PTW_PENDING_STATUSES: string[] = [
   PTW_STATUS.menungguApprovalPM,
   PTW_STATUS.reviewPtwIssuer,

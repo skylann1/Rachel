@@ -1,19 +1,29 @@
-/**
- * Alur persetujuan Prosedur Kerja — satu tahap, direview oleh PM.
+﻿/**
+ * Alur persetujuan Prosedur Kerja — satu tahap review internal vendor,
+ * lalu satu tahap review PM.
  *
- *   Draft -> Menunggu Review PM -> Prosedur Disetujui
+ *   Draft -> Review Internal Vendor -> Menunggu Review PM -> Prosedur Disetujui
  *
- * Reject mengembalikan status ke Draft; vendor merevisi lalu mengajukan
- * ulang (balik ke Menunggu Review PM).
+ * Review Internal Vendor tidak pernah nyampe pihak PGN/PGSOL — staff vendor
+ * sendiri (ditugaskan admin vendor per proyek, lihat Fase 3) harus
+ * menyetujui dulu sebelum PM melihatnya. Reject di tahap manapun
+ * mengembalikan status ke Draft; vendor merevisi lalu mengajukan ulang
+ * (balik ke Review Internal Vendor).
  */
 
 export const PROCEDURE_STATUS = {
   draft: 'Draft',
+  reviewInternalVendor: 'Review Internal Vendor',
   menungguReviewPM: 'Menunggu Review PM',
   approved: 'Prosedur Disetujui',
 } as const;
 
-/** Status yang berarti Prosedur sedang menunggu tindakan pihak internal. */
+/**
+ * Status yang berarti Prosedur sedang menunggu tindakan pihak INTERNAL
+ * (PGN/PGSOL) — dipakai untuk /dashboard/my-task. `reviewInternalVendor`
+ * SENGAJA tidak masuk sini: tahap itu menunggu staff vendor sendiri, bukan
+ * pihak internal, dan tidak boleh muncul di task list internal.
+ */
 export const PROCEDURE_PENDING_STATUSES: string[] = [
   PROCEDURE_STATUS.menungguReviewPM,
 ];
