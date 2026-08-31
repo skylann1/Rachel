@@ -3,6 +3,8 @@ import { createClient } from '@/utils/supabase/server';
 import { notFound } from 'next/navigation';
 import { getJsaSignatories } from '@/lib/jsa-signatories';
 import { getPtwSignatories } from '@/lib/ptw-signatories';
+import { hasPermission } from '@/utils/permissions';
+import { getStageAssignments, getEligibleAssignees, VENDOR_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
 
 export default async function ProjectDetailTrackerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -10,12 +12,38 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  const canManageAssignments = await hasPermission('masterData', 'manage_org_staff');
+  const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', user?.id).single();
+  const actorOrgId = actorProfile?.org_id ?? '';
+
+  const VENDOR_STAGE_LABELS: Record<string, string> = {
+    'procedure.review_vendor': 'Review Internal — Prosedur Kerja',
+    'jsa.review_vendor': 'Review Internal — JSA',
+    'ptw.review_vendor': 'Review Internal — PTW',
+  };
+
+  const assignmentSlots = canManageAssignments ? await Promise.all(VENDOR_STAGE_KEYS.map(async (stageKey) => {
+    const docType = stageKey.split('.')[0];
+    const permission = STAGE_KEY_PERMISSION[stageKey];
+    const [candidates, assignments] = await Promise.all([
+      getEligibleAssignees(supabase, permission.module, permission.action, actorOrgId),
+      getStageAssignments(supabase, projectId, docType, stageKey),
+    ]);
+    return {
+      stageKey,
+      label: VENDOR_STAGE_LABELS[stageKey],
+      candidates,
+      currentAssigneeIds: assignments.map(a => a.assignee_id),
+      locked: assignments.some(a => a.status !== 'pending'),
+    };
+  })) : [];
+
   // Fetch project + its JSA + its PTW + its procedure
   const { data: project, error } = await supabase
     .from('projects')
     .select(`
       id, name, location, start_date, end_date, description, status,
-      vendor_profiles ( company_name, profiles ( full_name ) ),
+      vendor_profiles ( company_name, organizations ( profiles ( full_name ) ) ),
       jsa ( id, status, rejection_note, reviewer_id, reviewed_at, approver_id, approved_at, jsa_steps ( id, step_number, pekerjaan, bahaya, risiko, tindakan ) ),
       ptw ( id, status, rejection_note, ptw_number, workers, equipment, ptw_type, hazards, apd, gas_tests,
             created_at, authority_id, authority_approved_at, issuer_id, issuer_approved_at, hsse_id,
@@ -37,7 +65,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   // approval sendiri.
   const vendorProfile: any = Array.isArray(project.vendor_profiles) ? project.vendor_profiles[0] : project.vendor_profiles;
   const vendorPic = {
-    nama: (Array.isArray(vendorProfile?.profiles) ? vendorProfile.profiles[0] : vendorProfile?.profiles)?.full_name,
+    nama: (Array.isArray(vendorProfile?.organizations?.profiles) ? vendorProfile.organizations.profiles[0] : vendorProfile?.organizations?.profiles)?.full_name,
     perusahaan: vendorProfile?.company_name,
   };
   const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
@@ -64,6 +92,8 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       ptwSignatories={ptwSignatories}
       siteCheckins={siteCheckins ?? []}
       toolboxMeetings={toolboxMeetings ?? []}
+      canManageAssignments={canManageAssignments}
+      assignmentSlots={assignmentSlots}
     />
   );
 }

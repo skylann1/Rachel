@@ -19,6 +19,7 @@ import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { buildCheckinUrl } from '@/lib/site-ops';
+import VendorAssignmentPanel from './VendorAssignmentPanel';
 
 const BlobProvider = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.BlobProvider),
@@ -55,12 +56,15 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
   );
 }
 
-export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings }: {
+export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, assignmentSlots }: {
   project: any; currentUserId: string; jsaSignatories?: any; ptwSignatories?: Record<string, any>;
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
   siteCheckins?: any[];
   /** Riwayat toolbox meeting (toolbox_meetings) lintas semua PTW proyek ini, terbaru dulu. */
   toolboxMeetings?: any[];
+  /** true kalau caller punya masterData.manage_org_staff — menentukan apakah tab Assignment Reviewer ditampilkan. */
+  canManageAssignments: boolean;
+  assignmentSlots: any[];
 }) {
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [qrModalToken, setQrModalToken] = useState<string | null>(null);
@@ -121,6 +125,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
     { id: 'dokumen', label: 'Dokumen K3', icon: <FileText className="w-4 h-4" /> },
     { id: 'lapangan', label: 'Status Lapangan', icon: <Siren className="w-4 h-4" /> },
     { id: 'diskusi', label: 'Diskusi & Notes', icon: <MessageSquare className="w-4 h-4" /> },
+    ...(canManageAssignments ? [{ id: 'assignment', label: 'Assignment Reviewer', icon: <Users className="w-4 h-4" /> }] : []),
   ];
 
   // Tab "Status Lapangan" — check-in/toolbox meeting lintas semua tipe PTW proyek ini.
@@ -627,6 +632,24 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 p-8 min-h-[600px]">
             <ProjectDiscussion projectId={project.id} currentUserId={currentUserId} />
          </div>
+      )}
+
+      {/* --- TAB: ASSIGNMENT REVIEWER --- */}
+      {activeTab === 'assignment' && canManageAssignments && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5">
+            <h3 className="text-blue-800 font-bold mb-1 flex items-center gap-2">
+              <Users className="w-4 h-4" /> Assignment Reviewer Internal
+            </h3>
+            <p className="text-sm text-blue-600/80">
+              Tunjuk staff perusahaan Anda untuk mereview setiap dokumen K3 sebelum diajukan ke PGSOL/PGN.
+              Kalau lebih dari satu orang ditugaskan pada satu tahap, semuanya harus menyetujui sebelum dokumen lanjut.
+            </p>
+          </div>
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <VendorAssignmentPanel projectId={project.id} slots={assignmentSlots} />
+          </div>
+        </div>
       )}
 
     </div>
