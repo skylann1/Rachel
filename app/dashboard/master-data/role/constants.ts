@@ -41,6 +41,7 @@ export const allPermissionModules = [
     description: 'Hak akses terkait dokumen Prosedur Kerja vendor — tahap pertama alur Prosedur → JSA → PTW.',
     items: [
       { key: 'view', label: 'Melihat Daftar Prosedur Kerja' },
+      { key: 'review_vendor', label: 'Review Internal Vendor — Prosedur Kerja' },
       { key: 'review', label: 'Review & Approve Prosedur Kerja' },
     ]
   },
@@ -51,6 +52,7 @@ export const allPermissionModules = [
     items: [
       { key: 'view', label: 'Melihat Daftar JSA' },
       { key: 'create', label: 'Membuat Pengajuan JSA Baru' },
+      { key: 'review_vendor', label: 'Review Internal Vendor — JSA' },
       { key: 'review_pgsol', label: 'Review JSA — Tahap PGSOL' },
       { key: 'manage_assignment_pgsol', label: 'Menunjuk Reviewer PGSOL per Proyek' },
       { key: 'approve_pgn', label: 'Approve JSA — Tahap PGN' },
@@ -63,6 +65,7 @@ export const allPermissionModules = [
     description: 'Hak akses terkait manajemen Surat Izin Kerja Aman — tiga tahap approval berurutan.',
     items: [
       { key: 'view', label: 'Melihat Daftar PTW' },
+      { key: 'review_vendor', label: 'Review Internal Vendor — PTW' },
       { key: 'approve_pm', label: 'Approval Tahap PM (PTW Authority)' },
       { key: 'review_issuer', label: 'Review Tahap PTW Issuer' },
       { key: 'numbering_hsse', label: 'Penomoran & Penerbitan PTW (HSSE)' },

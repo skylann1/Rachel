@@ -1,8 +1,11 @@
-/**
- * Alur persetujuan JSA — dua tahap, dua orang berbeda.
+﻿/**
+ * Alur persetujuan JSA — review internal vendor, lalu dua tahap eksternal.
  *
- *   Draft -> Review PGSOL -> Persetujuan PGN -> JSA Disetujui
+ *   Draft -> Review Internal Vendor -> Review PGSOL -> Persetujuan PGN -> JSA Disetujui
  *
+ * Review Internal Vendor : staff vendor sendiri (ditugaskan admin vendor
+ *                   per proyek, lihat Fase 3) harus menyetujui dulu
+ *                   sebelum JSA nyampe PGSOL.
  * Review PGSOL    : verifikasi teknis oleh Satker Pemberi Kerja (PGSOL).
  *                   Mengecek bahaya sudah teridentifikasi, mitigasi memadai,
  *                   dan nilai risiko wajar. Blok "Direview Oleh" pada form.
@@ -14,12 +17,17 @@
 
 export const JSA_STATUS = {
   draft: 'Draft',
+  reviewInternalVendor: 'Review Internal Vendor',
   reviewPgsol: 'Review PGSOL',
   approvalPgn: 'Persetujuan PGN',
   approved: 'JSA Disetujui',
 } as const;
 
-/** Status yang berarti JSA sedang menunggu tindakan pihak internal. */
+/**
+ * Status yang berarti JSA sedang menunggu tindakan pihak INTERNAL
+ * (PGN/PGSOL) — dipakai untuk /dashboard/my-task. `reviewInternalVendor`
+ * SENGAJA tidak masuk sini: tahap itu menunggu staff vendor sendiri.
+ */
 export const JSA_PENDING_STATUSES: string[] = [
   JSA_STATUS.reviewPgsol,
   JSA_STATUS.approvalPgn,
