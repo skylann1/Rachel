@@ -35,25 +35,27 @@ export async function saveJsa(projectId: string, jsaData: any) {
       .from('jsa')
       .insert({
         project_id: projectId,
-        status: JSA_STATUS.reviewPgsol
+        status: JSA_STATUS.reviewInternalVendor
       })
       .select('id')
       .single();
-      
+
     if (error) throw new Error(error.message);
     jsaId = newJsa.id;
   } else {
-    await supabase.from('jsa').update({ status: JSA_STATUS.reviewPgsol, rejection_note: null }).eq('id', jsaId);
+    await supabase.from('jsa').update({ status: JSA_STATUS.reviewInternalVendor, rejection_note: null }).eq('id', jsaId);
   }
 
-  // JSA (kembali) berada di tahap `jsa.review_pgsol` tanpa melewati rejectJsa,
-  // jadi baris stage_assignments tahap itu bisa masih memuat keputusan ronde
-  // sebelumnya. Tanpa reset ini reviewer PGSOL tidak punya baris 'pending'
-  // untuk ditindaklanjuti dan admin pun tidak bisa mengganti assignee (
-  // writeStageAssignment menolak menyunting baris non-'pending').
-  // `jsa.approve_pgn` sengaja TIDAK direset di sini — sama seperti rejectJsa
-  // pada kasus penolakan PGSOL, tahap itu memang belum dimulai untuk ronde ini.
-  await resetStageAssignments(supabase, projectId, 'jsa', 'jsa.review_pgsol');
+  // JSA (kembali) berada di tahap `jsa.review_vendor` tanpa melewati
+  // rejectVendorInternalReview, jadi baris stage_assignments tahap itu bisa
+  // masih memuat keputusan ronde sebelumnya. Tanpa reset ini reviewer
+  // internal vendor tidak punya baris 'pending' untuk ditindaklanjuti dan
+  // admin pun tidak bisa mengganti assignee (writeStageAssignment menolak
+  // menyunting baris non-'pending').
+  // `jsa.review_pgsol` sengaja TIDAK direset di sini — tahap itu memang
+  // belum dimulai untuk ronde ini (baru dimulai kalau review internal
+  // vendor selesai, lihat approveVendorInternalReview).
+  await resetStageAssignments(supabase, projectId, 'jsa', 'jsa.review_vendor');
 
   // Delete existing steps
   await supabase.from('jsa_steps').delete().eq('jsa_id', jsaId);
@@ -92,11 +94,11 @@ export async function saveJsa(projectId: string, jsaData: any) {
   await notifyAssignees({
     projectId,
     docType: 'jsa',
-    stageKey: 'jsa.review_pgsol',
+    stageKey: 'jsa.review_vendor',
     type: 'action_required',
-    title: 'JSA Menunggu Review PGSOL',
-    message: `JSA untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,
-    link: `/dashboard/projects/${projectId}`,
+    title: 'JSA Menunggu Review Internal',
+    message: `JSA untuk proyek "${project?.name}" telah diajukan dan menunggu review internal Anda sebelum diteruskan ke PGSOL.`,
+    link: `/vendor/dashboard/jsa/create/${projectId}`,
   });
 }
 

@@ -22,7 +22,7 @@ export async function saveProsedur(projectId: string, payload: any) {
   if (existing) {
     const { error } = await supabase
       .from('procedures')
-      .update({ content: payload, status: PROCEDURE_STATUS.menungguReviewPM })
+      .update({ content: payload, status: PROCEDURE_STATUS.reviewInternalVendor })
       .eq('id', existing.id);
 
     if (error) throw new Error(error.message);
@@ -32,7 +32,7 @@ export async function saveProsedur(projectId: string, payload: any) {
       .insert({
         project_id: projectId,
         content: payload,
-        status: PROCEDURE_STATUS.menungguReviewPM
+        status: PROCEDURE_STATUS.reviewInternalVendor
       })
       .select('id')
       .single();
@@ -41,13 +41,13 @@ export async function saveProsedur(projectId: string, payload: any) {
     procedureId = created?.id;
   }
 
-  // Dokumen ini baru saja (kembali) masuk tahap `procedure.review`, tapi jalur
-  // ini BUKAN lewat rejectProcedure — jadi baris stage_assignments tahap itu
-  // bisa saja masih menyimpan keputusan ronde sebelumnya ('approved' dari
-  // siklus yang sudah selesai, misalnya). writeStageAssignment menolak
-  // menyunting baris non-'pending' dan approver tidak punya baris 'pending'
-  // untuk ditindaklanjuti, sehingga ronde baru macet permanen tanpa reset ini.
-  await resetStageAssignments(supabase, projectId, 'procedure', 'procedure.review');
+  // Dokumen ini baru saja (kembali) masuk tahap `procedure.review_vendor`,
+  // tapi jalur ini BUKAN lewat rejectVendorInternalReview — jadi baris
+  // stage_assignments tahap itu bisa saja masih menyimpan keputusan ronde
+  // sebelumnya. writeStageAssignment menolak menyunting baris non-'pending'
+  // dan reviewer tidak punya baris 'pending' untuk ditindaklanjuti, sehingga
+  // ronde baru macet permanen tanpa reset ini.
+  await resetStageAssignments(supabase, projectId, 'procedure', 'procedure.review_vendor');
 
   if (procedureId) {
     await logDocumentEvent(supabase, {
@@ -60,11 +60,11 @@ export async function saveProsedur(projectId: string, payload: any) {
   await notifyAssignees({
     projectId,
     docType: 'procedure',
-    stageKey: 'procedure.review',
+    stageKey: 'procedure.review_vendor',
     type: 'action_required',
-    title: 'Prosedur Kerja Menunggu Review',
-    message: `Prosedur kerja untuk proyek "${project?.name}" telah diajukan dan menunggu review Anda.`,
-    link: `/dashboard/projects/${projectId}`,
+    title: 'Prosedur Kerja Menunggu Review Internal',
+    message: `Prosedur kerja untuk proyek "${project?.name}" telah diajukan dan menunggu review internal Anda sebelum diteruskan ke PM.`,
+    link: `/vendor/dashboard/projects/${projectId}/prosedur`,
   });
 }
 
@@ -72,7 +72,7 @@ export async function getProsedur(projectId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('procedures')
-    .select('content, status')
+    .select('id, content, status')
     .eq('project_id', projectId)
     .single();
     

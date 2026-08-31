@@ -95,7 +95,7 @@ export async function savePtw(
         apd,
         gas_tests: gasTests,
         ...formDetails,
-        status: PTW_STATUS.menungguApprovalPM,
+        status: PTW_STATUS.reviewInternalVendor,
         rejection_note: null
       })
       .eq('id', existing.id)
@@ -120,7 +120,7 @@ export async function savePtw(
         apd,
         gas_tests: gasTests,
         ...formDetails,
-        status: PTW_STATUS.menungguApprovalPM
+        status: PTW_STATUS.reviewInternalVendor
       })
       .select('id')
       .single();
@@ -132,21 +132,20 @@ export async function savePtw(
     ptwId = created?.id;
   }
 
-  // PTW ini (baik tipe baru maupun pengajuan ulang) sekarang berada di tahap
-  // `ptw.approve_pm` tanpa melewati rejectPtw, jadi baris stage_assignments
-  // tahap itu bisa masih memuat keputusan dari ronde — atau dari tipe PTW —
-  // sebelumnya. Tanpa reset ini approver tidak punya baris 'pending' untuk
-  // ditindaklanjuti dan tahap macet permanen.
+  // PTW ini (baik tipe baru maupun pengajuan ulang) sekarang berada di
+  // tahap `ptw.review_vendor` tanpa melewati rejectVendorInternalReview,
+  // jadi baris stage_assignments tahap itu bisa masih memuat keputusan dari
+  // ronde — atau dari tipe PTW — sebelumnya. Tanpa reset ini reviewer tidak
+  // punya baris 'pending' untuk ditindaklanjuti dan tahap macet permanen.
   //
   // KETERBATASAN YANG DIKETAHUI: stage_assignments belum menyimpan identitas
   // dokumen (hanya project_id + doc_type + stage_key), jadi dua PTW dengan
-  // tipe berbeda pada satu proyek berbagi baris assignment yang sama. Reset di
-  // sini benar untuk pengajuan yang berurutan, tapi kalau tipe kedua diajukan
-  // saat tipe pertama MASIH mengambang di tahap yang sama, reset ini menghapus
-  // keputusan yang sudah dibuat untuk tipe pertama. Perbaikan penuhnya butuh
-  // perubahan skema (kolom identitas dokumen) — lihat catatan di
-  // supabase/README_stage_assignment_migration_order.md.
-  await resetStageAssignments(supabase, projectId, 'ptw', 'ptw.approve_pm');
+  // tipe berbeda pada satu proyek berbagi baris assignment yang sama —
+  // termasuk di tahap review_vendor ini, sama seperti keterbatasan yang
+  // sudah ada di tahap approve_pm. Reset di sini benar untuk pengajuan yang
+  // berurutan; perbaikan penuhnya butuh perubahan skema (kolom identitas
+  // dokumen) — lihat catatan di supabase/README_stage_assignment_migration_order.md.
+  await resetStageAssignments(supabase, projectId, 'ptw', 'ptw.review_vendor');
 
   if (ptwId) {
     await logDocumentEvent(supabase, {
@@ -159,10 +158,10 @@ export async function savePtw(
   await notifyAssignees({
     projectId,
     docType: 'ptw',
-    stageKey: 'ptw.approve_pm',
+    stageKey: 'ptw.review_vendor',
     type: 'action_required',
-    title: 'PTW Menunggu Persetujuan',
-    message: `PTW untuk proyek "${project?.name}" telah diajukan dan menunggu persetujuan Anda.`,
-    link: `/dashboard/projects/${projectId}`,
+    title: 'PTW Menunggu Review Internal',
+    message: `PTW untuk proyek "${project?.name}" telah diajukan dan menunggu review internal Anda sebelum diteruskan ke persetujuan.`,
+    link: `/vendor/dashboard/ptw/create/${projectId}/${ptwType}`,
   });
 }
