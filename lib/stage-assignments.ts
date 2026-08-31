@@ -29,6 +29,13 @@ export const PGN_STAGE_KEYS = [
   'ptw.numbering_hsse',
 ] as const;
 
+/** Ketiga stage_key yang ditugaskan admin vendor — dipakai untuk membatasi apa yang boleh disimpan lewat saveVendorStageAssignment (masterData.manage_org_staff). */
+export const VENDOR_STAGE_KEYS = [
+  'procedure.review_vendor',
+  'jsa.review_vendor',
+  'ptw.review_vendor',
+] as const;
+
 export async function getStageAssignments(
   supabase: any, projectId: string, docType: string, stageKey: string
 ): Promise<StageAssignmentRow[]> {
@@ -70,9 +77,12 @@ export async function getEligibleAssignees(
  * memakai ini alih-alih menyalin tabelnya sendiri.
  */
 export const STAGE_KEY_PERMISSION: Record<string, { module: string; action: string }> = {
+  'procedure.review_vendor': { module: 'procedure', action: 'review_vendor' },
   'procedure.review': { module: 'procedure', action: 'review' },
+  'jsa.review_vendor': { module: 'jsa', action: 'review_vendor' },
   'jsa.review_pgsol': { module: 'jsa', action: 'review_pgsol' },
   'jsa.approve_pgn': { module: 'jsa', action: 'approve_pgn' },
+  'ptw.review_vendor': { module: 'ptw', action: 'review_vendor' },
   'ptw.approve_pm': { module: 'ptw', action: 'approve_pm' },
   'ptw.review_issuer': { module: 'ptw', action: 'review_issuer' },
   'ptw.numbering_hsse': { module: 'ptw', action: 'numbering_hsse' },
