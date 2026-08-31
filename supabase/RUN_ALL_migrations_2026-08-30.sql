@@ -1,12 +1,17 @@
 -- =====================================================================
 -- MIGRASI GABUNGAN — Fase 1 (fondasi multi-tenant) + Fase 2
--- (per-project approver assignment), SIPERMIT K3
+-- (per-project approver assignment) + Fase 3 (vendor internal review
+-- stage), SIPERMIT K3
 --
--- File ini adalah gabungan dari 11 file schema_*.sql yang sebelumnya
+-- File ini adalah gabungan dari 13 file schema_*.sql yang sebelumnya
 -- harus dijalankan satu-satu (lihat README_org_migration_order.md dan
 -- README_stage_assignment_migration_order.md untuk isi & alasan tiap
 -- bagian secara terpisah — file ini tidak menggantikan dokumen itu,
--- cuma menggabungkan isinya jadi satu paste-dan-jalankan).
+-- cuma menggabungkan isinya jadi satu paste-dan-jalankan). Fase 3's dua
+-- file (schema_stage_assignments_vendor_review.sql,
+-- schema_vendor_review_permissions.sql) ditambahkan di TRANSAKSI 5 di
+-- bawah — keduanya tidak menyentuh enum, jadi tidak perlu BEGIN/COMMIT
+-- tersendiri seperti transaksi 1-4.
 --
 -- KENAPA ADA BEGIN;/COMMIT; DI TENGAH-TENGAH, BUKAN SATU TRANSAKSI BESAR:
 -- Postgres tidak mengizinkan sebuah nilai enum baru (ATAU nama enum yang
@@ -514,6 +519,78 @@ SET permissions = permissions || '{"jsa": ["manage_assignment_pgsol"]}'::jsonb
 WHERE name = 'pgsol_admin';
 
 COMMIT;
+
+
+-- =====================================================================
+-- TRANSAKSI 5 — Fase 3: vendor internal review stage
+-- (schema_stage_assignments_vendor_review.sql + schema_vendor_review_permissions.sql)
+-- Tidak menyentuh enum, jadi cukup jalan sebagai statement biasa —
+-- tidak perlu BEGIN/COMMIT eksplisit seperti transaksi 1-4 di atas.
+-- =====================================================================
+
+-- --- schema_stage_assignments_vendor_review.sql (Fase 3) ---
+-- Vendor sekarang perlu menulis (bukan cuma baca) baris stage_assignments
+-- untuk tahap internalnya sendiri — admin vendor menugaskan reviewer, dan
+-- reviewer itu sendiri mencatat approve/reject. Policy existing hanya
+-- izinkan is_internal_user() menulis apa pun, dan vendor cuma boleh baca
+-- (transparansi) atau reset ke pending saat resubmit.
+--
+-- Sama seperti sisi internal: RLS di sini cuma jaga batas kasar (proyek
+-- miliknya sendiri + stage_key vendor-only). Siapa yang boleh assign
+-- (manage_org_staff) vs siapa yang boleh approve (baris pending miliknya)
+-- tetap dicek di TypeScript (app/vendor/dashboard/projects/[id]/assignment-actions.ts
+-- dan app/vendor/dashboard/approval/actions.ts) — konsisten dengan
+-- is_internal_user() yang juga permisif di RLS dan ketat di TypeScript.
+CREATE POLICY "Vendors can manage their own internal-review stage assignments"
+ON public.stage_assignments
+FOR ALL
+USING (
+  stage_key IN ('procedure.review_vendor', 'jsa.review_vendor', 'ptw.review_vendor')
+  AND EXISTS (
+    SELECT 1 FROM public.projects p
+    WHERE p.id = project_id AND p.vendor_id = public.current_vendor_org_id()
+  )
+)
+WITH CHECK (
+  stage_key IN ('procedure.review_vendor', 'jsa.review_vendor', 'ptw.review_vendor')
+  AND EXISTS (
+    SELECT 1 FROM public.projects p
+    WHERE p.id = project_id AND p.vendor_id = public.current_vendor_org_id()
+  )
+);
+
+-- --- schema_vendor_review_permissions.sql (Fase 3) ---
+-- vendor_admin butuh izin default untuk jadi kandidat reviewer internal
+-- (procedure/jsa/ptw . review_vendor) supaya perusahaan vendor dengan satu
+-- admin saja bisa langsung pakai fitur ini tanpa harus bikin role custom
+-- dulu lewat halaman Role & Permission. Merge (bukan replace penuh)
+-- supaya tidak menimpa perubahan permission vendor_admin yang mungkin
+-- sudah dilakukan admin PGN lewat UI sejak Fase 1. Guarded dengan
+-- `NOT ... ? 'review_vendor'` supaya aman dijalankan ulang tanpa
+-- menduplikasi entri array.
+UPDATE public.roles
+SET permissions = jsonb_set(
+  permissions, '{procedure}',
+  COALESCE(permissions->'procedure', '[]'::jsonb) || '["review_vendor"]'::jsonb
+)
+WHERE name = 'vendor_admin'
+  AND NOT COALESCE(permissions->'procedure', '[]'::jsonb) ? 'review_vendor';
+
+UPDATE public.roles
+SET permissions = jsonb_set(
+  permissions, '{jsa}',
+  COALESCE(permissions->'jsa', '[]'::jsonb) || '["review_vendor"]'::jsonb
+)
+WHERE name = 'vendor_admin'
+  AND NOT COALESCE(permissions->'jsa', '[]'::jsonb) ? 'review_vendor';
+
+UPDATE public.roles
+SET permissions = jsonb_set(
+  permissions, '{ptw}',
+  COALESCE(permissions->'ptw', '[]'::jsonb) || '["review_vendor"]'::jsonb
+)
+WHERE name = 'vendor_admin'
+  AND NOT COALESCE(permissions->'ptw', '[]'::jsonb) ? 'review_vendor';
 
 -- =====================================================================
 -- SELESAI. Verifikasi:
