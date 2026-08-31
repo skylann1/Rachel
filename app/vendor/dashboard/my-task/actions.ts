@@ -186,5 +186,60 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
     });
   });
 
+  // 6. Dokumen menunggu review internal SAYA (assignee-perspective — beda
+  // dari bullet-bullet di atas yang submitter-perspective/org-wide).
+  const { data: myAssignments } = await supabase
+    .from('stage_assignments')
+    .select('id, project_id, doc_type, assigned_at')
+    .eq('assignee_id', user.id)
+    .eq('status', 'pending')
+    .in('stage_key', ['procedure.review_vendor', 'jsa.review_vendor', 'ptw.review_vendor']);
+
+  (myAssignments || []).forEach((a: any) => {
+    const project = (projects || []).find((p: any) => p.id === a.project_id);
+    if (!project) return;
+    const date = a.assigned_at;
+
+    if (a.doc_type === 'procedure') {
+      tasks.push({
+        id: `review-vendor-procedure-${a.id}`,
+        title: 'Review Internal — Prosedur Kerja',
+        type: 'Prosedur',
+        projectName: project.name,
+        date,
+        url: `/vendor/dashboard/projects/${project.id}/prosedur`,
+        status: 'Menunggu Review Saya',
+        urgency: getUrgency(date),
+        timeInQueue: formatTimeInQueue(date),
+      });
+    } else if (a.doc_type === 'jsa') {
+      tasks.push({
+        id: `review-vendor-jsa-${a.id}`,
+        title: 'Review Internal — JSA',
+        type: 'JSA',
+        projectName: project.name,
+        date,
+        url: `/vendor/dashboard/jsa/create/${project.id}`,
+        status: 'Menunggu Review Saya',
+        urgency: getUrgency(date),
+        timeInQueue: formatTimeInQueue(date),
+      });
+    } else if (a.doc_type === 'ptw') {
+      const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+      const pendingPtw = ptws.find((p: any) => p.status === PTW_STATUS.reviewInternalVendor);
+      tasks.push({
+        id: `review-vendor-ptw-${a.id}`,
+        title: `Review Internal — PTW${pendingPtw ? ` (${ptwTypeTitle(pendingPtw.ptw_type)})` : ''}`,
+        type: 'PTW',
+        projectName: project.name,
+        date,
+        url: pendingPtw ? `/vendor/dashboard/ptw/create/${project.id}/${pendingPtw.ptw_type}` : `/vendor/dashboard/ptw/create/${project.id}`,
+        status: 'Menunggu Review Saya',
+        urgency: getUrgency(date),
+        timeInQueue: formatTimeInQueue(date),
+      });
+    }
+  });
+
   return tasks.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
