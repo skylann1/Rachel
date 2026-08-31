@@ -42,6 +42,7 @@ export const allPermissionModules = [
     items: [
       { key: 'view', label: 'Melihat Daftar Prosedur Kerja', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'review_vendor', label: 'Review Internal Vendor — Prosedur Kerja', allowedTypes: ['vendor'] },
+      { key: 'review_pgsol', label: 'Review Prosedur Kerja — Tahap PGSOL', allowedTypes: ['pgsol'] },
       { key: 'review', label: 'Review & Approve Prosedur Kerja', allowedTypes: ['pgn', 'pgsol'] },
     ]
   },
