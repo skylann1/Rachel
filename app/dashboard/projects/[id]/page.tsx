@@ -25,7 +25,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
     .from('projects')
     .select(`
       id, name, location, start_date, end_date, description, status,
-      vendor_profiles ( company_name, profiles ( full_name ) ),
+      vendor_profiles ( company_name, organizations ( profiles ( full_name ) ) ),
       jsa ( id, status, rejection_note, reviewer_id, reviewed_at, approver_id, approved_at, jsa_steps ( id, step_number, pekerjaan, bahaya, risiko, tindakan ) ),
       ptw ( id, status, rejection_note, ptw_number, workers, equipment, ptw_type, hazards, apd, gas_tests,
             created_at, authority_id, authority_approved_at, issuer_id, issuer_approved_at, hsse_id,
@@ -57,7 +57,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
   // approval sendiri.
   const vendorProfile: any = Array.isArray(project.vendor_profiles) ? project.vendor_profiles[0] : project.vendor_profiles;
   const vendorPic = {
-    nama: (Array.isArray(vendorProfile?.profiles) ? vendorProfile.profiles[0] : vendorProfile?.profiles)?.full_name,
+    nama: (Array.isArray(vendorProfile?.organizations?.profiles) ? vendorProfile.organizations.profiles[0] : vendorProfile?.organizations?.profiles)?.full_name,
     perusahaan: vendorProfile?.company_name,
   };
   const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
