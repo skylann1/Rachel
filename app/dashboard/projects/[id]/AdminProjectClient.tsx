@@ -805,7 +805,7 @@ export default function AdminProjectClient({
                )}
 
                {/* JIKA JSA PENDING */}
-               {jsaStatus === 'Pending' && canApproveJsa && (
+               {showJsaCard && (
                  <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
                     <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                        <div>
@@ -821,6 +821,7 @@ export default function AdminProjectClient({
                              ? 'Verifikasi teknis: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar.'
                              : 'Otorisasi akhir: JSA sudah direview PGSOL. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
                          </p>
+                         <StageProgress {...jsaProgress} />
                        </div>
                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                          <button
@@ -832,10 +833,14 @@ export default function AdminProjectClient({
                            {hseLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                            Analisis Anomali AI
                          </button>
-                         <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
-                         <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                           {isTahapReviewPgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
-                         </button>
+                         {canApproveJsa && (
+                           <>
+                             <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
+                             <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
+                               {isTahapReviewPgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
+                             </button>
+                           </>
+                         )}
                        </div>
                     </div>
                     {hseError && (
