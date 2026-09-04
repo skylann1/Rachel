@@ -221,7 +221,7 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
 
 export default function AdminProjectClient({
   project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, permissions,
-  siteCheckins, toolboxMeetings,
+  siteCheckins, toolboxMeetings, stageAssignments,
 }: {
   project: any, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
   /** worker_id / equipment_id -> 'expired' | 'expiring' | 'valid' | 'unknown', computed server-side against live master data. */
@@ -229,12 +229,14 @@ export default function AdminProjectClient({
   equipmentExpiry?: Record<string, string>,
   /** Full Prosedur/JSA/PTW audit trail for this project, newest first — see document_logs. */
   documentLogs?: any[],
-  /** roles.permissions milik user saat ini — sumber kebenaran gerbang approve/reject, lihat utils/permissions.ts. */
+  /** roles.permissions milik user saat ini — sumber kebenaran VISIBILITY kartu approval (bukan lagi tombolnya), lihat utils/permissions.ts. */
   permissions?: Record<string, string[]> | null,
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
   siteCheckins?: any[],
   /** Riwayat toolbox meeting (toolbox_meetings) lintas semua PTW proyek ini, terbaru dulu. */
   toolboxMeetings?: any[],
+  /** stage_assignments untuk tiap tahap AKTIF dokumen proyek ini, key = stage_key persis (mis. "procedure.review_pgsol"). Sumber kebenaran gerbang tombol Setujui/Tolak dan indikator progress. */
+  stageAssignments?: Record<string, StageAssignmentRow[]>,
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
