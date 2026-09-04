@@ -194,38 +194,51 @@ export async function approveProcedure(procedureId: string) {
   if (!user) throw new Error("Unauthorized");
 
   const { data: current } = await supabase.from('procedures').select('status, project_id').eq('id', procedureId).single();
-  if (current?.status !== PROCEDURE_STATUS.menungguReviewPM) throw new Error("Prosedur tidak dalam tahap yang bisa disetujui.");
-  if (!current.project_id) throw new Error("Prosedur ini tidak terhubung ke proyek.");
+  if (!current?.project_id) throw new Error("Prosedur ini tidak terhubung ke proyek.");
 
-  const rows = await getStageAssignments(supabase, current.project_id, 'procedure', 'procedure.review');
+  let stageKey = '';
+  let nextStatus = '';
+
+  if (current.status === PROCEDURE_STATUS.reviewPgsol) {
+    stageKey = 'procedure.review_pgsol';
+    nextStatus = PROCEDURE_STATUS.menungguReviewPM;
+  } else if (current.status === PROCEDURE_STATUS.menungguReviewPM) {
+    stageKey = 'procedure.review';
+    nextStatus = PROCEDURE_STATUS.approved;
+  } else {
+    throw new Error("Prosedur tidak dalam tahap yang bisa disetujui.");
+  }
+
+  const rows = await getStageAssignments(supabase, current.project_id, 'procedure', stageKey);
   const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
-  if (!myRow) throw new Error("Anda tidak ditugaskan untuk mereview Prosedur Kerja proyek ini.");
+  if (!myRow) throw new Error("Anda tidak ditugaskan untuk tahap Prosedur Kerja ini pada proyek ini.");
 
   const { error: markError } = await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
   if (markError) throw new Error(markError.message);
 
-  // Re-fetch fresh from the DB rather than patching the stale initial `rows`
-  // snapshot locally: if two of the last two pending assignees approve at
-  // nearly the same time, each request's local snapshot still shows the
-  // other assignee as pending even after both DB rows are `approved`, which
-  // would make both calls see isStageFullyApproved === false and leave the
-  // document stuck forever. Re-fetching narrows that race window instead of
-  // trusting data captured before either write landed.
-  const freshRows = await getStageAssignments(supabase, current.project_id, 'procedure', 'procedure.review');
+  // Re-fetch fresh dari DB (bukan patch lokal dari `rows`) — lihat catatan
+  // yang sama di approveJsa/approvePtw: dua approver terakhir yang approve
+  // nyaris bersamaan bisa sama-sama melihat snapshot awal yang belum
+  // mencatat approval satu sama lain, sehingga dokumen bisa macet permanen
+  // walau di DB semua baris sudah approved.
+  const freshRows = await getStageAssignments(supabase, current.project_id, 'procedure', stageKey);
   if (!isStageFullyApproved(freshRows)) {
     revalidatePath('/dashboard/approval');
     return;
   }
 
   const { data: profile } = await supabase.from('internal_profiles').select('id').eq('id', user.id).single();
-  // .eq('status', current.status) jadi optimistic lock terakhir (pola yang sama
-  // dengan approvePtw): kalau seseorang menolak dokumen ini persis di sela-sela
-  // antara pembacaan status di atas dan update ini, penolakan itu akan diam-diam
-  // ditimpa oleh approve yang balapan. Dengan penjagaan ini update-nya tidak
-  // mengenai baris apa pun dan pemanggil mendapat pesan jelas.
+  const updatePayload: any = stageKey === 'procedure.review_pgsol'
+    ? { status: PROCEDURE_STATUS.menungguReviewPM }
+    : { status: PROCEDURE_STATUS.approved, reviewed_by: profile?.id };
+
+  // .eq('status', current.status) jadi optimistic lock terakhir (pola sama
+  // dengan approveJsa/approvePtw): kalau seseorang menolak dokumen ini
+  // persis di sela-sela antara pembacaan status di atas dan update ini,
+  // penolakan itu akan diam-diam ditimpa oleh approve yang balapan.
   const { data: updated, error } = await supabase
     .from('procedures')
-    .update({ status: PROCEDURE_STATUS.approved, reviewed_by: profile?.id })
+    .update(updatePayload)
     .eq('id', procedureId)
     .eq('status', current.status)
     .select('id');
@@ -239,15 +252,28 @@ export async function approveProcedure(procedureId: string) {
   if (proc?.project_id) {
     await logDocumentEvent(supabase, {
       docType: 'procedure', docId: procedureId, projectId: proc.project_id, actorId: user.id,
-      action: 'Direview & Disetujui PM',
+      action: nextStatus === PROCEDURE_STATUS.approved ? 'Direview & Disetujui PM' : 'Direview PGSOL',
     });
   }
+
+  if (nextStatus === PROCEDURE_STATUS.menungguReviewPM) {
+    await notifyAssignees({
+      projectId: current.project_id, docType: 'procedure', stageKey: 'procedure.review',
+      type: 'action_required',
+      title: 'Prosedur Kerja Menunggu Review PM',
+      message: `Prosedur Kerja untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu review Anda.`,
+      link: `/dashboard/projects/${proc?.project_id}`,
+    });
+  }
+
   if (proj?.vendor_id) {
     await createNotification({
       userId: proj.vendor_id,
-      type: 'approval',
-      title: `Prosedur Kerja Disetujui`,
-      message: `Prosedur Kerja untuk proyek "${proj.name}" telah disetujui. Silakan lanjutkan pengajuan JSA.`,
+      type: nextStatus === PROCEDURE_STATUS.approved ? 'approval' : 'info',
+      title: nextStatus === PROCEDURE_STATUS.approved ? `Prosedur Kerja Disetujui` : `Prosedur Kerja Telah Direview PGSOL`,
+      message: nextStatus === PROCEDURE_STATUS.approved
+        ? `Prosedur Kerja untuk proyek "${proj.name}" telah disetujui. Silakan lanjutkan pengajuan JSA.`
+        : `Prosedur Kerja untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu review PM.`,
       link: `/vendor/dashboard/projects/${proc?.project_id}`,
     });
   }
@@ -260,15 +286,33 @@ export async function rejectProcedure(procedureId: string, note: string) {
   if (!user) throw new Error("Unauthorized");
 
   const { data: currentCheck } = await supabase.from('procedures').select('status, project_id').eq('id', procedureId).single();
-  if (currentCheck?.status !== PROCEDURE_STATUS.menungguReviewPM) throw new Error("Prosedur tidak dalam tahap yang bisa ditolak.");
-  if (!currentCheck.project_id) throw new Error("Prosedur ini tidak terhubung ke proyek.");
+  if (!currentCheck?.project_id) throw new Error("Prosedur ini tidak terhubung ke proyek.");
 
-  const rows = await getStageAssignments(supabase, currentCheck.project_id, 'procedure', 'procedure.review');
+  let stageKey = '';
+  let penolak = '';
+  if (currentCheck.status === PROCEDURE_STATUS.reviewPgsol) {
+    stageKey = 'procedure.review_pgsol';
+    penolak = 'PGSOL';
+  } else if (currentCheck.status === PROCEDURE_STATUS.menungguReviewPM) {
+    stageKey = 'procedure.review';
+    penolak = 'PM';
+  } else {
+    throw new Error("Prosedur tidak dalam tahap yang bisa ditolak.");
+  }
+
+  const rows = await getStageAssignments(supabase, currentCheck.project_id, 'procedure', stageKey);
   const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
-  if (!myRow) throw new Error("Anda tidak ditugaskan untuk mereview Prosedur Kerja proyek ini.");
+  if (!myRow) throw new Error("Anda tidak ditugaskan untuk tahap Prosedur Kerja ini pada proyek ini.");
 
   await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
-  await resetStageAssignments(supabase, currentCheck.project_id, 'procedure', 'procedure.review');
+  await resetStageAssignments(supabase, currentCheck.project_id, 'procedure', stageKey);
+  if (stageKey === 'procedure.review') {
+    // Reject di tahap PM (kedua) mengembalikan Prosedur sampai ke Draft
+    // (bukan cuma ke tahap PGSOL), jadi tahap review_pgsol ikut di-reset
+    // supaya konsisten dengan restart penuh — pola sama dengan rejectPtw
+    // mereset ketiga tahapnya.
+    await resetStageAssignments(supabase, currentCheck.project_id, 'procedure', 'procedure.review_pgsol');
+  }
 
   const { data: proc } = await supabase.from('procedures').select('content, project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
 
@@ -286,18 +330,17 @@ export async function rejectProcedure(procedureId: string, note: string) {
   if (proc?.project_id) {
     await logDocumentEvent(supabase, {
       docType: 'procedure', docId: procedureId, projectId: proc.project_id, actorId: user.id,
-      action: 'Ditolak PM — Revisi Diperlukan', notes: note,
+      action: `Ditolak ${penolak} — Revisi Diperlukan`, notes: note,
     });
   }
 
-  // Notify vendor about rejection
   const proj: any = Array.isArray(proc?.projects) ? proc?.projects[0] : proc?.projects;
   if (proj?.vendor_id) {
     await createNotification({
       userId: proj.vendor_id,
       type: 'warning',
-      title: `Prosedur Kerja Ditolak — Revisi Diperlukan`,
-      message: `Prosedur untuk proyek "${proj.name}" ditolak. Catatan: "${note}". Silakan perbaiki dan ajukan ulang.`,
+      title: `Prosedur Kerja Ditolak ${penolak} — Revisi Diperlukan`,
+      message: `Prosedur untuk proyek "${proj.name}" ditolak oleh ${penolak}. Catatan: "${note}". Silakan perbaiki dan ajukan ulang.`,
       link: `/vendor/dashboard/projects/${proc?.project_id}`,
     });
   }
@@ -437,11 +480,17 @@ export async function rejectJsa(jsaId: string, note: string) {
     await resetStageAssignments(supabase, current.project_id, 'jsa', 'jsa.review_pgsol');
   }
 
-  // Kembali ke awal: vendor harus memperbaiki, lalu direview ulang dari tahap PGSOL.
+  // Kembali ke Draft (bukan langsung ke Review PGSOL) — vendor harus lolos
+  // Review Internal Vendor lagi sebelum PGSOL/PGN melihatnya ulang, sama
+  // seperti rejectProcedure dan rejectPtw. Ini memperbaiki bug: sebelumnya
+  // status di-set langsung ke reviewPgsol, yang skip gerbang vendor-internal
+  // sepenuhnya pada setiap reject JSA. saveJsa (jalur resubmit, Fase 3)
+  // sudah mereset assignment jsa.review_vendor saat vendor mengajukan ulang
+  // dari Draft, jadi tidak ada reset tambahan yang perlu ditambahkan di sini.
   const { error } = await supabase
     .from('jsa')
     .update({
-      status: JSA_STATUS.reviewPgsol,
+      status: JSA_STATUS.draft,
       rejection_note: note,
       reviewer_id: null, reviewed_at: null,
       approver_id: null, approved_at: null,
