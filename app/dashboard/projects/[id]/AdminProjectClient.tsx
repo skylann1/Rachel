@@ -19,6 +19,7 @@ import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
+import { StageAssignmentRow } from '@/lib/stage-assignments';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { EXPIRY_TONE } from '@/lib/document-expiry';
 import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
@@ -80,6 +81,22 @@ function DocumentModal({ isOpen, onClose, title, children }: any) {
            {children}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Indikator progress multi-signature satu tahap — "N dari M sudah menyetujui", atau peringatan kalau belum ada yang ditugaskan sama sekali. */
+function StageProgress({ approved, total }: { approved: number; total: number }) {
+  if (total === 0) {
+    return (
+      <div className="flex items-center gap-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5 w-fit mt-2">
+        <AlertTriangle className="w-3.5 h-3.5" /> Belum ada reviewer yang ditugaskan
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5 w-fit mt-2">
+      <Users className="w-3.5 h-3.5" /> {approved} dari {total} sudah menyetujui
     </div>
   );
 }
