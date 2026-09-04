@@ -33,11 +33,11 @@ const VENDOR_REVIEW_CONFIG: Record<VendorReviewDocType, VendorReviewConfig> = {
   procedure: {
     table: 'procedures',
     stageKey: 'procedure.review_vendor',
-    externalStageKey: 'procedure.review',
+    externalStageKey: 'procedure.review_pgsol',
     reviewVendorStatus: PROCEDURE_STATUS.reviewInternalVendor,
     draftStatus: PROCEDURE_STATUS.draft,
-    nextStatus: PROCEDURE_STATUS.menungguReviewPM,
-    nextStatusLabel: 'Prosedur Kerja Menunggu Review PM',
+    nextStatus: PROCEDURE_STATUS.reviewPgsol,
+    nextStatusLabel: 'Prosedur Kerja Menunggu Review PGSOL',
   },
   jsa: {
     table: 'jsa',

@@ -20,9 +20,11 @@ export default async function PgsolAssignPage({ params }: { params: Promise<{ id
   if (!actorProfile?.org_id) redirect('/pgsol/dashboard');
 
   const { data: project } = await supabase.from('projects').select('id, name').eq('id', projectId).single();
-  const [candidates, assignments] = await Promise.all([
+  const [procCandidates, procAssignments, jsaCandidates, jsaAssignments] = await Promise.all([
     // Dibatasi ke org PGSOL milik admin ini — tanpa itu admin PGN (yang
-    // memegang semua permission) ikut muncul sebagai kandidat reviewer PGSOL.
+    // memegang semua permission) ikut muncul sebagai kandidat reviewer.
+    getEligibleAssignees(supabase, 'procedure', 'review_pgsol', actorProfile.org_id),
+    getStageAssignments(supabase, projectId, 'procedure', 'procedure.review_pgsol'),
     getEligibleAssignees(supabase, 'jsa', 'review_pgsol', actorProfile.org_id),
     getStageAssignments(supabase, projectId, 'jsa', 'jsa.review_pgsol'),
   ]);
@@ -35,15 +37,31 @@ export default async function PgsolAssignPage({ params }: { params: Promise<{ id
         </Link>
         <div>
           <h1 className="text-xl font-bold text-slate-800">Reviewer PGSOL — {project?.name}</h1>
-          <p className="text-sm text-slate-500 mt-1">Semua yang ditunjuk di sini harus menyetujui sebelum JSA lanjut ke tahap PGN.</p>
+          <p className="text-sm text-slate-500 mt-1">Semua yang ditunjuk di sini harus menyetujui sebelum dokumen lanjut ke tahap berikutnya.</p>
         </div>
       </div>
-      <AssignPgsolPanel
-        projectId={projectId}
-        candidates={candidates}
-        currentAssigneeIds={assignments.map(a => a.assignee_id)}
-        locked={assignments.some(a => a.status !== 'pending')}
-      />
+      <div>
+        <h2 className="text-sm font-bold text-slate-700 mb-2">Prosedur Kerja</h2>
+        <AssignPgsolPanel
+          projectId={projectId}
+          docType="procedure"
+          stageKey="procedure.review_pgsol"
+          candidates={procCandidates}
+          currentAssigneeIds={procAssignments.map(a => a.assignee_id)}
+          locked={procAssignments.some(a => a.status !== 'pending')}
+        />
+      </div>
+      <div>
+        <h2 className="text-sm font-bold text-slate-700 mb-2">JSA</h2>
+        <AssignPgsolPanel
+          projectId={projectId}
+          docType="jsa"
+          stageKey="jsa.review_pgsol"
+          candidates={jsaCandidates}
+          currentAssigneeIds={jsaAssignments.map(a => a.assignee_id)}
+          locked={jsaAssignments.some(a => a.status !== 'pending')}
+        />
+      </div>
     </div>
   );
 }

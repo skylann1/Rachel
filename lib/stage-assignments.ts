@@ -36,6 +36,12 @@ export const VENDOR_STAGE_KEYS = [
   'ptw.review_vendor',
 ] as const;
 
+/** Kedua stage_key yang ditugaskan admin PGSOL — dipakai untuk membatasi apa yang boleh disimpan lewat savePgsolAssignment (jsa.manage_assignment_pgsol). */
+export const PGSOL_STAGE_KEYS = [
+  'jsa.review_pgsol',
+  'procedure.review_pgsol',
+] as const;
+
 export async function getStageAssignments(
   supabase: any, projectId: string, docType: string, stageKey: string
 ): Promise<StageAssignmentRow[]> {
@@ -78,6 +84,7 @@ export async function getEligibleAssignees(
  */
 export const STAGE_KEY_PERMISSION: Record<string, { module: string; action: string }> = {
   'procedure.review_vendor': { module: 'procedure', action: 'review_vendor' },
+  'procedure.review_pgsol': { module: 'procedure', action: 'review_pgsol' },
   'procedure.review': { module: 'procedure', action: 'review' },
   'jsa.review_vendor': { module: 'jsa', action: 'review_vendor' },
   'jsa.review_pgsol': { module: 'jsa', action: 'review_pgsol' },

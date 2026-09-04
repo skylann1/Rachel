@@ -7,9 +7,10 @@ import { savePgsolAssignment } from '../../actions';
 interface Candidate { id: string; full_name: string; }
 
 export default function AssignPgsolPanel({
-  projectId, candidates, currentAssigneeIds, locked,
+  projectId, docType, stageKey, candidates, currentAssigneeIds, locked,
 }: {
-  projectId: string; candidates: Candidate[]; currentAssigneeIds: string[]; locked: boolean;
+  projectId: string; docType: 'procedure' | 'jsa'; stageKey: string;
+  candidates: Candidate[]; currentAssigneeIds: string[]; locked: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>(currentAssigneeIds);
   const [saving, setSaving] = useState(false);
@@ -19,7 +20,7 @@ export default function AssignPgsolPanel({
   async function handleSave() {
     setSaving(true);
     setError(null);
-    const result = await savePgsolAssignment(projectId, selected);
+    const result = await savePgsolAssignment(projectId, docType, stageKey, selected);
     setSaving(false);
     if (result.error) {
       setError(result.error);
@@ -38,7 +39,7 @@ export default function AssignPgsolPanel({
         </div>
       )}
       <div className="space-y-2">
-        {candidates.length === 0 && <p className="text-sm text-slate-400">Tidak ada staff PGSOL dengan izin review JSA.</p>}
+        {candidates.length === 0 && <p className="text-sm text-slate-400">Tidak ada staff PGSOL dengan izin review tahap ini.</p>}
         {candidates.map(c => (
           <label key={c.id} className="flex items-center gap-2 text-sm text-slate-700">
             <input

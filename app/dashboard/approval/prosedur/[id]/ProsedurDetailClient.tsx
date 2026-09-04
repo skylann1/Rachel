@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import { ArrowLeft, CheckCircle2, XCircle, FileText, Loader2 } from 'lucide-react';
 import { approveProcedure, rejectProcedure } from '../../actions';
-import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
@@ -32,7 +32,16 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
   const [rejectNote, setRejectNote] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
 
-  const canApprove = (permissions?.procedure?.includes('review') || false) && prosedur.status === PROCEDURE_STATUS.menungguReviewPM;
+  // Gerbang lewat permission per-tahap (PROCEDURE_STAGE_PERMISSION), sama
+  // seperti hasProsedurPermission di AdminProjectClient.tsx — mengenali BAIK
+  // tahap Review PGSOL maupun Menunggu Review PM. Catatan: halaman ini belum
+  // punya data stage_assignments per proyek (lihat page.tsx di folder yang
+  // sama, hanya fetch getProcedureById + getUserPermissions), jadi berbeda
+  // dari AdminProjectClient.tsx, tombol di sini masih tampil ke SEMUA
+  // pemegang permission tahap ini, bukan hanya yang ditugaskan (assignment-
+  // aware) — gap ini sengaja belum ditutup di fix wave ini.
+  const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur.status];
+  const canApprove = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
 
   const pdfData = prosedur.content ? {
     projectName: prosedur.projects?.name || 'Proyek',
@@ -108,6 +117,7 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
             prosedur.status === PROCEDURE_STATUS.draft ? 'bg-slate-100 text-slate-600' :
+            prosedur.status === PROCEDURE_STATUS.reviewPgsol ? 'bg-amber-100 text-amber-700' :
             prosedur.status === PROCEDURE_STATUS.menungguReviewPM ? 'bg-orange-100 text-orange-600' :
             'bg-green-100 text-green-700'
           }`}>

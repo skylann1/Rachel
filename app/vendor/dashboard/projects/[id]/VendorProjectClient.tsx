@@ -16,7 +16,7 @@ import PtwPDF from '@/components/ptw/PtwPDF';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
 import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
-import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { PROCEDURE_STATUS, isProcedurePending } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { buildCheckinUrl } from '@/lib/site-ops';
 import VendorAssignmentPanel from './VendorAssignmentPanel';
@@ -79,7 +79,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
   // Normalize statuses for UI logic
-  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : prosedur?.status === PROCEDURE_STATUS.menungguReviewPM ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
+  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : isProcedurePending(prosedur?.status) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
   const jsaStatus = jsa?.rejection_note ? 'Rejected'
     : jsa?.status === JSA_STATUS.approved ? 'Approved'
     : isJsaPending(jsa?.status) ? 'Pending'

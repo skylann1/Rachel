@@ -3,7 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES, PTW_STAGE_PERMISSION } from "@/lib/ptw-status";
 import { JSA_STATUS, JSA_STAGE_PERMISSION, JSA_PENDING_STATUSES } from "@/lib/jsa-status";
-import { PROCEDURE_STATUS } from "@/lib/procedure-status";
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, PROCEDURE_PENDING_STATUSES } from "@/lib/procedure-status";
 import { hasPermissionForUser } from "@/utils/permissions";
 
 export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan';
@@ -50,15 +50,27 @@ export async function getMyTasks(): Promise<TaskItem[]> {
   const role = profile?.role || 'vendor';
   const tasks: TaskItem[] = [];
 
-  // 1. Fetch Procedures — hanya proyek yang stage_assignments-nya
-  // menugaskan user ini ke procedure.review dengan status pending.
+  // 1. Fetch Procedures — dua tahap: Review PGSOL, lalu Menunggu Review PM.
+  // Pola sama seperti blok JSA di bawah: ambil dulu stage_assignments
+  // pending user ini untuk kedua stage_key Prosedur, per proyek, baru
+  // cocokkan ke status Prosedur saat ini lewat PROCEDURE_STAGE_PERMISSION.
+  // Filter status memakai PROCEDURE_PENDING_STATUSES secara presisi
+  // (bukan hardcode string lepas) supaya PM/PGSOL tidak melihat entri
+  // phantom saat dokumen masih Draft menunggu vendor merevisi.
   {
+    const procStageKeys = Object.values(PROCEDURE_STAGE_PERMISSION).map(p => `${p.module}.${p.action}`);
     const { data: myAssignments } = await supabase
       .from('stage_assignments')
-      .select('project_id')
-      .eq('doc_type', 'procedure').eq('stage_key', 'procedure.review')
+      .select('project_id, stage_key')
+      .eq('doc_type', 'procedure').in('stage_key', procStageKeys)
       .eq('assignee_id', user.id).eq('status', 'pending');
-    const projectIds = (myAssignments || []).map((a: any) => a.project_id);
+
+    const myStageKeysByProject = new Map<string, Set<string>>();
+    (myAssignments || []).forEach((a: any) => {
+      if (!myStageKeysByProject.has(a.project_id)) myStageKeysByProject.set(a.project_id, new Set());
+      myStageKeysByProject.get(a.project_id)!.add(a.stage_key);
+    });
+    const projectIds = Array.from(myStageKeysByProject.keys());
 
     if (projectIds.length > 0) {
       const { data: procedures } = await supabase
@@ -68,20 +80,31 @@ export async function getMyTasks(): Promise<TaskItem[]> {
           projects ( name, vendor_profiles ( company_name ) )
         `)
         .in('project_id', projectIds)
-        .in('status', ['Submitted', PROCEDURE_STATUS.menungguReviewPM, PROCEDURE_STATUS.draft]);
+        .in('status', PROCEDURE_PENDING_STATUSES);
 
       if (procedures) {
         procedures.forEach((proc: any) => {
-          const proj = Array.isArray(proc.projects) ? proc.projects[0] : proc.projects;
-          const vendor = proj?.vendor_profiles;
-          const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
-          tasks.push({
-            id: proc.id, title: `Review Prosedur Kerja`, type: 'Prosedur',
-            projectName: proj?.name || 'Unknown Project', vendorName: companyName || 'Internal',
-            date: proc.created_at, url: `/dashboard/projects/${proc.project_id}`,
-            status: proc.status, urgency: getUrgency(proc.created_at),
-            timeInQueue: formatTimeInQueue(proc.created_at)
-          });
+          const perm = PROCEDURE_STAGE_PERMISSION[proc.status];
+          const stageKey = perm ? `${perm.module}.${perm.action}` : null;
+          const myStageKeys = myStageKeysByProject.get(proc.project_id);
+          const isMyTask = !!stageKey && !!myStageKeys?.has(stageKey);
+
+          if (isMyTask) {
+            const proj = Array.isArray(proc.projects) ? proc.projects[0] : proc.projects;
+            const vendor = proj?.vendor_profiles;
+            const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
+            tasks.push({
+              id: proc.id,
+              title: proc.status === PROCEDURE_STATUS.reviewPgsol
+                ? `Review Prosedur Kerja (PGSOL)`
+                : `Review Prosedur Kerja (PM)`,
+              type: 'Prosedur',
+              projectName: proj?.name || 'Unknown Project', vendorName: companyName || 'Internal',
+              date: proc.created_at, url: `/dashboard/projects/${proc.project_id}`,
+              status: proc.status, urgency: getUrgency(proc.created_at),
+              timeInQueue: formatTimeInQueue(proc.created_at)
+            });
+          }
         });
       }
     }

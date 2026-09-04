@@ -19,6 +19,7 @@ import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
+import { StageAssignmentRow } from '@/lib/stage-assignments';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { EXPIRY_TONE } from '@/lib/document-expiry';
 import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
@@ -84,6 +85,22 @@ function DocumentModal({ isOpen, onClose, title, children }: any) {
   );
 }
 
+/** Indikator progress multi-signature satu tahap — "N dari M sudah menyetujui", atau peringatan kalau belum ada yang ditugaskan sama sekali. */
+function StageProgress({ approved, total }: { approved: number; total: number }) {
+  if (total === 0) {
+    return (
+      <div className="flex items-center gap-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5 w-fit mt-2">
+        <AlertTriangle className="w-3.5 h-3.5" /> Belum ada reviewer yang ditugaskan
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5 w-fit mt-2">
+      <Users className="w-3.5 h-3.5" /> {approved} dari {total} sudah menyetujui
+    </div>
+  );
+}
+
 // Reuse RejectModal
 function RejectModal({ onConfirm, onCancel, isLoading }: {
   onConfirm: (note: string) => void;
@@ -141,6 +158,10 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
 }
 
 const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
+  'prosedur-review': {
+    title: 'Selesaikan Review PGSOL?',
+    desc: 'Anda menyatakan Prosedur Kerja sudah sesuai standar kerja aman. Dokumen akan diteruskan ke PM untuk persetujuan akhir.',
+  },
   prosedur: { title: 'Setujui Prosedur Kerja?', desc: 'Dokumen SOP akan ditandai disetujui dan vendor dapat melanjutkan ke tahap JSA.' },
   jsa: { title: 'Setujui Job Safety Analysis?', desc: 'JSA akan ditandai disetujui pada tahap ini dan lanjut ke tahap berikutnya.' },
   'jsa-review': {
@@ -204,7 +225,7 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
 
 export default function AdminProjectClient({
   project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, permissions,
-  siteCheckins, toolboxMeetings,
+  siteCheckins, toolboxMeetings, stageAssignments,
 }: {
   project: any, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
   /** worker_id / equipment_id -> 'expired' | 'expiring' | 'valid' | 'unknown', computed server-side against live master data. */
@@ -212,12 +233,14 @@ export default function AdminProjectClient({
   equipmentExpiry?: Record<string, string>,
   /** Full Prosedur/JSA/PTW audit trail for this project, newest first — see document_logs. */
   documentLogs?: any[],
-  /** roles.permissions milik user saat ini — sumber kebenaran gerbang approve/reject, lihat utils/permissions.ts. */
+  /** roles.permissions milik user saat ini — sumber kebenaran VISIBILITY kartu approval (bukan lagi tombolnya), lihat utils/permissions.ts. */
   permissions?: Record<string, string[]> | null,
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
   siteCheckins?: any[],
   /** Riwayat toolbox meeting (toolbox_meetings) lintas semua PTW proyek ini, terbaru dulu. */
   toolboxMeetings?: any[],
+  /** stage_assignments untuk tiap tahap AKTIF dokumen proyek ini, key = stage_key persis (mis. "procedure.review_pgsol"). Sumber kebenaran gerbang tombol Setujui/Tolak dan indikator progress. */
+  stageAssignments?: Record<string, StageAssignmentRow[]>,
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -297,30 +320,56 @@ export default function AdminProjectClient({
     return <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Belum Dibuat</span>;
   };
 
-  // Check if current user can approve specific docs — dibaca dari
-  // roles.permissions (lihat utils/permissions.ts), bukan role slug yang
-  // di-hardcode, supaya admin bisa atur ulang siapa yang berhak lewat
-  // halaman Role & Permission tanpa perlu ubah kode.
+  // Gerbang tombol Setujui/Tolak sekarang dua lapis: (1) permission — dibaca
+  // dari roles.permissions, dicocokkan lewat *_STAGE_PERMISSION, sama seperti
+  // sebelumnya, menentukan apakah KARTU-nya tampil sama sekali; (2)
+  // assignment — apakah user ini punya baris stage_assignments 'pending'
+  // untuk tahap ini di PROYEK INI, menentukan apakah TOMBOL-nya tampil.
+  // Pemegang permission yang tidak ditugaskan tetap melihat kartunya
+  // (transparansi) tapi tidak melihat tombolnya.
+  const getStageRows = (stageKey: string): StageAssignmentRow[] => stageAssignments?.[stageKey] ?? [];
+  const isAssignedPending = (stageKey: string) =>
+    getStageRows(stageKey).some(r => r.assignee_id === currentUserId && r.status === 'pending');
+  const stageProgress = (stageKey: string) => {
+    const rows = getStageRows(stageKey);
+    return { approved: rows.filter(r => r.status === 'approved').length, total: rows.length };
+  };
+
+  const isProsedurTahapPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPgsol;
   const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur?.status];
-  const canApproveProsedur = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action) && prosedurStatus === 'Pending';
+  const procStageKey = procPerm ? `${procPerm.module}.${procPerm.action}` : '';
+  const hasProsedurPermission = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
+  const canApproveProsedur = hasProsedurPermission && isAssignedPending(procStageKey);
+  const showProsedurCard = hasProsedurPermission;
+  const prosedurProgress = stageProgress(procStageKey);
 
   // JSA: dua tahap, dua orang berbeda.
   //   Review PGSOL    -> permission jsa.review_pgsol
   //   Persetujuan PGN -> permission jsa.approve_pgn, DAN bukan orang yang mereview
   const isTahapReviewPgsol = jsa?.status === JSA_STATUS.reviewPgsol;
   const jsaPerm = JSA_STAGE_PERMISSION[jsa?.status];
+  const jsaStageKey = jsaPerm ? `${jsaPerm.module}.${jsaPerm.action}` : '';
   const jsaSudahDireviewOlehSaya = jsa?.status === JSA_STATUS.approvalPgn && jsa?.reviewer_id === currentUserId;
-  const canApproveJsa =
+  const hasJsaPermission =
     !!jsaPerm &&
     !!permissions?.[jsaPerm.module]?.includes(jsaPerm.action) &&
     !jsaSudahDireviewOlehSaya;
-  // PTW: permission tiap tahap dicek per baris karena bisa ada beberapa PTW tipe berbeda sekaligus.
-  const canApprovePtwRow = (row: any) => {
+  const canApproveJsa = hasJsaPermission && isAssignedPending(jsaStageKey);
+  const showJsaCard = hasJsaPermission;
+  const jsaProgress = stageProgress(jsaStageKey);
+
+  // PTW: permission & assignment dicek per baris karena bisa ada beberapa PTW tipe berbeda sekaligus.
+  const ptwStageKeyForRow = (row: any) => {
+    const perm = PTW_STAGE_PERMISSION[row.status];
+    return perm ? `${perm.module}.${perm.action}` : '';
+  };
+  const hasPtwPermissionForRow = (row: any) => {
     const perm = PTW_STAGE_PERMISSION[row.status];
     return !!perm && !!permissions?.[perm.module]?.includes(perm.action);
   };
-  const ptwActionableRows = ptws.filter(canApprovePtwRow);
-  const canApprovePtw = ptwActionableRows.length > 0;
+  const canApprovePtwRow = (row: any) => hasPtwPermissionForRow(row) && isAssignedPending(ptwStageKeyForRow(row));
+  const ptwVisibleRows = ptws.filter(hasPtwPermissionForRow);
+  const canApprovePtw = ptwVisibleRows.some(canApprovePtwRow);
 
   /**
    * Safety gate: workers/equipment on this PTW whose competency or
@@ -464,7 +513,9 @@ export default function AdminProjectClient({
           labelKey={
             approveTarget.type === 'jsa'
               ? (isTahapReviewPgsol ? 'jsa-review' : 'jsa-approve')
-              : approveTarget.type
+              : approveTarget.type === 'prosedur'
+                ? (isProsedurTahapPgsol ? 'prosedur-review' : 'prosedur')
+                : approveTarget.type
           }
           warning={approveTargetPtwWarning}
           onConfirm={handleConfirmApprove}
@@ -686,20 +737,32 @@ export default function AdminProjectClient({
                </div>
 
                {/* JIKA PROSEDUR PENDING */}
-               {prosedurStatus === 'Pending' && canApproveProsedur && (
+               {showProsedurCard && (
                  <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
                     <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                        <div>
-                         <div className="flex items-center gap-2 mb-1">
+                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                            <FileSignature className="w-5 h-5 text-amber-600" />
                            <h3 className="text-lg font-bold text-amber-900">Prosedur Kerja (SOP)</h3>
+                           <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
+                             {isProsedurTahapPgsol ? 'Tahap 1 — Review PGSOL' : 'Tahap 2 — Menunggu Review PM'}
+                           </span>
                          </div>
-                         <p className="text-amber-700 text-sm">Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.</p>
+                         <p className="text-amber-700 text-sm">
+                           {isProsedurTahapPgsol
+                             ? 'Verifikasi teknis: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke PM.'
+                             : 'Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.'}
+                         </p>
+                         <StageProgress {...prosedurProgress} />
                        </div>
-                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                         <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
-                         <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui SOP</button>
-                       </div>
+                       {canApproveProsedur && (
+                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                           <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
+                           <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
+                             {isProsedurTahapPgsol ? 'Review & Teruskan ke PM' : 'Setujui SOP'}
+                           </button>
+                         </div>
+                       )}
                     </div>
                     <div className="bg-slate-100 p-2">
                       {prosedur?.content?.prosedur_html ? (
@@ -742,7 +805,7 @@ export default function AdminProjectClient({
                )}
 
                {/* JIKA JSA PENDING */}
-               {jsaStatus === 'Pending' && canApproveJsa && (
+               {showJsaCard && (
                  <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
                     <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                        <div>
@@ -758,6 +821,7 @@ export default function AdminProjectClient({
                              ? 'Verifikasi teknis: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar.'
                              : 'Otorisasi akhir: JSA sudah direview PGSOL. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
                          </p>
+                         <StageProgress {...jsaProgress} />
                        </div>
                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                          <button
@@ -769,10 +833,14 @@ export default function AdminProjectClient({
                            {hseLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                            Analisis Anomali AI
                          </button>
-                         <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
-                         <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                           {isTahapReviewPgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
-                         </button>
+                         {canApproveJsa && (
+                           <>
+                             <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
+                             <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
+                               {isTahapReviewPgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
+                             </button>
+                           </>
+                         )}
                        </div>
                     </div>
                     {hseError && (
@@ -825,9 +893,11 @@ export default function AdminProjectClient({
                )}
 
                {/* JIKA ADA PTW PENDING (bisa lebih dari satu tipe sekaligus) */}
-               {ptwActionableRows.map(row => {
+               {ptwVisibleRows.map(row => {
                  const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
                  const safety = getPtwSafetyIssues(row);
+                 const rowCanApprove = canApprovePtwRow(row);
+                 const rowProgress = stageProgress(ptwStageKeyForRow(row));
                  return (
                    <div key={row.id} className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50 mb-6">
                       <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -837,11 +907,14 @@ export default function AdminProjectClient({
                              <h3 className="text-lg font-bold text-amber-900">Permit to Work — {rowTitle}</h3>
                            </div>
                            <p className="text-amber-700 text-sm">Vendor telah melengkapi PTW. Silakan review pekerja & peralatan.</p>
+                           <StageProgress {...rowProgress} />
                          </div>
-                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                           <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
-                           <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
-                         </div>
+                         {rowCanApprove && (
+                           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                             <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
+                             <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
+                           </div>
+                         )}
                       </div>
                       {safety.hasIssues && (
                         <div className="flex items-start gap-3 bg-rose-50 border-b border-rose-100 px-4 sm:px-6 py-4">
@@ -934,10 +1007,8 @@ export default function AdminProjectClient({
                  );
                })}
 
-               {/* KALO TIDAK ADA YANG PENDING */}
-               {((!canApproveProsedur || prosedurStatus !== 'Pending') &&
-                 (!canApproveJsa || jsaStatus !== 'Pending') &&
-                 !canApprovePtw) && (
+               {/* KALO TIDAK ADA KARTU YANG TAMPIL (bukan cuma "tidak ada yang BISA saya approve" — pemegang permission yang belum ditugaskan tetap harus melihat kartunya) */}
+               {(!showProsedurCard && !showJsaCard && ptwVisibleRows.length === 0) && (
                  <div className="bg-slate-50 border border-slate-200 border-dashed rounded-3xl p-12 text-center">
                     <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-slate-800">Tidak ada dokumen yang perlu di-review</h3>

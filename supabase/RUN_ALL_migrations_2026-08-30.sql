@@ -3,7 +3,7 @@
 -- (per-project approver assignment) + Fase 3 (vendor internal review
 -- stage), SIPERMIT K3
 --
--- File ini adalah gabungan dari 13 file schema_*.sql yang sebelumnya
+-- File ini adalah gabungan dari 14 file schema_*.sql yang sebelumnya
 -- harus dijalankan satu-satu (lihat README_org_migration_order.md dan
 -- README_stage_assignment_migration_order.md untuk isi & alasan tiap
 -- bagian secara terpisah — file ini tidak menggantikan dokumen itu,
@@ -591,6 +591,20 @@ SET permissions = jsonb_set(
 )
 WHERE name = 'vendor_admin'
   AND NOT COALESCE(permissions->'ptw', '[]'::jsonb) ? 'review_vendor';
+
+-- ============================================================
+-- TRANSAKSI 6 — Fase 3.1: Gerbang PGSOL untuk Prosedur Kerja
+-- ============================================================
+-- Tidak ada perubahan enum di sini, jadi tidak perlu BEGIN/COMMIT khusus.
+
+-- --- schema_procedure_pgsol_permission.sql ---
+UPDATE public.roles
+SET permissions = jsonb_set(
+  permissions, '{procedure}',
+  COALESCE(permissions->'procedure', '[]'::jsonb) || '["review_pgsol"]'::jsonb
+)
+WHERE name = 'pgsol_reviewer'
+  AND NOT COALESCE(permissions->'procedure', '[]'::jsonb) ? 'review_pgsol';
 
 -- =====================================================================
 -- SELESAI. Verifikasi:
