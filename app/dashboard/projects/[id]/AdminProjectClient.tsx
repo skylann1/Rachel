@@ -316,30 +316,56 @@ export default function AdminProjectClient({
     return <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Belum Dibuat</span>;
   };
 
-  // Check if current user can approve specific docs — dibaca dari
-  // roles.permissions (lihat utils/permissions.ts), bukan role slug yang
-  // di-hardcode, supaya admin bisa atur ulang siapa yang berhak lewat
-  // halaman Role & Permission tanpa perlu ubah kode.
+  // Gerbang tombol Setujui/Tolak sekarang dua lapis: (1) permission — dibaca
+  // dari roles.permissions, dicocokkan lewat *_STAGE_PERMISSION, sama seperti
+  // sebelumnya, menentukan apakah KARTU-nya tampil sama sekali; (2)
+  // assignment — apakah user ini punya baris stage_assignments 'pending'
+  // untuk tahap ini di PROYEK INI, menentukan apakah TOMBOL-nya tampil.
+  // Pemegang permission yang tidak ditugaskan tetap melihat kartunya
+  // (transparansi) tapi tidak melihat tombolnya.
+  const getStageRows = (stageKey: string): StageAssignmentRow[] => stageAssignments?.[stageKey] ?? [];
+  const isAssignedPending = (stageKey: string) =>
+    getStageRows(stageKey).some(r => r.assignee_id === currentUserId && r.status === 'pending');
+  const stageProgress = (stageKey: string) => {
+    const rows = getStageRows(stageKey);
+    return { approved: rows.filter(r => r.status === 'approved').length, total: rows.length };
+  };
+
+  const isProsedurTahapPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPgsol;
   const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur?.status];
-  const canApproveProsedur = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action) && prosedurStatus === 'Pending';
+  const procStageKey = procPerm ? `${procPerm.module}.${procPerm.action}` : '';
+  const hasProsedurPermission = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action) && prosedurStatus === 'Pending';
+  const canApproveProsedur = hasProsedurPermission && isAssignedPending(procStageKey);
+  const showProsedurCard = hasProsedurPermission;
+  const prosedurProgress = stageProgress(procStageKey);
 
   // JSA: dua tahap, dua orang berbeda.
   //   Review PGSOL    -> permission jsa.review_pgsol
   //   Persetujuan PGN -> permission jsa.approve_pgn, DAN bukan orang yang mereview
   const isTahapReviewPgsol = jsa?.status === JSA_STATUS.reviewPgsol;
   const jsaPerm = JSA_STAGE_PERMISSION[jsa?.status];
+  const jsaStageKey = jsaPerm ? `${jsaPerm.module}.${jsaPerm.action}` : '';
   const jsaSudahDireviewOlehSaya = jsa?.status === JSA_STATUS.approvalPgn && jsa?.reviewer_id === currentUserId;
-  const canApproveJsa =
+  const hasJsaPermission =
     !!jsaPerm &&
     !!permissions?.[jsaPerm.module]?.includes(jsaPerm.action) &&
     !jsaSudahDireviewOlehSaya;
-  // PTW: permission tiap tahap dicek per baris karena bisa ada beberapa PTW tipe berbeda sekaligus.
-  const canApprovePtwRow = (row: any) => {
+  const canApproveJsa = hasJsaPermission && isAssignedPending(jsaStageKey);
+  const showJsaCard = hasJsaPermission;
+  const jsaProgress = stageProgress(jsaStageKey);
+
+  // PTW: permission & assignment dicek per baris karena bisa ada beberapa PTW tipe berbeda sekaligus.
+  const ptwStageKeyForRow = (row: any) => {
+    const perm = PTW_STAGE_PERMISSION[row.status];
+    return perm ? `${perm.module}.${perm.action}` : '';
+  };
+  const hasPtwPermissionForRow = (row: any) => {
     const perm = PTW_STAGE_PERMISSION[row.status];
     return !!perm && !!permissions?.[perm.module]?.includes(perm.action);
   };
-  const ptwActionableRows = ptws.filter(canApprovePtwRow);
-  const canApprovePtw = ptwActionableRows.length > 0;
+  const canApprovePtwRow = (row: any) => hasPtwPermissionForRow(row) && isAssignedPending(ptwStageKeyForRow(row));
+  const ptwVisibleRows = ptws.filter(hasPtwPermissionForRow);
+  const canApprovePtw = ptwVisibleRows.some(canApprovePtwRow);
 
   /**
    * Safety gate: workers/equipment on this PTW whose competency or
