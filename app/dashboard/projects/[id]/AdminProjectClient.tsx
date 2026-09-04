@@ -1007,10 +1007,8 @@ export default function AdminProjectClient({
                  );
                })}
 
-               {/* KALO TIDAK ADA YANG PENDING */}
-               {((!canApproveProsedur || prosedurStatus !== 'Pending') &&
-                 (!canApproveJsa || jsaStatus !== 'Pending') &&
-                 !canApprovePtw) && (
+               {/* KALO TIDAK ADA KARTU YANG TAMPIL (bukan cuma "tidak ada yang BISA saya approve" — pemegang permission yang belum ditugaskan tetap harus melihat kartunya) */}
+               {(!showProsedurCard && !showJsaCard && ptwVisibleRows.length === 0) && (
                  <div className="bg-slate-50 border border-slate-200 border-dashed rounded-3xl p-12 text-center">
                     <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-slate-800">Tidak ada dokumen yang perlu di-review</h3>
