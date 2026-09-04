@@ -181,3 +181,51 @@ tanggung jawabnya ada di admin vendor, bukan admin PGN/PGSOL.
       di perusahaan yang baru mendaftar setelah migrasi — konfirmasi dia
       langsung muncul sebagai kandidat di ketiga slot
       `*.review_vendor` tanpa perlu ke halaman Role & Permission dulu.
+
+---
+
+# Urutan Migrasi Fase 3.1 — Gerbang PGSOL untuk Prosedur Kerja
+
+Jalankan setelah semua migrasi Fase 1, Fase 2, dan Fase 3 di atas sudah
+selesai:
+
+1. `schema_procedure_pgsol_permission.sql`
+
+Tidak ada perubahan enum atau RLS di file ini — bisa langsung paste, atau
+pakai `RUN_ALL_migrations_2026-08-30.sql` yang sudah menyertakannya di
+Transaksi 6.
+
+## ⚠️ Cutover — pola fail-closed yang sama, lingkup lebih sempit lagi
+
+File ini HANYA menambah permission `procedure.review_pgsol` ke role
+`pgsol_reviewer` — tidak mengosongkan atau mereset baris apa pun. Prosedur
+Kerja yang sudah lewat tahap `Draft` sebelum migrasi ini tetap jalan seperti
+biasa. Yang fail-closed adalah alur submit baru: begitu kode aplikasi
+(harus di-deploy bersamaan dengan atau sebelum migrasi ini) mengarahkan
+Prosedur Kerja ke status `Review PGSOL`, dokumen itu macet di situ sampai
+admin PGSOL mengisi assignment `procedure.review_pgsol` untuk proyek yang
+bersangkutan.
+
+- [ ] Sebelum atau segera setelah deploy: umumkan ke admin PGSOL bahwa
+      halaman `/pgsol/dashboard/projects/{id}/assign` sekarang punya dua
+      panel assignment (Prosedur Kerja dan JSA), dan Prosedur Kerja proyek
+      aktif butuh diisi sebelum vendor bisa lanjut ke tahap PM.
+
+## Verifikasi manual — Fase 3.1
+
+- [ ] Assign 2 PGSOL reviewer ke `procedure.review_pgsol` sebuah proyek.
+      Ajukan Prosedur Kerja sebagai vendor — status harus `Review PGSOL`
+      (bukan langsung `Menunggu Review PM`).
+- [ ] Approve sebagai reviewer pertama — status tetap `Review PGSOL`.
+      Approve sebagai reviewer kedua — status maju ke `Menunggu Review PM`,
+      dan PM (sisi PGN) baru sekarang melihat dokumennya.
+- [ ] Reject JSA sebagai reviewer PGSOL atau PGN — pastikan status balik ke
+      `Draft` (BUKAN `Review PGSOL`), dan submit ulang sebagai vendor benar
+      memicu `Review Internal Vendor` lagi sebelum PGSOL melihatnya.
+- [ ] Login sebagai pemegang `jsa.review_pgsol` yang TIDAK ditugaskan ke
+      suatu proyek — buka proyek itu, kartu approval Prosedur/JSA tetap
+      terlihat (transparansi) tapi tombol Setujui/Tolak tidak muncul, dan
+      ada indikator "N dari M sudah menyetujui".
+- [ ] `/dashboard/my-task` untuk reviewer PGSOL menampilkan tugas Prosedur
+      Kerja hanya selagi benar ditugaskan dengan baris pending — tidak ada
+      entri phantom selagi dokumen masih `Draft`.
