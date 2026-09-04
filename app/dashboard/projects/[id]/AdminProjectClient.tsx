@@ -893,9 +893,11 @@ export default function AdminProjectClient({
                )}
 
                {/* JIKA ADA PTW PENDING (bisa lebih dari satu tipe sekaligus) */}
-               {ptwActionableRows.map(row => {
+               {ptwVisibleRows.map(row => {
                  const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
                  const safety = getPtwSafetyIssues(row);
+                 const rowCanApprove = canApprovePtwRow(row);
+                 const rowProgress = stageProgress(ptwStageKeyForRow(row));
                  return (
                    <div key={row.id} className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50 mb-6">
                       <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -905,11 +907,14 @@ export default function AdminProjectClient({
                              <h3 className="text-lg font-bold text-amber-900">Permit to Work — {rowTitle}</h3>
                            </div>
                            <p className="text-amber-700 text-sm">Vendor telah melengkapi PTW. Silakan review pekerja & peralatan.</p>
+                           <StageProgress {...rowProgress} />
                          </div>
-                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                           <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
-                           <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
-                         </div>
+                         {rowCanApprove && (
+                           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                             <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
+                             <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
+                           </div>
+                         )}
                       </div>
                       {safety.hasIssues && (
                         <div className="flex items-start gap-3 bg-rose-50 border-b border-rose-100 px-4 sm:px-6 py-4">
