@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Search, Briefcase, MapPin, Calendar, ArrowRight, FileSignature } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
-import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { PROCEDURE_STATUS, isProcedurePending } from '@/lib/procedure-status';
 import { JSA_STATUS } from '@/lib/jsa-status';
 
 function StatusBadge({ status }: { status: string }) {
@@ -49,7 +49,7 @@ export default async function VendorProjectsPage() {
     if (ptws.length > 0 && effectivePtwStatuses.every(s => s === PTW_STATUS.aktif)) return PTW_STATUS.aktif;
     if (jsa?.status === JSA_STATUS.approved) return JSA_STATUS.approved;
     if (prosedur?.status === PROCEDURE_STATUS.approved) return PROCEDURE_STATUS.approved;
-    if (prosedur?.status === PROCEDURE_STATUS.menungguReviewPM) return PROCEDURE_STATUS.menungguReviewPM;
+    if (isProcedurePending(prosedur?.status)) return PROCEDURE_STATUS.menungguReviewPM;
     if (prosedur?.status === PROCEDURE_STATUS.draft) return 'Revisi Prosedur';
     return project.status;
   };

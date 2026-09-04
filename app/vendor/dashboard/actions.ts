@@ -4,7 +4,7 @@ import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { getNotifications } from "@/app/dashboard/inbox/actions";
 import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from "@/lib/ptw-status";
 import { JSA_STATUS, isJsaPending } from "@/lib/jsa-status";
-import { PROCEDURE_STATUS } from "@/lib/procedure-status";
+import { PROCEDURE_STATUS, isProcedurePending } from "@/lib/procedure-status";
 import { getVendorIncidents } from "@/app/vendor/dashboard/incident/actions";
 
 // Mirrors the real status strings written by the approval workflow
@@ -198,7 +198,7 @@ export async function getVendorChartsData(): Promise<VendorDashboardData> {
     {
       stage: 'Prosedur',
       disetujui: procedures.filter(p => p.status === PROCEDURE_STATUS.approved).length,
-      menunggu: procedures.filter(p => p.status === PROCEDURE_STATUS.draft || p.status === PROCEDURE_STATUS.menungguReviewPM).length,
+      menunggu: procedures.filter(p => p.status === PROCEDURE_STATUS.draft || isProcedurePending(p.status)).length,
     },
     {
       stage: 'JSA',

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { EditableVendorProfile } from "./EditableVendorProfile";
 import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from "@/lib/ptw-status";
 import { isJsaPending } from "@/lib/jsa-status";
-import { PROCEDURE_STATUS } from "@/lib/procedure-status";
+import { PROCEDURE_STATUS, isProcedurePending } from "@/lib/procedure-status";
 
 export const metadata = {
   title: 'Profil Mitra Kerja | Portal Mitra Kerja RACHEL',
@@ -72,7 +72,7 @@ export default async function VendorProfilePage() {
     }).length;
     incidentCount = incCount || 0;
     pendingReview =
-      (procedures || []).filter(p => p.status === PROCEDURE_STATUS.menungguReviewPM).length +
+      (procedures || []).filter(p => isProcedurePending(p.status)).length +
       (jsas || []).filter(j => isJsaPending(j.status)).length +
       (ptws || []).filter(p => PTW_PENDING_STATUSES.includes(p.status)).length;
   }

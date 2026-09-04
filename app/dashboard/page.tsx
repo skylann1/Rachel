@@ -5,7 +5,7 @@ import { createClient } from '@/utils/supabase/server';
 import { InteractiveDashboard, DashboardData } from '@/components/internal/interactive-dashboard';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from '@/lib/ptw-status';
 import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
-import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { PROCEDURE_STATUS, isProcedurePending } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { PeriodSwitcher } from '@/components/internal/period-switcher';
 
@@ -170,7 +170,7 @@ export default async function DashboardOverviewPage({
    const terlambat = activeProjects.filter(p => new Date(p.end_date) < now).length;
 
    // ------------------------------------------------------------- pipeline
-   const procMenunggu = (procedures || []).filter(p => p.status === PROCEDURE_STATUS.draft || p.status === PROCEDURE_STATUS.menungguReviewPM).length;
+   const procMenunggu = (procedures || []).filter(p => p.status === PROCEDURE_STATUS.draft || isProcedurePending(p.status)).length;
    const procDisetujui = (procedures || []).filter(p => p.status === PROCEDURE_STATUS.approved).length;
 
    const jsaMenunggu = (jsas || []).filter(j => isJsaPending(j.status)).length;

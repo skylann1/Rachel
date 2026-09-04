@@ -198,13 +198,20 @@ Transaksi 6.
 ## ⚠️ Cutover — pola fail-closed yang sama, lingkup lebih sempit lagi
 
 File ini HANYA menambah permission `procedure.review_pgsol` ke role
-`pgsol_reviewer` — tidak mengosongkan atau mereset baris apa pun. Prosedur
-Kerja yang sudah lewat tahap `Draft` sebelum migrasi ini tetap jalan seperti
-biasa. Yang fail-closed adalah alur submit baru: begitu kode aplikasi
-(harus di-deploy bersamaan dengan atau sebelum migrasi ini) mengarahkan
-Prosedur Kerja ke status `Review PGSOL`, dokumen itu macet di situ sampai
-admin PGSOL mengisi assignment `procedure.review_pgsol` untuk proyek yang
-bersangkutan.
+`pgsol_reviewer` — tidak mengosongkan atau mereset baris apa pun. Migrasi
+ini murni aditif dan inert tanpa kode aplikasinya (cuma memberi permission
+yang belum dipakai jalur kode manapun), jadi menjalankannya lebih awal
+tidak berbahaya. Yang justru berbahaya adalah urutan sebaliknya: deploy
+kode aplikasi SEBELUM migrasi ini berarti Prosedur Kerja baru bisa
+mencapai status `Review PGSOL` sementara belum ada satu pun role yang
+memegang permission `procedure.review_pgsol` — `getEligibleAssignees`
+akan mengembalikan daftar kosong dan admin PGSOL tidak bisa menugaskan
+siapa pun, sehingga dokumen macet tanpa jalan keluar. **Migrasi ini WAJIB
+dijalankan SEBELUM (atau paling lambat bersamaan dengan, tapi tidak
+pernah SESUDAH) deploy kode aplikasi** — begitu kode aplikasi ter-deploy
+dan mengarahkan Prosedur Kerja ke status `Review PGSOL`, dokumen itu macet
+di situ sampai admin PGSOL mengisi assignment `procedure.review_pgsol`
+untuk proyek yang bersangkutan.
 
 - [ ] Sebelum atau segera setelah deploy: umumkan ke admin PGSOL bahwa
       halaman `/pgsol/dashboard/projects/{id}/assign` sekarang punya dua

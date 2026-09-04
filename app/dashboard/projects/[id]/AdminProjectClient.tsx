@@ -338,7 +338,7 @@ export default function AdminProjectClient({
   const isProsedurTahapPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPgsol;
   const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur?.status];
   const procStageKey = procPerm ? `${procPerm.module}.${procPerm.action}` : '';
-  const hasProsedurPermission = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action) && prosedurStatus === 'Pending';
+  const hasProsedurPermission = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
   const canApproveProsedur = hasProsedurPermission && isAssignedPending(procStageKey);
   const showProsedurCard = hasProsedurPermission;
   const prosedurProgress = stageProgress(procStageKey);

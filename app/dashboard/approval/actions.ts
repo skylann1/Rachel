@@ -77,7 +77,7 @@ export async function getPendingProcedures() {
       id, status, created_at, content, project_id,
       projects ( name, vendor_profiles ( company_name ) )
     `)
-    .in('status', [PROCEDURE_STATUS.draft, PROCEDURE_STATUS.menungguReviewPM])
+    .in('status', [PROCEDURE_STATUS.draft, PROCEDURE_STATUS.reviewPgsol, PROCEDURE_STATUS.menungguReviewPM])
     .order('created_at', { ascending: false });
   if (error) { console.error(error); return []; }
   return data || [];
