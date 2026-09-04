@@ -737,20 +737,32 @@ export default function AdminProjectClient({
                </div>
 
                {/* JIKA PROSEDUR PENDING */}
-               {prosedurStatus === 'Pending' && canApproveProsedur && (
+               {showProsedurCard && (
                  <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
                     <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                        <div>
-                         <div className="flex items-center gap-2 mb-1">
+                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                            <FileSignature className="w-5 h-5 text-amber-600" />
                            <h3 className="text-lg font-bold text-amber-900">Prosedur Kerja (SOP)</h3>
+                           <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
+                             {isProsedurTahapPgsol ? 'Tahap 1 — Review PGSOL' : 'Tahap 2 — Menunggu Review PM'}
+                           </span>
                          </div>
-                         <p className="text-amber-700 text-sm">Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.</p>
+                         <p className="text-amber-700 text-sm">
+                           {isProsedurTahapPgsol
+                             ? 'Verifikasi teknis: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke PM.'
+                             : 'Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.'}
+                         </p>
+                         <StageProgress {...prosedurProgress} />
                        </div>
-                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                         <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
-                         <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui SOP</button>
-                       </div>
+                       {canApproveProsedur && (
+                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                           <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
+                           <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
+                             {isProsedurTahapPgsol ? 'Review & Teruskan ke PM' : 'Setujui SOP'}
+                           </button>
+                         </div>
+                       )}
                     </div>
                     <div className="bg-slate-100 p-2">
                       {prosedur?.content?.prosedur_html ? (
