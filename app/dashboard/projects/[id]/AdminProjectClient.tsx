@@ -158,6 +158,10 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
 }
 
 const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
+  'prosedur-review': {
+    title: 'Selesaikan Review PGSOL?',
+    desc: 'Anda menyatakan Prosedur Kerja sudah sesuai standar kerja aman. Dokumen akan diteruskan ke PM untuk persetujuan akhir.',
+  },
   prosedur: { title: 'Setujui Prosedur Kerja?', desc: 'Dokumen SOP akan ditandai disetujui dan vendor dapat melanjutkan ke tahap JSA.' },
   jsa: { title: 'Setujui Job Safety Analysis?', desc: 'JSA akan ditandai disetujui pada tahap ini dan lanjut ke tahap berikutnya.' },
   'jsa-review': {
@@ -509,7 +513,9 @@ export default function AdminProjectClient({
           labelKey={
             approveTarget.type === 'jsa'
               ? (isTahapReviewPgsol ? 'jsa-review' : 'jsa-approve')
-              : approveTarget.type
+              : approveTarget.type === 'prosedur'
+                ? (isProsedurTahapPgsol ? 'prosedur-review' : 'prosedur')
+                : approveTarget.type
           }
           warning={approveTargetPtwWarning}
           onConfirm={handleConfirmApprove}
