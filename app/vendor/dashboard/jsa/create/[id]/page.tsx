@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText, Sparkles, Loader2, Zap, Eye, ArrowDown, AlertTriangle } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
@@ -47,12 +47,25 @@ export default function JSACreatePage() {
   ]);
   const [procSteps, setProcSteps] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [aiLoadingId, setAiLoadingId] = useState<number | null>(null);
-  const [aiError, setAiError] = useState<{ id: number; message: string } | null>(null);
-  const [gatekeeperLoading, setGatekeeperLoading] = useState(false);
-  const [gatekeeperResult, setGatekeeperResult] = useState<{ score: number; summary: string } | null>(null);
-  const [gatekeeperError, setGatekeeperError] = useState<string | null>(null);
   const [docId, setDocId] = useState<string | null>(null);
+
+  // New Unified AI HSE Assistant State
+  const [hseLoading, setHseLoading] = useState(false);
+  const [hseResult, setHseResult] = useState<{
+    score: number;
+    summary: string;
+    anomalies: {
+      id: number;
+      severity: 'critical' | 'warning' | 'info';
+      category: string;
+      auto_comment: string;
+      suggested_hazard?: string;
+      suggested_mitigation?: string;
+    }[];
+  } | null>(null);
+  const [hseError, setHseError] = useState<string | null>(null);
+  const [highlightedStepId, setHighlightedStepId] = useState<number | null>(null);
+  const jsaRowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
   React.useEffect(() => {
     async function loadData() {
@@ -64,7 +77,6 @@ export default function JSACreatePage() {
         let finalSteps: any[] = [];
 
         if (data && data.procedureSteps && data.procedureSteps.length > 0) {
-          // Smart Sync: Always use SOP steps, but preserve existing JSA hazards if they exist at the same index
           finalSteps = data.procedureSteps.map((stepDesc: string, idx: number) => {
             const existing = (data.steps && data.steps[idx]) ? data.steps[idx] : null;
 
@@ -90,7 +102,7 @@ export default function JSACreatePage() {
 
               return {
                 id: existing.id || Date.now() + Math.random(),
-                langkah: stepDesc, // <--- Always override with SOP step
+                langkah: stepDesc, // Always override with SOP step
                 jenisBahaya: hazards.jenisBahaya || (legacyBahaya ? 'Fisika' : 'Fisika'),
                 sebab: hazards.sebab || '',
                 potensiBahaya: hazards.potensiBahaya || legacyBahaya || '',
@@ -101,7 +113,6 @@ export default function JSACreatePage() {
               };
             }
 
-            // No existing step at this index, create an empty one
             return {
               id: Date.now() + idx,
               langkah: stepDesc,
@@ -115,7 +126,6 @@ export default function JSACreatePage() {
             };
           });
         } else if (data && data.steps && data.steps.length > 0) {
-          // Fallback if no procedureSteps
           finalSteps = data.steps.map((step: any) => {
             const hazards = typeof step.hazards === 'string' ? JSON.parse(step.hazards) : (step.hazards || {});
             const risks = typeof step.risks === 'string' ? JSON.parse(step.risks) : (step.risks || {});
@@ -180,7 +190,6 @@ export default function JSACreatePage() {
     return { ...r, total, probability, rpn: Number(r.severity) * probability };
   };
 
-  
   const updateControlField = (id: number, field: 'faktorPositif' | 'mitigasi', subField: keyof ControlDetail, value: string) => {
     setJsaSteps(jsaSteps.map(step => {
       if (step.id === id) {
@@ -214,57 +223,59 @@ export default function JSACreatePage() {
     }));
   };
 
-  /** Fills in Potensi Bahaya + Mitigasi (Administrasi) from the AI Copilot given the step description. */
-  const handleAiSuggest = async (step: JsaStepData) => {
-    if (!step.langkah.trim() || aiLoadingId !== null) return;
-    setAiLoadingId(step.id);
-    setAiError(null);
-    try {
-      const res = await fetch('/api/ai/copilot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobStep: step.langkah }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(body?.error || 'Gagal mendapat saran AI.');
-
-      setJsaSteps(prev => prev.map(s => s.id === step.id
-        ? { ...s, potensiBahaya: body.hazard, mitigasi: { ...s.mitigasi, administrasi: body.mitigation } }
-        : s));
-    } catch (err) {
-      setAiError({ id: step.id, message: err instanceof Error ? err.message : 'Gagal mendapat saran AI.' });
-    } finally {
-      setAiLoadingId(null);
-    }
+  const applyAISuggestion = (stepId: number, hazard?: string, mitigasi?: string) => {
+    setJsaSteps(jsaSteps.map(step => {
+      if (step.id === stepId) {
+        return {
+          ...step,
+          potensiBahaya: hazard || step.potensiBahaya,
+          mitigasi: { ...step.mitigasi, administrasi: mitigasi || step.mitigasi.administrasi }
+        };
+      }
+      return step;
+    }));
   };
 
-  /** AI Gatekeeper — a pre-submit compliance score so the vendor can catch a weak JSA before HSE does. */
-  const handleCheckGatekeeper = async () => {
-    setGatekeeperLoading(true);
-    setGatekeeperError(null);
-    setGatekeeperResult(null);
+  /** Unified AI HSE Assistant — Analyze Entire JSA */
+  const handleHseAssistant = async () => {
+    setHseLoading(true);
+    setHseError(null);
+    setHseResult(null);
+    setHighlightedStepId(null);
     try {
-      const jsaData = jsaSteps.map(step => ({
+      const jsaData = jsaSteps.map((step, idx) => ({
+        id: step.id,
         langkah: step.langkah,
         jenisBahaya: step.jenisBahaya,
         sebab: step.sebab,
         potensiBahaya: step.potensiBahaya,
-        mitigasi: step.mitigasi,
+        mitigasi: typeof step.mitigasi === 'object' 
+          ? Object.entries(step.mitigasi).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join('; ')
+          : step.mitigasi,
       }));
-      const res = await fetch('/api/ai/gatekeeper', {
+      const res = await fetch('/api/ai/hse-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jsaData }),
       });
       const body = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(body?.error || 'Gagal mengecek skor kepatuhan AI.');
-      setGatekeeperResult(body);
+      if (!res.ok) throw new Error(body?.error || 'Gagal mengecek JSA dengan AI.');
+      setHseResult(body);
     } catch (err) {
-      setGatekeeperError(err instanceof Error ? err.message : 'Gagal mengecek skor kepatuhan AI.');
+      setHseError(err instanceof Error ? err.message : 'Gagal mengecek JSA dengan AI.');
     } finally {
-      setGatekeeperLoading(false);
+      setHseLoading(false);
     }
   };
+
+  const scrollToStep = useCallback((stepId: number) => {
+    setHighlightedStepId(stepId);
+    const row = jsaRowRefs.current[stepId];
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    setTimeout(() => setHighlightedStepId(null), 2000);
+  }, []);
 
   const handleSimpan = async () => {
     setIsSaving(true);
@@ -281,30 +292,30 @@ export default function JSACreatePage() {
   };
 
   const getRpnColor = (rpn: number) => {
-    if (rpn >= 15) return 'bg-red-500 text-white';
-    if (rpn >= 8) return 'bg-yellow-400 text-black';
-    if (rpn >= 4) return 'bg-green-500 text-white';
-    return 'bg-green-300 text-black';
+    if (rpn >= 15) return 'bg-rose-500 text-white';
+    if (rpn >= 8) return 'bg-amber-400 text-black';
+    if (rpn >= 4) return 'bg-emerald-500 text-white';
+    return 'bg-emerald-300 text-black';
   };
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-12 px-4">
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200 gap-4">
         <div>
           <Link href={`/vendor/dashboard/projects/${encodeURIComponent(projectId)}`} className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-primary transition-colors mb-2">
             <ArrowLeft className="w-4 h-4" /> Kembali ke Proyek
           </Link>
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
-            <ShieldAlert className="w-6 h-6 text-orange-500" />
+            <ShieldAlert className="w-6 h-6 text-amber-500" />
             Formulir JSA
           </h1>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={handleCheckGatekeeper} disabled={gatekeeperLoading} className="px-5 py-3 bg-violet-50 text-violet-700 border border-violet-200 text-sm font-bold rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-colors flex items-center gap-2">
-            {gatekeeperLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-            Cek Skor Kepatuhan AI
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <button onClick={handleHseAssistant} disabled={hseLoading} className="flex-1 md:flex-none justify-center px-5 py-3 bg-violet-50 text-violet-700 border border-violet-200 text-sm font-bold rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm">
+            {hseLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+            {hseResult ? 'Analisis Ulang AI' : 'Cek JSA dengan AI'}
           </button>
-          <button onClick={handleSimpan} disabled={isSaving} className="px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
+          <button onClick={handleSimpan} disabled={isSaving} className="flex-1 md:flex-none justify-center px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
             {isSaving ? (
               <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</span>
             ) : (
@@ -314,33 +325,157 @@ export default function JSACreatePage() {
         </div>
       </div>
 
-      {gatekeeperError && (
-        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-sm text-rose-700">
-          {gatekeeperError}
+      {hseError && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-sm text-rose-700 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+          <p>{hseError}</p>
         </div>
       )}
 
-      {gatekeeperResult && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-          <div className={`shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center font-black text-2xl ${
-            gatekeeperResult.score >= 80 ? 'bg-emerald-50 text-emerald-600' : gatekeeperResult.score >= 50 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
-          }`}>
-            {gatekeeperResult.score}
-            <span className="text-[9px] font-bold uppercase tracking-wider -mt-1">/ 100</span>
+      {/* --- AI Score Dashboard + Anomaly Panel --- */}
+      {hseResult && (
+        <div className="bg-white rounded-3xl border border-violet-200 shadow-xl overflow-hidden ring-4 ring-violet-50 mb-6">
+          <div className="bg-gradient-to-r from-slate-900 to-violet-900 px-4 sm:px-6 py-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              {/* Score Ring */}
+              <div className="relative shrink-0">
+                <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+                  <circle cx="48" cy="48" r="40" fill="none"
+                    stroke={hseResult.score >= 80 ? '#34d399' : hseResult.score >= 50 ? '#fbbf24' : '#f87171'}
+                    strokeWidth="8" strokeLinecap="round"
+                    strokeDasharray={`${(hseResult.score / 100) * 251.2} 251.2`}
+                    style={{ transition: 'stroke-dasharray 1s ease-out' }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-black text-white">{hseResult.score}</span>
+                  <span className="text-[9px] font-bold text-white/60 uppercase tracking-wider">/ 100</span>
+                </div>
+              </div>
+              {/* Summary */}
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-violet-300" />
+                  <h4 className="text-sm font-bold text-white/80 uppercase tracking-wider">Evaluasi AI — Skor Kepatuhan K3</h4>
+                </div>
+                <p className="text-sm text-white/90 leading-relaxed">{hseResult.summary}</p>
+                <div className="flex items-center gap-4 mt-3 text-xs font-bold">
+                  {hseResult.anomalies.filter(a => a.severity === 'critical').length > 0 && (
+                    <span className="flex items-center gap-1.5 text-rose-300">
+                      <span className="w-2 h-2 rounded-full bg-rose-400" />
+                      {hseResult.anomalies.filter(a => a.severity === 'critical').length} Kritis
+                    </span>
+                  )}
+                  {hseResult.anomalies.filter(a => a.severity === 'warning').length > 0 && (
+                    <span className="flex items-center gap-1.5 text-amber-300">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      {hseResult.anomalies.filter(a => a.severity === 'warning').length} Peringatan
+                    </span>
+                  )}
+                  {hseResult.anomalies.filter(a => a.severity === 'info').length > 0 && (
+                    <span className="flex items-center gap-1.5 text-sky-300">
+                      <span className="w-2 h-2 rounded-full bg-sky-400" />
+                      {hseResult.anomalies.filter(a => a.severity === 'info').length} Info
+                    </span>
+                  )}
+                  {hseResult.anomalies.length === 0 && (
+                    <span className="flex items-center gap-1.5 text-emerald-300">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Tidak ada anomali ditemukan
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-violet-500" /> Skor Kepatuhan AI
-            </p>
-            <p className="text-sm text-slate-700 mt-1">{gatekeeperResult.summary}</p>
-          </div>
+
+          {/* Anomaly Cards */}
+          {hseResult.anomalies.length > 0 && (
+            <div className="px-4 sm:px-6 py-5 space-y-3 bg-slate-50">
+              <div className="flex items-center gap-2 mb-1">
+                <Zap className="w-4 h-4 text-violet-600" />
+                <p className="text-sm font-bold text-slate-800">{hseResult.anomalies.length} temuan AI — klik "Terapkan" untuk memperbaiki form JSA</p>
+              </div>
+              {hseResult.anomalies.map(a => {
+                const step = jsaSteps.find(s => s.id === a.id);
+                const severityConfig = {
+                  critical: { border: 'border-l-rose-500', bg: 'bg-rose-50', badge: 'bg-rose-100 text-rose-700 border-rose-200', icon: '🔴', label: 'KRITIS' },
+                  warning: { border: 'border-l-amber-500', bg: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700 border-amber-200', icon: '🟡', label: 'PERINGATAN' },
+                  info: { border: 'border-l-sky-500', bg: 'bg-sky-50', badge: 'bg-sky-100 text-sky-700 border-sky-200', icon: '🔵', label: 'INFO' },
+                }[a.severity];
+                return (
+                  <div key={a.id} className={`bg-white border border-slate-200 ${severityConfig.border} border-l-4 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow`}>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
+                            <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${severityConfig.badge}`}>
+                              {severityConfig.icon} {severityConfig.label}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded">
+                              {a.category}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold text-slate-800 mb-1">
+                            Langkah {jsaSteps.findIndex(s => s.id === a.id) + 1}{step?.langkah ? ` — ${step.langkah}` : ''}
+                          </p>
+                          <p className="text-sm text-slate-600 leading-relaxed">{a.auto_comment}</p>
+                        </div>
+                        <div className="shrink-0 flex flex-col gap-2">
+                          <button
+                            onClick={() => scrollToStep(a.id)}
+                            className="flex items-center gap-1.5 justify-center px-3 py-1.5 text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors"
+                            title="Scroll ke baris JSA ini"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Lihat Baris <ArrowDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                      {/* Suggestions */}
+                      {(a.suggested_hazard || a.suggested_mitigation) && (
+                        <div className={`mt-3 p-3 rounded-lg ${severityConfig.bg} space-y-3`}>
+                          <div className="flex items-center justify-between gap-4">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" /> Saran Perbaikan AI
+                            </p>
+                            <button 
+                              onClick={() => applyAISuggestion(a.id, a.suggested_hazard, a.suggested_mitigation)}
+                              className="px-3 py-1 text-[10px] font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-full shadow-sm flex items-center gap-1"
+                            >
+                              Terapkan Saran
+                            </button>
+                          </div>
+                          
+                          {a.suggested_hazard && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0 mt-0.5 w-16">Bahaya:</span>
+                              <p className="text-xs text-slate-700 flex-1">{a.suggested_hazard}</p>
+                            </div>
+                          )}
+                          {a.suggested_mitigation && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0 mt-0.5 w-16">Mitigasi:</span>
+                              <p className="text-xs text-slate-700 flex-1">{a.suggested_mitigation}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 bg-slate-50 border-b border-slate-200">
-          <h2 className="font-bold text-slate-800">Tabel Analisa Keselamatan Kerja (JSA)</h2>
-          <p className="text-xs text-slate-500 mt-1">Scroll ke kanan untuk melihat seluruh kolom matriks risiko.</p>
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+          <div>
+            <h2 className="font-bold text-slate-800">Tabel Analisa Keselamatan Kerja (JSA)</h2>
+            <p className="text-xs text-slate-500 mt-1">Isi potensi bahaya dan tindakan mitigasi untuk setiap langkah kerja.</p>
+          </div>
         </div>
         
         <div className="overflow-x-auto">
@@ -357,7 +492,7 @@ export default function JSACreatePage() {
                 <th colSpan={7} className="border border-slate-300 px-2 py-2 text-center bg-orange-100 text-orange-800 font-bold text-[11px]">Inherent Risk</th>
                 <th rowSpan={3} className="border border-slate-300 px-2 py-3 w-56 bg-slate-200 text-center font-bold align-middle">Pengendalian tambahan /<br/>Tindakan Mitigasi<br/><span className="text-[9px] font-normal text-slate-500">(13)</span></th>
                 <th colSpan={7} className="border border-slate-300 px-2 py-2 text-center bg-emerald-100 text-emerald-800 font-bold text-[11px]">Residual Risk</th>
-                <th rowSpan={3} className="border border-slate-300 px-2 py-3 text-center w-20 bg-slate-200 font-bold align-middle">Paraf /<br/>Verifikasi<br/><span className="text-[9px] font-normal text-slate-500">(21)</span></th>
+                <th rowSpan={3} className="border border-slate-300 px-2 py-3 text-center w-20 bg-slate-200 font-bold align-middle">Aksi</th>
               </tr>
               {/* Row 2: Severity + Probability group */}
               <tr>
@@ -387,81 +522,105 @@ export default function JSACreatePage() {
               </tr>
             </thead>
             <tbody>
-              {jsaSteps.map((step, index) => (
-                <tr key={step.id} className="hover:bg-slate-50/50 border-b border-slate-200">
-                  <td className="border border-slate-300 p-2 text-center align-top font-bold text-slate-500">{index + 1}</td>
-                  <td className="border border-slate-300 p-1 align-top">
-                    <textarea value={step.langkah} onChange={(e) => updateStepText(step.id, 'langkah', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Tuliskan langkah pekerjaan..." />
-                    <button
-                      type="button"
-                      onClick={() => handleAiSuggest(step)}
-                      disabled={!step.langkah.trim() || aiLoadingId !== null}
-                      title="Minta AI menyarankan potensi bahaya & mitigasi dari langkah kerja ini"
-                      className="mt-1 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {aiLoadingId === step.id ? (
-                        <><Loader2 className="w-3 h-3 animate-spin" /> Menganalisis...</>
-                      ) : (
-                        <><Sparkles className="w-3 h-3" /> Saran AI</>
-                      )}
-                    </button>
-                    {aiError?.id === step.id && (
-                      <p className="text-[9px] text-rose-500 mt-1 leading-snug">{aiError.message}</p>
-                    )}
-                  </td>
-                  <td className="border border-slate-300 p-1 align-top"><select value={step.jenisBahaya} onChange={(e) => updateStepText(step.id, 'jenisBahaya', e.target.value)} className="w-full p-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-primary">{BAHAYA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></td>
-                  <td className="border border-slate-300 p-1 align-top"><textarea value={step.sebab} onChange={(e) => updateStepText(step.id, 'sebab', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Sebab / sumber bahaya..." /></td>
-                  <td className="border border-slate-300 p-1 align-top"><textarea value={step.potensiBahaya} onChange={(e) => updateStepText(step.id, 'potensiBahaya', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-transparent resize-y rounded" placeholder="Potensi bahaya..." /></td>
-                  <td className="border border-slate-300 p-1 align-top">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Eliminasi:</label><textarea value={step.faktorPositif.eliminasi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'eliminasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Substitusi:</label><textarea value={step.faktorPositif.substitusi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'substitusi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Rekayasa Alat:</label><textarea value={step.faktorPositif.rekayasa || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'rekayasa', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Administrasi:</label><textarea value={step.faktorPositif.administrasi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'administrasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">APD:</label><textarea value={step.faktorPositif.apd || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'apd', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                    </div>
-                  </td>
-                  {/* Inherent Risk: Severity */}
-                  <td className="border border-slate-300 p-1 align-top bg-orange-50/30"><input type="number" min="1" max="5" value={step.inherentRisk.severity} onChange={(e) => updateInherentRisk(step.id, 'severity', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
-                  {/* Inherent Risk: Probability -> Intensitas, Kapabilitas, History, Total */}
-                  <td className="border border-slate-300 p-1 align-top bg-orange-50/20"><input type="number" min="1" max="5" value={step.inherentRisk.intensitas} onChange={(e) => updateInherentRisk(step.id, 'intensitas', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
-                  <td className="border border-slate-300 p-1 align-top bg-orange-50/20"><input type="number" min="1" max="5" value={step.inherentRisk.kapabilitas} onChange={(e) => updateInherentRisk(step.id, 'kapabilitas', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
-                  <td className="border border-slate-300 p-1 align-top bg-orange-50/20"><input type="number" min="1" max="5" value={step.inherentRisk.history} onChange={(e) => updateInherentRisk(step.id, 'history', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
-                  <td className="border border-slate-300 p-1 align-middle text-center font-bold bg-slate-100">{step.inherentRisk.total}</td>
-                  {/* Inherent Risk: Prob, RPN */}
-                  <td className="border border-slate-300 p-1 align-middle text-center font-bold bg-slate-100">{step.inherentRisk.probability}</td>
-                  <td className={`border border-slate-300 p-1 align-middle text-center font-black text-sm ${getRpnColor(step.inherentRisk.rpn)}`}>{step.inherentRisk.rpn}</td>
-                  
-                  {/* Mitigasi */}
-                  <td className="border border-slate-300 p-1 align-top">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Eliminasi:</label><textarea value={step.mitigasi.eliminasi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'eliminasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Substitusi:</label><textarea value={step.mitigasi.substitusi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'substitusi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Rekayasa Alat:</label><textarea value={step.mitigasi.rekayasa || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'rekayasa', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Administrasi:</label><textarea value={step.mitigasi.administrasi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'administrasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                      <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">APD:</label><textarea value={step.mitigasi.apd || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'apd', e.target.value)} className="w-full p-1 text-xs border border-slate-200 rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
-                    </div>
-                  </td>
-                  
-                  {/* Residual Risk: Severity */}
-                  <td className="border border-slate-300 p-1 align-top bg-emerald-50/30"><input type="number" min="1" max="5" value={step.residualRisk.severity} onChange={(e) => updateResidualRisk(step.id, 'severity', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
-                  {/* Residual Risk: Probability -> Intensitas, Kapabilitas, History, Total */}
-                  <td className="border border-slate-300 p-1 align-top bg-emerald-50/20"><input type="number" min="1" max="5" value={step.residualRisk.intensitas} onChange={(e) => updateResidualRisk(step.id, 'intensitas', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
-                  <td className="border border-slate-300 p-1 align-top bg-emerald-50/20"><input type="number" min="1" max="5" value={step.residualRisk.kapabilitas} onChange={(e) => updateResidualRisk(step.id, 'kapabilitas', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
-                  <td className="border border-slate-300 p-1 align-top bg-emerald-50/20"><input type="number" min="1" max="5" value={step.residualRisk.history} onChange={(e) => updateResidualRisk(step.id, 'history', e.target.value)} className="w-full p-1 text-center text-xs bg-transparent border border-slate-200 rounded" /></td>
-                  <td className="border border-slate-300 p-1 align-middle text-center font-bold bg-slate-100">{step.residualRisk.total}</td>
-                  {/* Residual Risk: Prob, RPN */}
-                  <td className="border border-slate-300 p-1 align-middle text-center font-bold bg-slate-100">{step.residualRisk.probability}</td>
-                  <td className={`border border-slate-300 p-1 align-middle text-center font-black text-sm ${getRpnColor(step.residualRisk.rpn)}`}>{step.residualRisk.rpn}</td>
-                  
-                  {/* Paraf / Verifikasi + Delete */}
-                  <td className="border border-slate-300 p-2 text-center align-middle"><button onClick={() => removeStep(step.id)} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Hapus langkah"><Trash2 className="w-4 h-4 mx-auto" /></button></td>
-                </tr>
-              ))}
+              {jsaSteps.map((step, index) => {
+                const anomaly = hseResult?.anomalies.find(a => a.id === step.id);
+                const isHighlighted = highlightedStepId === step.id;
+                
+                const borderColor = anomaly
+                  ? anomaly.severity === 'critical' ? 'border-l-4 border-l-rose-500'
+                    : anomaly.severity === 'warning' ? 'border-l-4 border-l-amber-400'
+                    : 'border-l-4 border-l-sky-400'
+                  : 'border-l-4 border-l-transparent';
+                
+                const bgColor = isHighlighted
+                  ? 'bg-violet-100 animate-pulse'
+                  : anomaly
+                    ? anomaly.severity === 'critical' ? 'bg-rose-50/50'
+                      : anomaly.severity === 'warning' ? 'bg-amber-50/50'
+                      : 'bg-sky-50/30'
+                    : 'bg-white hover:bg-slate-50';
+
+                return (
+                  <tr 
+                    key={step.id} 
+                    ref={el => { jsaRowRefs.current[step.id] = el; }}
+                    className={`${borderColor} ${bgColor} transition-all duration-500 border-b border-slate-200`}
+                  >
+                    <td className="border border-slate-300 p-2 text-center align-top font-bold text-slate-500">
+                      <div className="flex flex-col items-center gap-2">
+                        {index + 1}
+                        {anomaly && (
+                          <span className={`inline-block w-3 h-3 rounded-full shrink-0 ${
+                            anomaly.severity === 'critical' ? 'bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.6)]' : anomaly.severity === 'warning' ? 'bg-amber-400 animate-pulse' : 'bg-sky-400'
+                          }`} title="AI menemukan anomali pada baris ini" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="border border-slate-300 p-1 align-top">
+                      <textarea value={step.langkah} onChange={(e) => updateStepText(step.id, 'langkah', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-white/50 resize-y rounded" placeholder="Tuliskan langkah pekerjaan..." />
+                    </td>
+                    <td className="border border-slate-300 p-1 align-top">
+                      <select value={step.jenisBahaya} onChange={(e) => updateStepText(step.id, 'jenisBahaya', e.target.value)} className="w-full p-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-primary bg-white">
+                        {BAHAYA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </td>
+                    <td className="border border-slate-300 p-1 align-top">
+                      <textarea value={step.sebab} onChange={(e) => updateStepText(step.id, 'sebab', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-white/50 resize-y rounded" placeholder="Sebab / sumber bahaya..." />
+                    </td>
+                    <td className="border border-slate-300 p-1 align-top">
+                      <textarea value={step.potensiBahaya} onChange={(e) => updateStepText(step.id, 'potensiBahaya', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-white/50 resize-y rounded" placeholder="Potensi bahaya..." />
+                    </td>
+                    <td className="border border-slate-300 p-1 align-top">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Eliminasi:</label><textarea value={step.faktorPositif.eliminasi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'eliminasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Substitusi:</label><textarea value={step.faktorPositif.substitusi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'substitusi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Rekayasa Alat:</label><textarea value={step.faktorPositif.rekayasa || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'rekayasa', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Administrasi:</label><textarea value={step.faktorPositif.administrasi || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'administrasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">APD:</label><textarea value={step.faktorPositif.apd || ''} onChange={(e) => updateControlField(step.id, 'faktorPositif', 'apd', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      </div>
+                    </td>
+                    {/* Inherent Risk: Severity */}
+                    <td className="border border-slate-300 p-1 align-top bg-orange-50/50"><input type="number" min="1" max="5" value={step.inherentRisk.severity} onChange={(e) => updateInherentRisk(step.id, 'severity', e.target.value)} className="w-full p-1 text-center text-xs bg-white border border-slate-200 rounded" /></td>
+                    {/* Inherent Risk: Probability -> Intensitas, Kapabilitas, History, Total */}
+                    <td className="border border-slate-300 p-1 align-top bg-orange-50/30"><input type="number" min="1" max="5" value={step.inherentRisk.intensitas} onChange={(e) => updateInherentRisk(step.id, 'intensitas', e.target.value)} className="w-full p-1 text-center text-xs bg-white border border-slate-200 rounded" /></td>
+                    <td className="border border-slate-300 p-1 align-top bg-orange-50/30"><input type="number" min="1" max="5" value={step.inherentRisk.kapabilitas} onChange={(e) => updateInherentRisk(step.id, 'kapabilitas', e.target.value)} className="w-full p-1 text-center text-xs bg-white border border-slate-200 rounded" /></td>
+                    <td className="border border-slate-300 p-1 align-top bg-orange-50/30"><input type="number" min="1" max="5" value={step.inherentRisk.history} onChange={(e) => updateInherentRisk(step.id, 'history', e.target.value)} className="w-full p-1 text-center text-xs bg-white border border-slate-200 rounded" /></td>
+                    <td className="border border-slate-300 p-1 align-middle text-center font-bold bg-slate-100">{step.inherentRisk.total}</td>
+                    {/* Inherent Risk: Prob, RPN */}
+                    <td className="border border-slate-300 p-1 align-middle text-center font-bold bg-slate-100">{step.inherentRisk.probability}</td>
+                    <td className={`border border-slate-300 p-1 align-middle text-center font-black text-sm ${getRpnColor(step.inherentRisk.rpn)}`}>{step.inherentRisk.rpn}</td>
+                    
+                    {/* Mitigasi */}
+                    <td className="border border-slate-300 p-1 align-top">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Eliminasi:</label><textarea value={step.mitigasi.eliminasi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'eliminasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Substitusi:</label><textarea value={step.mitigasi.substitusi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'substitusi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Rekayasa Alat:</label><textarea value={step.mitigasi.rekayasa || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'rekayasa', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">Administrasi:</label><textarea value={step.mitigasi.administrasi || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'administrasi', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500">APD:</label><textarea value={step.mitigasi.apd || ''} onChange={(e) => updateControlField(step.id, 'mitigasi', 'apd', e.target.value)} className="w-full p-1 text-xs border border-slate-200 bg-white rounded min-h-[40px] resize-y focus:ring-1 focus:ring-primary" /></div>
+                      </div>
+                    </td>
+                    
+                    {/* Residual Risk: Severity */}
+                    <td className="border border-slate-300 p-1 align-top bg-emerald-50/50"><input type="number" min="1" max="5" value={step.residualRisk.severity} onChange={(e) => updateResidualRisk(step.id, 'severity', e.target.value)} className="w-full p-1 text-center text-xs bg-white border border-slate-200 rounded" /></td>
+                    {/* Residual Risk: Probability -> Intensitas, Kapabilitas, History, Total */}
+                    <td className="border border-slate-300 p-1 align-top bg-emerald-50/30"><input type="number" min="1" max="5" value={step.residualRisk.intensitas} onChange={(e) => updateResidualRisk(step.id, 'intensitas', e.target.value)} className="w-full p-1 text-center text-xs bg-white border border-slate-200 rounded" /></td>
+                    <td className="border border-slate-300 p-1 align-top bg-emerald-50/30"><input type="number" min="1" max="5" value={step.residualRisk.kapabilitas} onChange={(e) => updateResidualRisk(step.id, 'kapabilitas', e.target.value)} className="w-full p-1 text-center text-xs bg-white border border-slate-200 rounded" /></td>
+                    <td className="border border-slate-300 p-1 align-top bg-emerald-50/30"><input type="number" min="1" max="5" value={step.residualRisk.history} onChange={(e) => updateResidualRisk(step.id, 'history', e.target.value)} className="w-full p-1 text-center text-xs bg-white border border-slate-200 rounded" /></td>
+                    <td className="border border-slate-300 p-1 align-middle text-center font-bold bg-slate-100">{step.residualRisk.total}</td>
+                    {/* Residual Risk: Prob, RPN */}
+                    <td className="border border-slate-300 p-1 align-middle text-center font-bold bg-slate-100">{step.residualRisk.probability}</td>
+                    <td className={`border border-slate-300 p-1 align-middle text-center font-black text-sm ${getRpnColor(step.residualRisk.rpn)}`}>{step.residualRisk.rpn}</td>
+                    
+                    {/* Paraf / Verifikasi + Delete */}
+                    <td className="border border-slate-300 p-2 text-center align-middle"><button onClick={() => removeStep(step.id)} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Hapus langkah"><Trash2 className="w-4 h-4 mx-auto" /></button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end"><button onClick={addStep} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-100 flex gap-2 items-center"><Plus className="w-4 h-4" /> Tambah Langkah</button></div>
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end"><button onClick={addStep} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-100 flex gap-2 items-center shadow-sm"><Plus className="w-4 h-4" /> Tambah Langkah Baru</button></div>
 
       </div>
 

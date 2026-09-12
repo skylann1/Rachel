@@ -78,11 +78,14 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   const prosedurRevisions = prosedur?.content?.revisions || [];
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
-  // Normalize statuses for UI logic
-  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : isProcedurePending(prosedur?.status) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
+  // Normalize statuses for UI logic. Sisi vendor: tahap "Review Internal
+  // Vendor" juga dihitung 'Pending' — isProcedurePending/isJsaPending
+  // SENGAJA mengecualikannya (buat task list internal), tapi di layar vendor
+  // ini dokumennya memang sedang direview, jadi jangan tampil sebagai Draft.
+  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : (isProcedurePending(prosedur?.status) || prosedur?.status === PROCEDURE_STATUS.reviewInternalVendor) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
   const jsaStatus = jsa?.rejection_note ? 'Rejected'
     : jsa?.status === JSA_STATUS.approved ? 'Approved'
-    : isJsaPending(jsa?.status) ? 'Pending'
+    : (isJsaPending(jsa?.status) || jsa?.status === JSA_STATUS.reviewInternalVendor) ? 'Pending'
     : jsa ? 'Draft' : 'Draft';
 
   // PTW tahap proyek: hijau hanya kalau SEMUA tipe PTW yang diajukan sudah Aktif.
