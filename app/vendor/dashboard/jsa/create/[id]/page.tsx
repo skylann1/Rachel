@@ -82,9 +82,9 @@ export default function JSACreatePage() {
             const existing = (data.steps && data.steps[idx]) ? data.steps[idx] : null;
 
             if (existing) {
-              const hazards = typeof existing.hazards === 'string' ? JSON.parse(existing.hazards) : (existing.hazards || {});
-              const risks = typeof existing.risks === 'string' ? JSON.parse(existing.risks) : (existing.risks || {});
-              const controls = typeof existing.controls === 'string' ? JSON.parse(existing.controls) : (existing.controls || {});
+              const hazards = typeof existing.bahaya === 'string' ? JSON.parse(existing.bahaya) : (existing.bahaya || {});
+              const risks = typeof existing.risiko === 'string' ? JSON.parse(existing.risiko) : (existing.risiko || {});
+              const controls = typeof existing.tindakan === 'string' ? JSON.parse(existing.tindakan) : (existing.tindakan || {});
               
               const legacyBahaya = Array.isArray(hazards) ? hazards[0] : '';
               const legacyMitigasi = Array.isArray(controls) ? controls[0] : '';
@@ -128,9 +128,9 @@ export default function JSACreatePage() {
           });
         } else if (data && data.steps && data.steps.length > 0) {
           finalSteps = data.steps.map((step: any) => {
-            const hazards = typeof step.hazards === 'string' ? JSON.parse(step.hazards) : (step.hazards || {});
-            const risks = typeof step.risks === 'string' ? JSON.parse(step.risks) : (step.risks || {});
-            const controls = typeof step.controls === 'string' ? JSON.parse(step.controls) : (step.controls || {});
+            const hazards = typeof step.bahaya === 'string' ? JSON.parse(step.bahaya) : (step.bahaya || {});
+            const risks = typeof step.risiko === 'string' ? JSON.parse(step.risiko) : (step.risiko || {});
+            const controls = typeof step.tindakan === 'string' ? JSON.parse(step.tindakan) : (step.tindakan || {});
             
             const legacyBahaya = Array.isArray(hazards) ? hazards[0] : '';
             const legacyMitigasi = Array.isArray(controls) ? controls[0] : '';
