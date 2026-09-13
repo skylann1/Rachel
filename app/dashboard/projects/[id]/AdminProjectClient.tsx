@@ -16,6 +16,7 @@ import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
+import PtwSafetyChecklistForm from '@/components/ptw/PtwSafetyChecklistForm';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
@@ -1194,6 +1195,14 @@ export default function AdminProjectClient({
                                  <QrCode className="w-4 h-4" /> QR Check-in Lapangan
                                </button>
                              )}
+                             <PtwSafetyChecklistForm
+                               ptwId={row.id}
+                               ptwType={row.ptw_type || 'dingin'}
+                               validFrom={row.valid_from}
+                               validTo={row.valid_to}
+                               initialChecklist={row.safety_checklist || {}}
+                               editable={rowEffective === PTW_STATUS.aktif}
+                             />
                              <BlobProvider document={
                                <PtwPDF
                                  projectId={project.id}
