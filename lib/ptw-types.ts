@@ -581,9 +581,12 @@ export function ptwValidDayDates(validFrom?: string | null, validTo?: string | n
     }
   }
 
+  const toLocalIsoDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
   return Array.from({ length: count }, (_, i) => {
     const d = new Date(start);
     d.setDate(d.getDate() + i);
-    return d.toISOString().slice(0, 10);
+    return toLocalIsoDate(d);
   });
 }
