@@ -494,6 +494,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                                   workEnd={row.work_end}
                                   hotWorkTypes={row.hot_work_types || []}
                                   gasTestFrequency={row.gas_test_frequency || {}}
+                                  checklistData={row.safety_checklist || {}}
                                   jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                   siblings={ptws}
                                   signatories={ptwSignatories?.[row.id]}
