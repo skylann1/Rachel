@@ -3,11 +3,12 @@
 import React, { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText, Sparkles, Loader2, Zap, Eye, ArrowDown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
+import { HseAssistantPanel } from '@/components/ai/HseAssistantPanel';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
@@ -334,139 +335,26 @@ export default function JSACreatePage() {
 
       {/* --- AI Score Dashboard + Anomaly Panel --- */}
       {hseResult && (
-        <div className="bg-white rounded-3xl border border-violet-200 shadow-xl overflow-hidden ring-4 ring-violet-50 mb-6">
-          <div className="bg-gradient-to-r from-slate-900 to-violet-900 px-4 sm:px-6 py-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-              {/* Score Ring */}
-              <div className="relative shrink-0">
-                <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
-                  <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
-                  <circle cx="48" cy="48" r="40" fill="none"
-                    stroke={hseResult.score >= 80 ? '#34d399' : hseResult.score >= 50 ? '#fbbf24' : '#f87171'}
-                    strokeWidth="8" strokeLinecap="round"
-                    strokeDasharray={`${(hseResult.score / 100) * 251.2} 251.2`}
-                    style={{ transition: 'stroke-dasharray 1s ease-out' }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-black text-white">{hseResult.score}</span>
-                  <span className="text-[9px] font-bold text-white/60 uppercase tracking-wider">/ 100</span>
-                </div>
-              </div>
-              {/* Summary */}
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-violet-300" />
-                  <h4 className="text-sm font-bold text-white/80 uppercase tracking-wider">Evaluasi AI — Skor Kepatuhan K3</h4>
-                </div>
-                <p className="text-sm text-white/90 leading-relaxed">{hseResult.summary}</p>
-                <div className="flex items-center gap-4 mt-3 text-xs font-bold">
-                  {hseResult.anomalies.filter(a => a.severity === 'critical').length > 0 && (
-                    <span className="flex items-center gap-1.5 text-rose-300">
-                      <span className="w-2 h-2 rounded-full bg-rose-400" />
-                      {hseResult.anomalies.filter(a => a.severity === 'critical').length} Kritis
-                    </span>
-                  )}
-                  {hseResult.anomalies.filter(a => a.severity === 'warning').length > 0 && (
-                    <span className="flex items-center gap-1.5 text-amber-300">
-                      <span className="w-2 h-2 rounded-full bg-amber-400" />
-                      {hseResult.anomalies.filter(a => a.severity === 'warning').length} Peringatan
-                    </span>
-                  )}
-                  {hseResult.anomalies.filter(a => a.severity === 'info').length > 0 && (
-                    <span className="flex items-center gap-1.5 text-sky-300">
-                      <span className="w-2 h-2 rounded-full bg-sky-400" />
-                      {hseResult.anomalies.filter(a => a.severity === 'info').length} Info
-                    </span>
-                  )}
-                  {hseResult.anomalies.length === 0 && (
-                    <span className="flex items-center gap-1.5 text-emerald-300">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Tidak ada anomali ditemukan
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Anomaly Cards */}
-          {hseResult.anomalies.length > 0 && (
-            <div className="px-4 sm:px-6 py-5 space-y-3 bg-slate-50">
-              <div className="flex items-center gap-2 mb-1">
-                <Zap className="w-4 h-4 text-violet-600" />
-                <p className="text-sm font-bold text-slate-800">{hseResult.anomalies.length} temuan AI — klik "Terapkan" untuk memperbaiki form JSA</p>
-              </div>
-              {hseResult.anomalies.map(a => {
-                const step = jsaSteps.find(s => s.id === a.id);
-                const severityConfig = {
-                  critical: { border: 'border-l-rose-500', bg: 'bg-rose-50', badge: 'bg-rose-100 text-rose-700 border-rose-200', icon: '🔴', label: 'KRITIS' },
-                  warning: { border: 'border-l-amber-500', bg: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700 border-amber-200', icon: '🟡', label: 'PERINGATAN' },
-                  info: { border: 'border-l-sky-500', bg: 'bg-sky-50', badge: 'bg-sky-100 text-sky-700 border-sky-200', icon: '🔵', label: 'INFO' },
-                }[a.severity];
-                return (
-                  <div key={a.id} className={`bg-white border border-slate-200 ${severityConfig.border} border-l-4 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow`}>
-                    <div className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-2">
-                            <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${severityConfig.badge}`}>
-                              {severityConfig.icon} {severityConfig.label}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded">
-                              {a.category}
-                            </span>
-                          </div>
-                          <p className="text-xs font-bold text-slate-800 mb-1">
-                            Langkah {jsaSteps.findIndex(s => s.id === a.id) + 1}{step?.langkah ? ` — ${step.langkah}` : ''}
-                          </p>
-                          <p className="text-sm text-slate-600 leading-relaxed">{a.auto_comment}</p>
-                        </div>
-                        <div className="shrink-0 flex flex-col gap-2">
-                          <button
-                            onClick={() => scrollToStep(a.id)}
-                            className="flex items-center gap-1.5 justify-center px-3 py-1.5 text-[11px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors"
-                            title="Scroll ke baris JSA ini"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            Lihat Baris <ArrowDown className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                      {/* Suggestions */}
-                      {(a.suggested_hazard || a.suggested_mitigation) && (
-                        <div className={`mt-3 p-3 rounded-lg ${severityConfig.bg} space-y-3`}>
-                          <div className="flex items-center justify-between gap-4">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                              <Sparkles className="w-3 h-3" /> Saran Perbaikan AI
-                            </p>
-                            <button 
-                              onClick={() => applyAISuggestion(a.id, a.suggested_hazard, a.suggested_mitigation)}
-                              className="px-3 py-1 text-[10px] font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-full shadow-sm flex items-center gap-1"
-                            >
-                              Terapkan Saran
-                            </button>
-                          </div>
-                          
-                          {a.suggested_hazard && (
-                            <div className="flex items-start gap-2">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0 mt-0.5 w-16">Bahaya:</span>
-                              <p className="text-xs text-slate-700 flex-1">{a.suggested_hazard}</p>
-                            </div>
-                          )}
-                          {a.suggested_mitigation && (
-                            <div className="flex items-start gap-2">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0 mt-0.5 w-16">Mitigasi:</span>
-                              <p className="text-xs text-slate-700 flex-1">{a.suggested_mitigation}</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        <div className="mb-6">
+          <HseAssistantPanel
+            score={hseResult.score}
+            summary={hseResult.summary}
+            anomalies={hseResult.anomalies}
+            getStepLabel={(id) => {
+              const idx = jsaSteps.findIndex(s => s.id === id);
+              const step = jsaSteps.find(s => s.id === id);
+              return `Langkah ${idx + 1}${step?.langkah ? ` — ${step.langkah}` : ''}`;
+            }}
+            onLocateStep={scrollToStep}
+            renderSuggestionAction={(a) => (
+              <button
+                onClick={() => applyAISuggestion(a.id, a.suggested_hazard, a.suggested_mitigation)}
+                className="px-3 py-1 text-[10px] font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-full shadow-sm flex items-center gap-1"
+              >
+                Terapkan Saran
+              </button>
+            )}
+          />
         </div>
       )}
 
