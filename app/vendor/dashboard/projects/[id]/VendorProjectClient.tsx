@@ -13,6 +13,7 @@ import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
+import PtwSafetyChecklistForm from '@/components/ptw/PtwSafetyChecklistForm';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
 import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
@@ -459,6 +460,15 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                               <QrCode className="w-4 h-4" /> QR Check-in Lapangan
                             </button>
                           )}
+
+                          <PtwSafetyChecklistForm
+                            ptwId={row.id}
+                            ptwType={row.ptw_type || 'dingin'}
+                            validFrom={row.valid_from}
+                            validTo={row.valid_to}
+                            initialChecklist={row.safety_checklist || {}}
+                            editable={rowStatus === 'Approved'}
+                          />
 
                           <div className="flex gap-3">
                             <div className="flex-1">
