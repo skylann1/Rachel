@@ -44,7 +44,7 @@ export default function PtwSafetyChecklistForm({
   const toggleDay = (key: string, dayIndex: number, value: boolean) => {
     if (!editable) return;
     setChecklist(prev => {
-      const current = entryFor(key);
+      const current = prev[key] || { days: Array(dayDates.length).fill(null), keterangan: '' };
       const days = [...current.days];
       days[dayIndex] = days[dayIndex] === value ? null : value;
       return { ...prev, [key]: { ...current, days } };
@@ -54,7 +54,7 @@ export default function PtwSafetyChecklistForm({
   const setKeterangan = (key: string, value: string) => {
     if (!editable) return;
     setChecklist(prev => {
-      const current = entryFor(key);
+      const current = prev[key] || { days: Array(dayDates.length).fill(null), keterangan: '' };
       return { ...prev, [key]: { ...current, keterangan: value } };
     });
   };
