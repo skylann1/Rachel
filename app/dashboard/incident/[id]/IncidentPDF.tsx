@@ -129,9 +129,34 @@ interface IncidentPDFProps {
     tindakanPencegahan: string;
     status: string;
   };
+  incident?: {
+    vendorName: string;
+    projectName: string;
+    type: string;
+    incident_date: string;
+    incident_time: string;
+    location: string;
+    chronology: string;
+    immediateAction?: string | null;
+    reporterName?: string | null;
+    investigatorName?: string | null;
+  } | null;
 }
 
-export default function IncidentPDF({ incidentId, investigation }: IncidentPDFProps) {
+function formatIncidentDate(date?: string): string {
+  if (!date) return '—';
+  const parsed = new Date(`${date}T00:00:00`);
+  if (isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function formatIncidentTime(time?: string): string {
+  if (!time) return '—';
+  const hhmm = time.slice(0, 5);
+  return hhmm.length === 5 ? `${hhmm} WIB` : time;
+}
+
+export default function IncidentPDF({ incidentId, investigation, incident }: IncidentPDFProps) {
   const currentDate = new Date().toLocaleDateString('id-ID');
 
   return (
@@ -167,22 +192,34 @@ export default function IncidentPDF({ incidentId, investigation }: IncidentPDFPr
         <Text style={styles.sectionTitle}>BAGIAN A: INFORMASI AWAL KEJADIAN</Text>
         <View style={styles.rowGroup}>
           <Text style={styles.label}>Vendor Pelapor</Text>
-          <Text style={styles.value}>: PT. Vendor Konstruksi</Text>
+          <Text style={styles.value}>: {incident?.vendorName || '—'}</Text>
+        </View>
+        <View style={styles.rowGroup}>
+          <Text style={styles.label}>Proyek Terkait</Text>
+          <Text style={styles.value}>: {incident?.projectName || '—'}</Text>
         </View>
         <View style={styles.rowGroup}>
           <Text style={styles.label}>Klasifikasi Insiden</Text>
-          <Text style={styles.value}>: Near Miss (Hampir Celaka)</Text>
+          <Text style={styles.value}>: {incident?.type || '—'}</Text>
         </View>
         <View style={styles.rowGroup}>
           <Text style={styles.label}>Waktu & Lokasi</Text>
-          <Text style={styles.value}>: 28 Juni 2026 10:15 WIB | Area Boiler 1</Text>
+          <Text style={styles.value}>: {formatIncidentDate(incident?.incident_date)} {formatIncidentTime(incident?.incident_time)} | {incident?.location || '—'}</Text>
         </View>
         <View style={{ marginTop: 10, marginBottom: 5 }}>
           <Text style={{ fontWeight: 'bold', marginBottom: 2 }}>Kronologi Awal:</Text>
           <View style={styles.multilineBox}>
-            <Text>"Pekerja sedang berjalan di area Boiler 1 dan nyaris tertimpa pipa scaffolding yang tergelincir dari lantai 2. Tidak ada korban jiwa maupun luka, namun pekerja kaget dan pekerjaan langsung dihentikan."</Text>
+            <Text>{incident?.chronology || '(Belum diisi)'}</Text>
           </View>
         </View>
+        {incident?.immediateAction && (
+          <View style={{ marginBottom: 5 }}>
+            <Text style={{ fontWeight: 'bold', marginBottom: 2 }}>Tindakan Langsung (Immediate Action):</Text>
+            <View style={styles.multilineBox}>
+              <Text>{incident.immediateAction}</Text>
+            </View>
+          </View>
+        )}
 
         {/* Bagian B: Hasil Investigasi (RCA) */}
         <Text style={styles.sectionTitle}>BAGIAN B: HASIL INVESTIGASI (HSE PGN)</Text>
@@ -212,12 +249,12 @@ export default function IncidentPDF({ incidentId, investigation }: IncidentPDFPr
         <View style={styles.signSection}>
           <View style={styles.signBox}>
             <Text style={styles.signTitle}>Dilaporkan Oleh,</Text>
-            <Text style={styles.signName}>SPV Vendor</Text>
-            <Text style={styles.signRole}>PT. Vendor Konstruksi</Text>
+            <Text style={styles.signName}>{incident?.reporterName || '__________________'}</Text>
+            <Text style={styles.signRole}>{incident?.vendorName || 'Vendor'}</Text>
           </View>
           <View style={styles.signBox}>
             <Text style={styles.signTitle}>Diinvestigasi Oleh,</Text>
-            <Text style={styles.signName}>__________________</Text>
+            <Text style={styles.signName}>{incident?.investigatorName || '__________________'}</Text>
             <Text style={styles.signRole}>HSE Officer PGN</Text>
           </View>
           <View style={styles.signBox}>
