@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Font, Image } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 import {
   PTW_TYPES, APD_ITEMS, PtwType, PTW_GAS_TEST_TYPES, PTW_GAS_FORM_TYPES, GAS_TEST_STANDARDS,
   PtwGasTestEntry, PtwGasTestFrequency, HOT_WORK_JOB_TYPES,
@@ -7,15 +7,6 @@ import {
   flattenSafetyChecklist, PtwSafetyChecklistData,
 } from '@/lib/ptw-types';
 import type { PtwSignatories, PtwSignatory } from '@/lib/ptw-signatories';
-
-// Register fonts
-Font.register({
-  family: 'Helvetica',
-  fonts: [
-    { src: 'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-regular-webfont.ttf' },
-    { src: 'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 'bold' }
-  ]
-});
 
 const B = '#000';
 // Form asli hanya mengarsir blok Verifikasi dan tiga kotak di bagian bawah;
@@ -283,7 +274,7 @@ export default function PtwPDF({
         </View>
         <View style={[styles.signNameRow, { height: 10 }]}>
           <Text style={[styles.signNameLabel, ink as any]}>Tanda Tangan</Text>
-          <Text style={styles.signNameVal}></Text>
+          <Text style={[styles.signNameVal, { textAlign: 'center', fontWeight: 'bold', fontSize: fs }]}>APPROVED</Text>
         </View>
         <View style={styles.signNameRow}>
           <Text style={[styles.signNameLabel, ink as any]}>Tanggal</Text>
@@ -620,11 +611,11 @@ export default function PtwPDF({
                    <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
+                   <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
-                   <View style={styles.tableCell}><Text></Text></View>
-                   <View style={styles.tableCell}><Text></Text></View>
+                   <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                 </View>
 
               </View>
@@ -653,7 +644,7 @@ export default function PtwPDF({
                          <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text></Text></View>
                          <View style={styles.tableCell}><Text></Text></View>
                          <View style={styles.tableCell}><Text></Text></View>
-                         <View style={styles.tableCell}><Text></Text></View>
+                         <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                       </View>
                   </View>
                 </View>
@@ -716,7 +707,7 @@ export default function PtwPDF({
                 <Text style={[styles.gasLogCell, { width: '12%' }]}>{row.combustibleHasil || '-'} / {row.combustibleSesuai ? 'Sesuai' : 'Tidak Sesuai'}</Text>
                 <Text style={[styles.gasLogCell, { width: '17%' }]}>{row.keterangan || '-'}</Text>
                 <Text style={[styles.gasLogCell, { width: '15%' }]}>{row.namaPelaksana || '-'}</Text>
-                <Text style={[styles.gasLogCell, { width: '17%', borderRightWidth: 0 }]}></Text>
+                <Text style={[styles.gasLogCell, { width: '17%', borderRightWidth: 0, textAlign: 'center', fontWeight: 'bold', fontSize: 4 }]}>APPROVED</Text>
               </View>
             ))
           )}
