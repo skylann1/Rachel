@@ -9,6 +9,7 @@ import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
 import { HseAssistantPanel } from '@/components/ai/HseAssistantPanel';
+import { aggregatePointNeeds, kebutuhanSummary, isKebutuhanEmpty, StepKebutuhan } from '@/lib/procedure-kebutuhan';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
@@ -26,6 +27,7 @@ export interface ControlDetail {
 export interface JsaStepData {
   id: number;
   langkah: string;
+  kebutuhan?: StepKebutuhan;
   jenisBahaya: string;
   sebab: string;
   potensiBahaya: string;
@@ -47,6 +49,7 @@ export default function JSACreatePage() {
     { id: 1, langkah: '', jenisBahaya: 'Fisika', sebab: '', potensiBahaya: '', faktorPositif: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, inherentRisk: {...defaultRisk}, mitigasi: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, residualRisk: {...defaultRisk} }
   ]);
   const [procSteps, setProcSteps] = useState<string[]>([]);
+  const [projectInfo, setProjectInfo] = useState<{ name: string; contract_number: string | null; location: string | null; companyName: string | null } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [docId, setDocId] = useState<string | null>(null);
 
@@ -101,9 +104,18 @@ export default function JSACreatePage() {
                 };
               };
 
+              let storedKebutuhan: StepKebutuhan | null = existing.kebutuhan as StepKebutuhan | null;
+              if (typeof storedKebutuhan === 'string') {
+                try { storedKebutuhan = JSON.parse(storedKebutuhan) as StepKebutuhan; } catch { storedKebutuhan = null; }
+              }
+              if (storedKebutuhan && typeof storedKebutuhan !== 'object') storedKebutuhan = null;
+
               return {
                 id: existing.id || Date.now() + Math.random(),
                 langkah: stepDesc, // Always override with SOP step
+                kebutuhan: isKebutuhanEmpty(storedKebutuhan ?? undefined)
+                  ? aggregatePointNeeds(data.procedureSections?.[idx]?.points || [])
+                  : storedKebutuhan,
                 jenisBahaya: hazards.jenisBahaya || (legacyBahaya ? 'Fisika' : 'Fisika'),
                 sebab: hazards.sebab || '',
                 potensiBahaya: hazards.potensiBahaya || legacyBahaya || '',
@@ -117,6 +129,7 @@ export default function JSACreatePage() {
             return {
               id: Date.now() + idx,
               langkah: stepDesc,
+              kebutuhan: aggregatePointNeeds(data.procedureSections?.[idx]?.points || []),
               jenisBahaya: 'Fisika',
               sebab: '',
               potensiBahaya: '',
@@ -146,10 +159,17 @@ export default function JSACreatePage() {
                 apd: val.apd || ''
               };
             };
-            
+
+            let storedKebutuhan: StepKebutuhan | null = step.kebutuhan as StepKebutuhan | null;
+            if (typeof storedKebutuhan === 'string') {
+              try { storedKebutuhan = JSON.parse(storedKebutuhan) as StepKebutuhan; } catch { storedKebutuhan = null; }
+            }
+            if (storedKebutuhan && typeof storedKebutuhan !== 'object') storedKebutuhan = null;
+
             return {
               id: step.id || Date.now() + Math.random(),
               langkah: step.description || '',
+              kebutuhan: isKebutuhanEmpty(storedKebutuhan ?? undefined) ? undefined : storedKebutuhan ?? undefined,
               jenisBahaya: hazards.jenisBahaya || (legacyBahaya ? 'Fisika' : 'Fisika'),
               sebab: hazards.sebab || '',
               potensiBahaya: hazards.potensiBahaya || legacyBahaya || '',
@@ -165,6 +185,9 @@ export default function JSACreatePage() {
         
         if (data && data.procedureSteps) {
           setProcSteps(data.procedureSteps);
+        }
+        if (data?.project) {
+          setProjectInfo(data.project);
         }
       }
     }
@@ -446,6 +469,12 @@ export default function JSACreatePage() {
                     </td>
                     <td className="border border-slate-300 p-1 align-top">
                       <textarea value={step.langkah} onChange={(e) => updateStepText(step.id, 'langkah', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-white/50 resize-y rounded" placeholder="Tuliskan langkah pekerjaan..." />
+                      {step.kebutuhan && !isKebutuhanEmpty(step.kebutuhan) && (
+                        <div className="mt-1 px-2 pb-1">
+                          <p className="text-[9px] font-bold text-primary uppercase tracking-wide mb-1">Kebutuhan dari Prosedur</p>
+                          <p className="text-[10px] text-slate-600 leading-relaxed whitespace-pre-line">{kebutuhanSummary(step.kebutuhan)?.split(' · ').map((chunk) => `• ${chunk}`).join('\n')}</p>
+                        </div>
+                      )}
                     </td>
                     <td className="border border-slate-300 p-1 align-top">
                       <select value={step.jenisBahaya} onChange={(e) => updateStepText(step.id, 'jenisBahaya', e.target.value)} className="w-full p-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-primary bg-white">
@@ -517,7 +546,7 @@ export default function JSACreatePage() {
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
         <h2 className="font-bold text-slate-800 mb-4">Preview PDF Analisa Keselamatan Kerja</h2>
         <div className="w-full bg-slate-500 rounded-xl overflow-hidden" style={{ height: '700px' }}>
-          <PDFViewer width="100%" height="100%" className="border-none"><JsaPDF projectId={projectId as string} steps={jsaSteps as any} /></PDFViewer>
+          <PDFViewer width="100%" height="100%" className="border-none"><JsaPDF projectId={projectId as string} steps={jsaSteps as any} projectInfo={projectInfo as any} /></PDFViewer>
         </div>
       </div>
     </div>

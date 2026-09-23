@@ -4,12 +4,20 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { 
   FileText, ArrowRight, ShieldCheck, Hammer, 
-  UploadCloud, CheckCircle2, X, HardHat, Info, Download, Plus, Trash2, GripVertical
+  UploadCloud, CheckCircle2, X, HardHat, Info, Download, Plus, Trash2, GripVertical, Boxes
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
 import { saveProsedur, getProsedur } from './actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
+import { getWorkers, WorkerItem } from '@/app/vendor/dashboard/pekerja/actions';
+import { getEquipment, EquipmentItem } from '@/app/vendor/dashboard/peralatan/actions';
+import { getMaterials, MaterialItem } from '@/app/vendor/dashboard/material/actions';
+import { APD_ITEMS, APD_CATEGORY_LABELS } from '@/lib/ptw-types';
+import {
+  normalizeTahapanPekerjaan, emptyKebutuhan,
+  TahapanSection, StepKebutuhan,
+} from '@/lib/procedure-kebutuhan';
 
 // Mock list APD
 const apdList = [
@@ -37,6 +45,7 @@ export default function ProsedurKerjaForm() {
   const [docNo, setDocNo] = useState('SOP-K3-001/2026');
   const [contractNo, setContractNo] = useState('006600.PMB-BP/LG.01/OP-CKR/PGAS/V/2026'); 
   const [submissionDate, setSubmissionDate] = useState('2026-06-29');
+  const [projectName, setProjectName] = useState('Perbaikan Pos Security Stasiun Muara Bekasi');
   const [vendorSignature, setVendorSignature] = useState<string | null>(null);
   const [revisions, setRevisions] = useState<any[]>([]);
   
@@ -84,9 +93,10 @@ export default function ProsedurKerjaForm() {
           setVendorSignature(content.vendorSignature || null);
           setRevisions(content.revisions || []);
           if (content.perlengkapanLainnya) setPerlengkapanLainnya(content.perlengkapanLainnya);
-          if (content.tahapanPekerjaan) setTahapanPekerjaan(content.tahapanPekerjaan);
+          if (content.tahapanPekerjaan) setTahapanPekerjaan(normalizeTahapanPekerjaan(content.tahapanPekerjaan));
           if (content.penyelesaianAkhir) setPenyelesaianAkhir(content.penyelesaianAkhir);
         }
+        if (data.project?.name) setProjectName(data.project.name);
       }
     }
     loadData();
@@ -97,7 +107,7 @@ export default function ProsedurKerjaForm() {
   const [perlengkapanInput, setPerlengkapanInput] = useState('');
 
   // Section 6
-  const [tahapanPekerjaan, setTahapanPekerjaan] = useState<{title: string, points: string[]}[]>([
+  const [tahapanPekerjaan, setTahapanPekerjaan] = useState<TahapanSection[]>(normalizeTahapanPekerjaan([
     {
       title: 'Persiapan',
       points: [
@@ -117,7 +127,7 @@ export default function ProsedurKerjaForm() {
         'Membersihkan area kerja.'
       ]
     }
-  ]);
+  ]));
 
   // Section 7
   const [penyelesaianAkhir, setPenyelesaianAkhir] = useState<string[]>([
@@ -129,6 +139,23 @@ export default function ProsedurKerjaForm() {
     'Melaksanakan demobilisasi peralatan dan personel dari area kerja.'
   ]);
   const [penyelesaianInput, setPenyelesaianInput] = useState('');
+
+  // Master data untuk picker kebutuhan per sub-langkah (org-scoped via action).
+  const [rosterPekerja, setRosterPekerja] = useState<WorkerItem[]>([]);
+  const [rosterPeralatan, setRosterPeralatan] = useState<EquipmentItem[]>([]);
+  const [rosterMaterial, setRosterMaterial] = useState<MaterialItem[]>([]);
+  // Kebutuhan panel yang sedang terbuka, kunci "{sectionIndex}-{pointIndex}".
+  const [openKebutuhan, setOpenKebutuhan] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([getWorkers(), getEquipment(), getMaterials()])
+      .then(([workers, equipment, materials]) => {
+        setRosterPekerja(workers);
+        setRosterPeralatan(equipment);
+        setRosterMaterial(materials);
+      })
+      .catch(() => {});
+  }, []);
 
 
   // --- Handlers ---
@@ -183,13 +210,13 @@ export default function ProsedurKerjaForm() {
 
   const addTahapanPoint = (sectionIndex: number) => {
     const newTahapan = [...tahapanPekerjaan];
-    newTahapan[sectionIndex].points.push('Langkah baru...');
+    newTahapan[sectionIndex].points.push({ text: 'Langkah baru...', kebutuhan: emptyKebutuhan() });
     setTahapanPekerjaan(newTahapan);
   };
 
   const updateTahapanPoint = (sectionIndex: number, pointIndex: number, newText: string) => {
     const newTahapan = [...tahapanPekerjaan];
-    newTahapan[sectionIndex].points[pointIndex] = newText;
+    newTahapan[sectionIndex].points[pointIndex].text = newText;
     setTahapanPekerjaan(newTahapan);
   };
 
@@ -198,6 +225,68 @@ export default function ProsedurKerjaForm() {
     newTahapan[sectionIndex].points.splice(pointIndex, 1);
     setTahapanPekerjaan(newTahapan);
   };
+
+  // Kebutuhan per sub-langkah — mutate satu point lalu set ulang seluruh state.
+  const updatePointKebutuhan = (
+    sectionIndex: number,
+    pointIndex: number,
+    updater: (k: StepKebutuhan) => StepKebutuhan
+  ) => {
+    setTahapanPekerjaan(prev =>
+      prev.map((section, sIdx) =>
+        sIdx !== sectionIndex
+          ? section
+          : {
+              ...section,
+              points: section.points.map((p, pIdx) =>
+                pIdx !== pointIndex
+                  ? p
+                  : { ...p, kebutuhan: updater(p.kebutuhan || emptyKebutuhan()) }
+              ),
+            }
+      )
+    );
+  };
+
+  const toggleKebutuhanWorker = (sIdx: number, pIdx: number, worker: WorkerItem) =>
+    updatePointKebutuhan(sIdx, pIdx, (k) => {
+      const exists = k.workers.some(w => w.id === worker.id);
+      return {
+        ...k,
+        workers: exists
+          ? k.workers.filter(w => w.id !== worker.id)
+          : [...k.workers, { id: worker.id, label: worker.full_name }],
+      };
+    });
+
+  const toggleKebutuhanEquipment = (sIdx: number, pIdx: number, equipment: EquipmentItem) =>
+    updatePointKebutuhan(sIdx, pIdx, (k) => {
+      const exists = k.equipment.some(e => e.id === equipment.id);
+      return {
+        ...k,
+        equipment: exists
+          ? k.equipment.filter(e => e.id !== equipment.id)
+          : [...k.equipment, { id: equipment.id, label: equipment.name }],
+      };
+    });
+
+  const toggleKebutuhanMaterial = (sIdx: number, pIdx: number, material: MaterialItem) =>
+    updatePointKebutuhan(sIdx, pIdx, (k) => {
+      const exists = k.materials.some(m => m.id === material.id);
+      return {
+        ...k,
+        materials: exists
+          ? k.materials.filter(m => m.id !== material.id)
+          : [...k.materials, { id: material.id, label: material.name }],
+      };
+    });
+
+  const toggleKebutuhanApd = (sIdx: number, pIdx: number, category: string, item: string) =>
+    updatePointKebutuhan(sIdx, pIdx, (k) => {
+      const list = k.apd[category] || [];
+      const next = list.includes(item) ? list.filter(x => x !== item) : [...list, item];
+      return { ...k, apd: { ...k.apd, [category]: next } };
+    });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,7 +323,7 @@ export default function ProsedurKerjaForm() {
   };
 
   const pdfData = {
-    projectName: 'Perbaikan Pos Security Stasiun Muara Bekasi', 
+    projectName,
     docNo,
     contractNo,
     submissionDate,
@@ -260,7 +349,7 @@ export default function ProsedurKerjaForm() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Formulir Prosedur Kerja (Dinamis)</h1>
-            <p className="text-sm font-medium text-slate-500">Proyek: Perbaikan Pos Security Stasiun Muara Bekasi</p>
+            <p className="text-sm font-medium text-slate-500">Proyek: {projectName}</p>
           </div>
         </div>
       </div>
@@ -440,20 +529,134 @@ export default function ProsedurKerjaForm() {
                     </div>
 
                     <div className="space-y-2 pl-4 border-l-2 border-slate-100 ml-4">
-                      {section.points.map((point, pIdx) => (
-                        <div key={pIdx} className="flex items-start gap-2">
-                          <GripVertical className="w-4 h-4 text-slate-300 mt-2 cursor-grab" />
-                          <textarea 
-                            value={point}
-                            onChange={(e) => updateTahapanPoint(sIdx, pIdx, e.target.value)}
-                            rows={2}
-                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-primary outline-none text-sm resize-y"
-                          />
-                          <button type="button" onClick={() => removeTahapanPoint(sIdx, pIdx)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg mt-1">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
+                      {section.points.map((point, pIdx) => {
+                        const kebutuhanKey = `${sIdx}-${pIdx}`;
+                        const kebutuhanOpen = openKebutuhan === kebutuhanKey;
+                        const pointKebutuhan = point.kebutuhan;
+                        const kebutuhanCount =
+                          (pointKebutuhan?.workers.length || 0) +
+                          (pointKebutuhan?.equipment.length || 0) +
+                          (pointKebutuhan?.materials.length || 0) +
+                          Object.values(pointKebutuhan?.apd || {}).reduce((n, list) => n + list.length, 0);
+                        return (
+                          <div key={pIdx}>
+                            <div className="flex items-start gap-2">
+                              <GripVertical className="w-4 h-4 text-slate-300 mt-2 cursor-grab shrink-0" />
+                              <textarea
+                                value={point.text}
+                                onChange={(e) => updateTahapanPoint(sIdx, pIdx, e.target.value)}
+                                rows={2}
+                                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-primary outline-none text-sm resize-y"
+                              />
+                              <div className="flex flex-col gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenKebutuhan(kebutuhanOpen ? null : kebutuhanKey)}
+                                  title="Kebutuhan sumber daya sub-langkah ini"
+                                  className={`relative p-2 rounded-lg border transition-colors ${kebutuhanOpen || kebutuhanCount > 0 ? 'bg-primary text-white border-primary' : 'text-slate-400 hover:text-primary border-slate-200 hover:border-primary bg-white'}`}
+                                >
+                                  <Boxes className="w-4 h-4" />
+                                  {kebutuhanCount > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
+                                      {kebutuhanCount}
+                                    </span>
+                                  )}
+                                </button>
+                                <button type="button" onClick={() => removeTahapanPoint(sIdx, pIdx)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {kebutuhanOpen && (
+                              <div className="ml-9 mt-2 w-[calc(100%-2rem)] border border-slate-200 rounded-lg bg-slate-50 p-3 space-y-3">
+                                <p className="text-[11px] font-bold text-slate-700">
+                                  Kebutuhan — pekerja, peralatan, material & APD (dibawa ke JSA & prefill PTW)
+                                </p>
+
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Pekerja</p>
+                                  {rosterPekerja.length === 0 ? (
+                                    <p className="text-[11px] text-slate-400 italic">Belum ada data pekerja. Tambahkan di menu Pekerja.</p>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {rosterPekerja.map(w => {
+                                        const on = pointKebutuhan?.workers.some(x => x.id === w.id);
+                                        return (
+                                          <button key={w.id} type="button" onClick={() => toggleKebutuhanWorker(sIdx, pIdx, w)}
+                                            className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary'}`}>
+                                            {w.full_name}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Peralatan</p>
+                                  {rosterPeralatan.length === 0 ? (
+                                    <p className="text-[11px] text-slate-400 italic">Belum ada data peralatan. Tambahkan di menu Peralatan.</p>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {rosterPeralatan.map(equipment => {
+                                        const on = pointKebutuhan?.equipment.some(e => e.id === equipment.id);
+                                        return (
+                                          <button key={equipment.id} type="button" onClick={() => toggleKebutuhanEquipment(sIdx, pIdx, equipment)}
+                                            className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary'}`}>
+                                            {equipment.name}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Material</p>
+                                  {rosterMaterial.length === 0 ? (
+                                    <p className="text-[11px] text-slate-400 italic">Belum ada data material. Tambahkan di menu Material.</p>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {rosterMaterial.map(material => {
+                                        const on = pointKebutuhan?.materials.some(m => m.id === material.id);
+                                        return (
+                                          <button key={material.id} type="button" onClick={() => toggleKebutuhanMaterial(sIdx, pIdx, material)}
+                                            className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary'}`}>
+                                            {material.name}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">APD</p>
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {Object.entries(APD_ITEMS).map(([cat, items]) => (
+                                      <div key={cat}>
+                                        <p className="text-[11px] text-slate-500 mb-1">{APD_CATEGORY_LABELS[cat]}</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {items.map(item => {
+                                            const on = pointKebutuhan?.apd[cat]?.includes(item);
+                                            return (
+                                              <button key={item} type="button" onClick={() => toggleKebutuhanApd(sIdx, pIdx, cat, item)}
+                                                className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary'}`}>
+                                                {item}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                       <button type="button" onClick={() => addTahapanPoint(sIdx)} className="flex items-center gap-1 text-xs font-bold text-primary hover:text-primary/80 mt-2 ml-6">
                         <Plus className="w-3 h-3" /> Tambah Poin
                       </button>

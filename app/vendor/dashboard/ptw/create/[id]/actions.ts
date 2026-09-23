@@ -7,6 +7,7 @@ import { PTW_STATUS } from "@/lib/ptw-status";
 import type { PtwFormDetails } from "@/lib/ptw-types";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { resetStageAssignments } from "@/lib/stage-assignments";
+import { aggregateStepNeeds, StepKebutuhan } from "@/lib/procedure-kebutuhan";
 
 /** Tanggal proyek, dipakai sebagai nilai awal masa berlaku PTW di form. */
 export async function getProjectPeriod(projectId: string) {
@@ -17,6 +18,41 @@ export async function getProjectPeriod(projectId: string) {
     .eq('id', projectId)
     .maybeSingle();
   return data;
+}
+
+/**
+ * Prefill PTW dari JSA yang sudah disetujui: union kebutuhan semua langkah JSA
+ * (pekerja, peralatan, APD). Material sengaja tidak diambil — PTW belum punya
+ * slot material (lihat spec prosedur-kebutuhan-ptw-prefill-design). Query
+ * memakai id JSA dari kolom status, jadi tidak terpengaruh stage_assignments.
+ */
+export async function getJsaPrefillNeeds(projectId: string): Promise<StepKebutuhan> {
+  const supabase = await createClient();
+  const { data: jsa } = await supabase
+    .from('jsa')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('status', APPROVED_JSA)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!jsa?.id) return { workers: [], equipment: [], materials: [], apd: {} };
+
+  const { data: steps } = await supabase
+    .from('jsa_steps')
+    .select('kebutuhan')
+    .eq('jsa_id', jsa.id)
+    .order('step_number', { ascending: true });
+
+  const parsed = (steps ?? []).map((s) => {
+    if (!s.kebutuhan) return undefined;
+    if (typeof s.kebutuhan === 'string') {
+      try { return JSON.parse(s.kebutuhan); } catch { return undefined; }
+    }
+    return s.kebutuhan as Partial<StepKebutuhan>;
+  });
+  return aggregateStepNeeds(parsed);
 }
 
 export async function getPtw(projectId: string, ptwType: string) {
