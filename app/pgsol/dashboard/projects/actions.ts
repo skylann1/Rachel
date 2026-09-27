@@ -13,21 +13,23 @@ export async function getPgsolProjects() {
       id, name, status, created_at,
       vendor_profiles ( company_name ),
       procedures ( id, status ),
-      jsa ( id, status )
+      jsa ( id, status ),
+      ptw ( id, status )
     `)
     .order('created_at', { ascending: false });
   if (error) { console.error('getPgsolProjects error:', error.message); return []; }
-  // Proyek relevan buat PGSOL begitu punya Prosedur Kerja ATAU JSA — bukan
-  // cuma JSA lagi, karena tahap PGSOL sekarang juga ada di Prosedur Kerja.
+  // Proyek relevan buat PGSOL begitu punya Prosedur Kerja, JSA, ATAU PTW —
+  // tahap PGSOL sekarang ada di ketiga jenis dokumen.
   return (data || []).filter((p: any) => {
     const procRows = Array.isArray(p.procedures) ? p.procedures : (p.procedures ? [p.procedures] : []);
     const jsaRows = Array.isArray(p.jsa) ? p.jsa : (p.jsa ? [p.jsa] : []);
-    return procRows.length > 0 || jsaRows.length > 0;
+    const ptwRows = Array.isArray(p.ptw) ? p.ptw : (p.ptw ? [p.ptw] : []);
+    return procRows.length > 0 || jsaRows.length > 0 || ptwRows.length > 0;
   });
 }
 
 export async function savePgsolAssignment(
-  projectId: string, docType: 'procedure' | 'jsa', stageKey: string, assigneeIds: string[]
+  projectId: string, docType: 'procedure' | 'jsa' | 'ptw', stageKey: string, assigneeIds: string[]
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
