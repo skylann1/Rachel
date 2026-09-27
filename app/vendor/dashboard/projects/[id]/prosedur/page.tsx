@@ -96,7 +96,6 @@ export default function ProsedurKerjaForm() {
           if (content.tahapanPekerjaan) setTahapanPekerjaan(normalizeTahapanPekerjaan(content.tahapanPekerjaan));
           if (content.penyelesaianAkhir) setPenyelesaianAkhir(content.penyelesaianAkhir);
         }
-        if (data.project?.name) setProjectName(data.project.name);
       }
     }
     loadData();
