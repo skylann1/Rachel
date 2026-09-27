@@ -1,16 +1,23 @@
 ﻿/**
- * Alur persetujuan PTW — review internal vendor, lalu tiga tahap internal PGN/PGSOL.
+ * Alur persetujuan PTW — review internal vendor, lalu PGSOL (Reviewer,
+ * lalu HSE), lalu tiga tahap internal PGN.
  *
- *   Review Internal Vendor -> Menunggu Approval PM -> Review PTW Issuer -> Menunggu Penomoran HSSE -> PTW Aktif
+ *   Review Internal Vendor -> Review PGSOL -> Review HSE PGSOL ->
+ *   Menunggu Approval PM -> Review PTW Issuer -> Menunggu Penomoran HSSE
+ *   -> PTW Aktif
  *
  * Review Internal Vendor tidak pernah nyampe PM — staff vendor sendiri
  * (ditugaskan admin vendor per proyek, lihat Fase 3) harus menyetujui dulu.
+ * Review PGSOL -> Review HSE PGSOL: dua orang PGSOL berbeda, berurutan,
+ * sama polanya dengan Prosedur Kerja dan JSA.
  * Reject di tahap manapun mengembalikan status ke Draft; vendor merevisi
  * lalu mengajukan ulang (balik ke Review Internal Vendor).
  */
 export const PTW_STATUS = {
   draft: 'Draft',
   reviewInternalVendor: 'Review Internal Vendor',
+  reviewPgsol: 'Review PGSOL',
+  reviewHsePgsol: 'Review HSE PGSOL',
   menungguApprovalPM: 'Menunggu Approval PM',
   reviewPtwIssuer: 'Review PTW Issuer',
   menungguPenomoranHSSE: 'Menunggu Penomoran HSSE',
@@ -25,6 +32,8 @@ export const PTW_STATUS = {
  * SENGAJA tidak masuk sini: tahap itu menunggu staff vendor sendiri.
  */
 export const PTW_PENDING_STATUSES: string[] = [
+  PTW_STATUS.reviewPgsol,
+  PTW_STATUS.reviewHsePgsol,
   PTW_STATUS.menungguApprovalPM,
   PTW_STATUS.reviewPtwIssuer,
   PTW_STATUS.menungguPenomoranHSSE,
@@ -41,6 +50,8 @@ export function isPtwPending(status: string | null | undefined): boolean {
  * Role & Permission otomatis bisa bertindak di tahap tersebut.
  */
 export const PTW_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
+  [PTW_STATUS.reviewPgsol]: { module: 'ptw', action: 'review_pgsol' },
+  [PTW_STATUS.reviewHsePgsol]: { module: 'ptw', action: 'hse_pgsol' },
   [PTW_STATUS.menungguApprovalPM]: { module: 'ptw', action: 'approve_pm' },
   [PTW_STATUS.reviewPtwIssuer]: { module: 'ptw', action: 'review_issuer' },
   [PTW_STATUS.menungguPenomoranHSSE]: { module: 'ptw', action: 'numbering_hsse' },
