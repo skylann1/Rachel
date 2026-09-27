@@ -51,11 +51,11 @@ const VENDOR_REVIEW_CONFIG: Record<VendorReviewDocType, VendorReviewConfig> = {
   ptw: {
     table: 'ptw',
     stageKey: 'ptw.review_vendor',
-    externalStageKey: 'ptw.approve_pm',
+    externalStageKey: 'ptw.review_pgsol',
     reviewVendorStatus: PTW_STATUS.reviewInternalVendor,
     draftStatus: PTW_STATUS.draft,
-    nextStatus: PTW_STATUS.menungguApprovalPM,
-    nextStatusLabel: 'PTW Menunggu Persetujuan',
+    nextStatus: PTW_STATUS.reviewPgsol,
+    nextStatusLabel: 'PTW Menunggu Review PGSOL',
   },
 };
 
