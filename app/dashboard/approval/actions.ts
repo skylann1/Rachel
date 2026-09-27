@@ -582,7 +582,13 @@ export async function approvePtw(ptwId: string) {
   let stageKey = '';
   let updatePayloadIfComplete: any = {};
 
-  if (current.status === PTW_STATUS.menungguApprovalPM) {
+  if (current.status === PTW_STATUS.reviewPgsol) {
+    stageKey = 'ptw.review_pgsol';
+    updatePayloadIfComplete = { status: PTW_STATUS.reviewHsePgsol };
+  } else if (current.status === PTW_STATUS.reviewHsePgsol) {
+    stageKey = 'ptw.hse_pgsol';
+    updatePayloadIfComplete = { status: PTW_STATUS.menungguApprovalPM };
+  } else if (current.status === PTW_STATUS.menungguApprovalPM) {
     stageKey = 'ptw.approve_pm';
     updatePayloadIfComplete = { authority_id: user.id, authority_approved_at: new Date().toISOString(), status: PTW_STATUS.reviewPtwIssuer };
   } else if (current.status === PTW_STATUS.reviewPtwIssuer) {
@@ -643,9 +649,13 @@ export async function approvePtw(ptwId: string) {
   if (ptw?.project_id) {
     const stageAction = updatePayloadIfComplete.status === PTW_STATUS.aktif
       ? `Nomor PTW Diterbitkan & Aktif (${updatePayloadIfComplete.ptw_number})`
-      : updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer
-        ? 'Disetujui PTW Authority (PM)'
-        : 'Disetujui PTW Issuer';
+      : updatePayloadIfComplete.status === PTW_STATUS.reviewHsePgsol
+        ? 'Direview PGSOL'
+        : updatePayloadIfComplete.status === PTW_STATUS.menungguApprovalPM
+          ? 'Direview HSE PGSOL'
+          : updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer
+            ? 'Disetujui PTW Authority (PM)'
+            : 'Disetujui PTW Issuer';
     await logDocumentEvent(supabase, {
       docType: 'ptw', docId: ptwId, projectId: ptw.project_id, actorId: user.id,
       action: stageAction,
@@ -665,7 +675,21 @@ export async function approvePtw(ptwId: string) {
     });
   }
 
-  if (updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer) {
+  if (updatePayloadIfComplete.status === PTW_STATUS.reviewHsePgsol) {
+    await notifyAssignees({
+      projectId: ptw!.project_id, docType: 'ptw', stageKey: 'ptw.hse_pgsol',
+      type: 'action_required', title: 'PTW Menunggu Review HSE PGSOL',
+      message: `PTW untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu review HSE Anda.`,
+      link: `/dashboard/projects/${ptw?.project_id}`,
+    });
+  } else if (updatePayloadIfComplete.status === PTW_STATUS.menungguApprovalPM) {
+    await notifyAssignees({
+      projectId: ptw!.project_id, docType: 'ptw', stageKey: 'ptw.approve_pm',
+      type: 'action_required', title: 'PTW Menunggu Persetujuan PM',
+      message: `PTW untuk proyek "${proj?.name}" telah direview HSE PGSOL dan menunggu persetujuan Anda.`,
+      link: `/dashboard/projects/${ptw?.project_id}`,
+    });
+  } else if (updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer) {
     await notifyAssignees({
       projectId: ptw!.project_id, docType: 'ptw', stageKey: 'ptw.review_issuer',
       type: 'action_required', title: 'PTW Menunggu Review Issuer',
@@ -706,7 +730,11 @@ export async function rejectPtw(ptwId: string, note: string) {
   if (!current?.project_id) throw new Error("PTW ini tidak terhubung ke proyek.");
 
   let stageKey = '';
-  if (current.status === PTW_STATUS.menungguApprovalPM) {
+  if (current.status === PTW_STATUS.reviewPgsol) {
+    stageKey = 'ptw.review_pgsol';
+  } else if (current.status === PTW_STATUS.reviewHsePgsol) {
+    stageKey = 'ptw.hse_pgsol';
+  } else if (current.status === PTW_STATUS.menungguApprovalPM) {
     stageKey = 'ptw.approve_pm';
   } else if (current.status === PTW_STATUS.reviewPtwIssuer) {
     stageKey = 'ptw.review_issuer';
@@ -726,7 +754,7 @@ export async function rejectPtw(ptwId: string, note: string) {
   // ke tahap sebelumnya seperti JSA), jadi ketiga tahap PTW harus direset
   // supaya semuanya `pending` lagi saat vendor mengajukan ulang — meniru alur
   // resubmission `savePtw` yang mengembalikan dokumen ke menungguApprovalPM.
-  const otherStageKeys = ['ptw.approve_pm', 'ptw.review_issuer', 'ptw.numbering_hsse'].filter(k => k !== stageKey);
+  const otherStageKeys = ['ptw.review_pgsol', 'ptw.hse_pgsol', 'ptw.approve_pm', 'ptw.review_issuer', 'ptw.numbering_hsse'].filter(k => k !== stageKey);
   for (const key of otherStageKeys) {
     await resetStageAssignments(supabase, current.project_id, 'ptw', key);
   }
