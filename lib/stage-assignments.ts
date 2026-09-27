@@ -36,10 +36,14 @@ export const VENDOR_STAGE_KEYS = [
   'ptw.review_vendor',
 ] as const;
 
-/** Kedua stage_key yang ditugaskan admin PGSOL — dipakai untuk membatasi apa yang boleh disimpan lewat savePgsolAssignment (jsa.manage_assignment_pgsol). */
+/** Keenam stage_key yang ditugaskan admin PGSOL (Reviewer + HSE, untuk Prosedur/JSA/PTW) — dipakai untuk membatasi apa yang boleh disimpan lewat savePgsolAssignment (jsa.manage_assignment_pgsol). */
 export const PGSOL_STAGE_KEYS = [
-  'jsa.review_pgsol',
   'procedure.review_pgsol',
+  'procedure.hse_pgsol',
+  'jsa.review_pgsol',
+  'jsa.hse_pgsol',
+  'ptw.review_pgsol',
+  'ptw.hse_pgsol',
 ] as const;
 
 export async function getStageAssignments(
@@ -85,11 +89,15 @@ export async function getEligibleAssignees(
 export const STAGE_KEY_PERMISSION: Record<string, { module: string; action: string }> = {
   'procedure.review_vendor': { module: 'procedure', action: 'review_vendor' },
   'procedure.review_pgsol': { module: 'procedure', action: 'review_pgsol' },
+  'procedure.hse_pgsol': { module: 'procedure', action: 'hse_pgsol' },
   'procedure.review': { module: 'procedure', action: 'review' },
   'jsa.review_vendor': { module: 'jsa', action: 'review_vendor' },
   'jsa.review_pgsol': { module: 'jsa', action: 'review_pgsol' },
+  'jsa.hse_pgsol': { module: 'jsa', action: 'hse_pgsol' },
   'jsa.approve_pgn': { module: 'jsa', action: 'approve_pgn' },
   'ptw.review_vendor': { module: 'ptw', action: 'review_vendor' },
+  'ptw.review_pgsol': { module: 'ptw', action: 'review_pgsol' },
+  'ptw.hse_pgsol': { module: 'ptw', action: 'hse_pgsol' },
   'ptw.approve_pm': { module: 'ptw', action: 'approve_pm' },
   'ptw.review_issuer': { module: 'ptw', action: 'review_issuer' },
   'ptw.numbering_hsse': { module: 'ptw', action: 'numbering_hsse' },

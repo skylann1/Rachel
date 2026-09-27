@@ -13,6 +13,7 @@ import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
+import PtwSafetyChecklistForm from '@/components/ptw/PtwSafetyChecklistForm';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
 import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
@@ -78,11 +79,14 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   const prosedurRevisions = prosedur?.content?.revisions || [];
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
-  // Normalize statuses for UI logic
-  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : isProcedurePending(prosedur?.status) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
+  // Normalize statuses for UI logic. Sisi vendor: tahap "Review Internal
+  // Vendor" juga dihitung 'Pending' — isProcedurePending/isJsaPending
+  // SENGAJA mengecualikannya (buat task list internal), tapi di layar vendor
+  // ini dokumennya memang sedang direview, jadi jangan tampil sebagai Draft.
+  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : (isProcedurePending(prosedur?.status) || prosedur?.status === PROCEDURE_STATUS.reviewInternalVendor) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
   const jsaStatus = jsa?.rejection_note ? 'Rejected'
     : jsa?.status === JSA_STATUS.approved ? 'Approved'
-    : isJsaPending(jsa?.status) ? 'Pending'
+    : (isJsaPending(jsa?.status) || jsa?.status === JSA_STATUS.reviewInternalVendor) ? 'Pending'
     : jsa ? 'Draft' : 'Draft';
 
   // PTW tahap proyek: hijau hanya kalau SEMUA tipe PTW yang diajukan sudah Aktif.
@@ -457,6 +461,15 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                             </button>
                           )}
 
+                          <PtwSafetyChecklistForm
+                            ptwId={row.id}
+                            ptwType={row.ptw_type || 'dingin'}
+                            validFrom={row.valid_from}
+                            validTo={row.valid_to}
+                            initialChecklist={row.safety_checklist || {}}
+                            editable={rowStatus === 'Approved'}
+                          />
+
                           <div className="flex gap-3">
                             <div className="flex-1">
                               <BlobProvider document={
@@ -481,6 +494,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                                   workEnd={row.work_end}
                                   hotWorkTypes={row.hot_work_types || []}
                                   gasTestFrequency={row.gas_test_frequency || {}}
+                                  checklistData={row.safety_checklist || {}}
                                   jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                   siblings={ptws}
                                   signatories={ptwSignatories?.[row.id]}

@@ -6,6 +6,7 @@ import { JSA_STATUS } from "@/lib/jsa-status";
 import { APPROVED_PROCEDURE } from "@/lib/project-stage";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { resetStageAssignments } from "@/lib/stage-assignments";
+import { normalizeTahapanPekerjaan, TahapanSection } from "@/lib/procedure-kebutuhan";
 
 export async function saveJsa(projectId: string, jsaData: any) {
   const supabase = await createClient();
@@ -43,7 +44,32 @@ export async function saveJsa(projectId: string, jsaData: any) {
     if (error) throw new Error(error.message);
     jsaId = newJsa.id;
   } else {
-    await supabase.from('jsa').update({ status: JSA_STATUS.reviewInternalVendor, rejection_note: null }).eq('id', jsaId);
+    // Guard status: JSA yang sudah berjalan melewati tahap review internal
+    // vendor (misal sudah Disetujui) tidak boleh diajukan ulang. Kalau
+    // dibiarkan, resubmit mereset stage_assignments yang sudah 'approved',
+    // dan writeStageAssignment menolak menyunting baris itu -- ronde baru
+    // macet permanen tanpa jalan keluar selain SQL manual.
+    const { data: current } = await supabase
+      .from('jsa')
+      .select('status')
+      .eq('id', jsaId)
+      .single();
+    if (!current) throw new Error('JSA tidak ditemukan.');
+    const resubmittable = [JSA_STATUS.draft, JSA_STATUS.reviewInternalVendor];
+    if (!resubmittable.includes(current.status)) {
+      throw new Error('JSA tidak bisa diajukan ulang karena sudah berjalan ke tahap berikutnya.');
+    }
+
+    const { data: updated, error } = await supabase
+      .from('jsa')
+      .update({ status: JSA_STATUS.reviewInternalVendor, rejection_note: null })
+      .eq('id', jsaId)
+      .eq('status', current.status)
+      .select('id');
+    if (error) throw new Error(error.message);
+    if (!updated || updated.length === 0) {
+      throw new Error('JSA baru saja diproses oleh pengguna lain. Muat ulang halaman untuk melihat status terbaru.');
+    }
   }
 
   // JSA (kembali) berada di tahap `jsa.review_vendor` tanpa melewati
@@ -66,6 +92,7 @@ export async function saveJsa(projectId: string, jsaData: any) {
       jsa_id: jsaId,
       step_number: index + 1,
       pekerjaan: step.langkah,
+      kebutuhan: step.kebutuhan ?? {},
       bahaya: JSON.stringify({
         jenisBahaya: step.jenisBahaya,
         sebab: step.sebab,
@@ -117,9 +144,11 @@ export async function getJsa(projectId: string) {
     .eq('project_id', projectId)
     .single();
     
-  let procedureSteps: string[] = [];
+  const procedureSteps: string[] = [];
+  let procedureSections: TahapanSection[] = [];
   if (proc?.content?.tahapanPekerjaan) {
-    proc.content.tahapanPekerjaan.forEach((section: any) => {
+    procedureSections = normalizeTahapanPekerjaan(proc.content.tahapanPekerjaan);
+    procedureSections.forEach((section: TahapanSection) => {
       if (section.title) {
         procedureSteps.push(section.title);
       }
@@ -131,19 +160,39 @@ export async function getJsa(projectId: string) {
     return null;
   }
   
-  if (jsa) {
+if (jsa) {
     const { data: steps } = await supabase
       .from('jsa_steps')
       .select('*')
       .eq('jsa_id', jsa.id)
       .order('step_number', { ascending: true });
-      
+
+    const { data: project } = await supabase
+      .from('projects')
+      .select('name, contract_number, location, vendor_id')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    let companyName: string | null = null;
+    if (project?.vendor_id) {
+      const { data: vp } = await supabase
+        .from('vendor_profiles')
+        .select('company_name')
+        .eq('id', project.vendor_id)
+        .single();
+      companyName = vp?.company_name || null;
+    }
+
     return {
       jsa,
       steps: steps || [],
-      procedureSteps
+      procedureSteps,
+      procedureSections,
+      project: project
+        ? { name: project.name, contract_number: project.contract_number, location: project.location, companyName }
+        : null,
     };
   }
-  
-  return { jsa: null, steps: [], procedureSteps };
+
+  return { jsa: null, steps: [], procedureSteps, procedureSections, project: null };
 }

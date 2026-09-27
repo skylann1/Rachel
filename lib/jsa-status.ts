@@ -1,7 +1,8 @@
 ﻿/**
- * Alur persetujuan JSA — review internal vendor, lalu dua tahap eksternal.
+ * Alur persetujuan JSA — review internal vendor, lalu PGSOL (Reviewer, lalu HSE), lalu PGN.
  *
- *   Draft -> Review Internal Vendor -> Review PGSOL -> Persetujuan PGN -> JSA Disetujui
+ *   Draft -> Review Internal Vendor -> Review PGSOL -> Review HSE PGSOL ->
+ *   Persetujuan PGN -> JSA Disetujui
  *
  * Review Internal Vendor : staff vendor sendiri (ditugaskan admin vendor
  *                   per proyek, lihat Fase 3) harus menyetujui dulu
@@ -9,6 +10,7 @@
  * Review PGSOL    : verifikasi teknis oleh Satker Pemberi Kerja (PGSOL).
  *                   Mengecek bahaya sudah teridentifikasi, mitigasi memadai,
  *                   dan nilai risiko wajar. Blok "Direview Oleh" pada form.
+ * Review HSE PGSOL : verifikasi aspek keselamatan kerja oleh orang PGSOL yang berbeda dari Reviewer, sebelum diteruskan ke PGN.
  *
  * Persetujuan PGN : otorisasi formal oleh Satker Penanggung Jawab (PGN).
  *                   Menerima risiko sisa dan mengizinkan pekerjaan berjalan.
@@ -19,6 +21,7 @@ export const JSA_STATUS = {
   draft: 'Draft',
   reviewInternalVendor: 'Review Internal Vendor',
   reviewPgsol: 'Review PGSOL',
+  reviewHsePgsol: 'Review HSE PGSOL',
   approvalPgn: 'Persetujuan PGN',
   approved: 'JSA Disetujui',
 } as const;
@@ -30,6 +33,7 @@ export const JSA_STATUS = {
  */
 export const JSA_PENDING_STATUSES: string[] = [
   JSA_STATUS.reviewPgsol,
+  JSA_STATUS.reviewHsePgsol,
   JSA_STATUS.approvalPgn,
 ];
 
@@ -45,5 +49,6 @@ export function isJsaPending(status: string | null | undefined): boolean {
  */
 export const JSA_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
   [JSA_STATUS.reviewPgsol]: { module: 'jsa', action: 'review_pgsol' },
+  [JSA_STATUS.reviewHsePgsol]: { module: 'jsa', action: 'hse_pgsol' },
   [JSA_STATUS.approvalPgn]: { module: 'jsa', action: 'approve_pgn' },
 };

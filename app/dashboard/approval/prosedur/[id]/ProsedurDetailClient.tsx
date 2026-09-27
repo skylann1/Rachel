@@ -43,6 +43,18 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
   const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur.status];
   const canApprove = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
 
+  // Keterangan tahap — sadar-status. Prosedur kini punya gerbang PGSOL
+  // sebelum PM, jadi teks lama ("diajukan untuk direview oleh PM") tidak
+  // lagi benar saat status masih Review PGSOL.
+  const statusBlurb =
+    prosedur.status === PROCEDURE_STATUS.reviewPgsol
+      ? 'Dokumen prosedur kerja ini sedang menunggu verifikasi teknis oleh PGSOL sebelum diteruskan ke PM.'
+      : prosedur.status === PROCEDURE_STATUS.menungguReviewPM
+      ? 'Dokumen prosedur kerja ini telah direview PGSOL dan diajukan untuk persetujuan akhir oleh PM.'
+      : prosedur.status === PROCEDURE_STATUS.approved
+      ? 'Dokumen prosedur kerja ini telah disetujui.'
+      : 'Dokumen prosedur kerja ini dikembalikan ke vendor untuk revisi.';
+
   const pdfData = prosedur.content ? {
     projectName: prosedur.projects?.name || 'Proyek',
     docNo: prosedur.content.docNo || '-',
@@ -127,7 +139,7 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
 
         <div className="p-6 space-y-4">
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 mb-2">
-             <p className="text-sm text-slate-600">Dokumen prosedur kerja ini diajukan untuk direview oleh PM.</p>
+             <p className="text-sm text-slate-600">{statusBlurb}</p>
              {prosedur.content?.revisions?.length > 0 && (
                <div className="mt-4">
                  <RejectionNote note={prosedur.content.revisions[prosedur.content.revisions.length - 1].note} />

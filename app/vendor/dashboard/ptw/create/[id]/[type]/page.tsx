@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Users, Truck, Stamp, ShieldAlert, FileText, HardHat, FlaskConical, Plus, Trash2, CalendarClock, Flame, AlertTriangle } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import PtwPDF from '@/components/ptw/PtwPDF';
-import { savePtw, getPtw, getPtwList, getProjectPeriod } from '../actions';
+import { savePtw, getPtw, getPtwList, getProjectPeriod, getJsaPrefillNeeds } from '../actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
 
 const PDFViewer = dynamic(
@@ -81,12 +81,13 @@ export default function PTWCreatePage() {
     }
 
     async function loadData() {
-      const [workers, equipment, data, siblings, periode] = await Promise.all([
+      const [workers, equipment, data, siblings, periode, jsaPrefill] = await Promise.all([
         getWorkers(),
         getEquipment(),
         projectId ? getPtw(projectId, ptwType) : Promise.resolve(null),
         projectId ? getPtwList(projectId) : Promise.resolve([]),
         projectId ? getProjectPeriod(projectId) : Promise.resolve(null),
+        projectId ? getJsaPrefillNeeds(projectId) : Promise.resolve({ workers: [], equipment: [], materials: [], apd: {} }),
       ]);
       setRosterPekerja(workers);
       setRosterPeralatan(equipment);
@@ -106,19 +107,37 @@ export default function PTWCreatePage() {
         if (data.valid_to) setValidTo(data.valid_to);
         if (data.work_start) setWorkStart(data.work_start);
         if (data.work_end) setWorkEnd(data.work_end);
-      } else if (siblings.length > 0) {
-        // Belum pernah diajukan untuk tipe ini — bantu isi awal dari tipe PTW
-        // lain di proyek yang sama (kemungkinan besar tim/alat & jadwalnya
-        // sama), tapi tetap bisa diubah oleh vendor.
-        const mostRecent = [...siblings].sort(
-          (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )[0] as any;
-        if (mostRecent?.workers) setSelectedPekerja(mostRecent.workers.map((w: any) => w.id).filter(Boolean));
-        if (mostRecent?.equipment) setSelectedPeralatan(mostRecent.equipment.map((e: any) => e.id).filter(Boolean));
-        if (mostRecent?.valid_from) setValidFrom(mostRecent.valid_from);
-        if (mostRecent?.valid_to) setValidTo(mostRecent.valid_to);
-        if (mostRecent?.work_start) setWorkStart(mostRecent.work_start);
-        if (mostRecent?.work_end) setWorkEnd(mostRecent.work_end);
+      } else {
+        // Belum pernah diajukan untuk tipe ini.
+        // 1) Prefill dari kebutuhan langkah JSA yang sudah disetujui (auto-check
+        //    pekerja/peralatan/APD) — masih bisa diubah oleh vendor.
+        const hasJsaPrefill =
+          jsaPrefill.workers.length > 0 ||
+          jsaPrefill.equipment.length > 0 ||
+          Object.values(jsaPrefill.apd).some(list => list.length > 0);
+
+        if (hasJsaPrefill) {
+          setSelectedPekerja(jsaPrefill.workers.map(w => w.id));
+          setSelectedPeralatan(jsaPrefill.equipment.map(e => e.id));
+          const apdPrefill: Record<string, string[]> = {};
+          for (const [cat, list] of Object.entries(jsaPrefill.apd)) {
+            apdPrefill[cat] = [...list];
+          }
+          setSelectedApd(apdPrefill);
+        } else if (siblings.length > 0) {
+          // 2) Kalau belum ada kebutuhan di JSA — bantu isi awal dari tipe PTW
+          // lain di proyek yang sama (kemungkinan besar tim/alat & jadwalnya
+          // sama), tapi tetap bisa diubah oleh vendor.
+          const mostRecent = [...siblings].sort(
+            (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0] as any;
+          if (mostRecent?.workers) setSelectedPekerja(mostRecent.workers.map((w: any) => w.id).filter(Boolean));
+          if (mostRecent?.equipment) setSelectedPeralatan(mostRecent.equipment.map((e: any) => e.id).filter(Boolean));
+          if (mostRecent?.valid_from) setValidFrom(mostRecent.valid_from);
+          if (mostRecent?.valid_to) setValidTo(mostRecent.valid_to);
+          if (mostRecent?.work_start) setWorkStart(mostRecent.work_start);
+          if (mostRecent?.work_end) setWorkEnd(mostRecent.work_end);
+        }
       }
 
       // Belum ada acuan sama sekali — mulai dari tanggal proyek, dipotong

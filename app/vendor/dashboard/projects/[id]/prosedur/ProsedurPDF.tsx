@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { normalizeTahapanPekerjaan, kebutuhanSummary } from '@/lib/procedure-kebutuhan';
 
 // Create styles
 const styles = StyleSheet.create({
@@ -136,7 +137,7 @@ interface ProsedurPDFProps {
     tools: string[];
     apd: string[];
     perlengkapanLainnya: string[];
-    tahapanPekerjaan: { title: string; points: string[] }[];
+    tahapanPekerjaan: { title: string; points: (string | { text: string; kebutuhan?: unknown })[] }[];
     penyelesaianAkhir: string[];
     revisions?: { revNo: number; date: string; note: string }[];
     vendorSignature?: string | null;
@@ -221,11 +222,7 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
           <View style={styles.tableRow}>
             <View style={[styles.cell, styles.revCol1, styles.revDataRow]}><Text style={styles.textCenter}>A</Text></View>
             <View style={[styles.cellLeftAlign, styles.revCol2, styles.revDataRow, { justifyContent: 'center' }]}><Text style={styles.textNormal}>Issued for Review</Text></View>
-            <View style={[styles.cell, styles.revCol3, styles.revDataRow]}>
-              {data.vendorSignature ? (
-                <Image src={data.vendorSignature} style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
-              ) : null}
-            </View>
+            <View style={[styles.cell, styles.revCol3, styles.revDataRow]}><Text style={styles.textBoldCenter}>APPROVED</Text></View>
             <View style={[styles.cell, styles.revCol4, styles.revDataRow]}></View>
             <View style={[styles.cell, styles.revCol5, styles.revDataRow]}></View>
             <View style={[styles.cell, styles.revCol6, styles.revDataRow]}></View>
@@ -341,17 +338,27 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
         </View>
 
         <Text style={styles.sectionTitle}>6. TAHAPAN PEKERJAAN</Text>
-        {data.tahapanPekerjaan.map((tahapan, idx) => (
+        {normalizeTahapanPekerjaan(data.tahapanPekerjaan).map((tahapan, idx) => (
           <React.Fragment key={idx}>
             <Text style={styles.subSectionTitle}>6.{idx + 1} {tahapan.title}</Text>
             <View style={{ marginBottom: 10 }}>
               {tahapan.points.length > 0 ? (
-                tahapan.points.map((pt, ptIdx) => (
-                  <View key={ptIdx} style={styles.subBulletContainer}>
-                    <Text style={styles.bulletPoint}>•</Text>
-                    <Text style={styles.bulletText}>{pt}</Text>
-                  </View>
-                ))
+                tahapan.points.map((pt, ptIdx) => {
+                  const kebutuhanLine = kebutuhanSummary(pt.kebutuhan);
+                  return (
+                    <View key={ptIdx} style={{ marginBottom: 4 }}>
+                      <View style={styles.subBulletContainer}>
+                        <Text style={styles.bulletPoint}>•</Text>
+                        <Text style={styles.bulletText}>{pt.text}</Text>
+                      </View>
+                      {kebutuhanLine && (
+                        <Text style={[styles.bulletText, { paddingLeft: 25, color: '#444', fontStyle: 'italic' }]}>
+                          Kebutuhan: {kebutuhanLine}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })
               ) : (
                 <Text style={[styles.paragraph, { paddingLeft: 25 }]}>Tidak ada rincian tahapan.</Text>
               )}

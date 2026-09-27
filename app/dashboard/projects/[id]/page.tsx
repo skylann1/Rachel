@@ -34,7 +34,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
       ptw ( id, status, rejection_note, ptw_number, workers, equipment, ptw_type, hazards, apd, gas_tests,
             created_at, authority_id, authority_approved_at, issuer_id, issuer_approved_at, hsse_id,
             valid_from, valid_to, work_start, work_end, hot_work_types, gas_test_frequency,
-            field_token, stopped_at, stopped_reason, stopped_by_name ),
+            field_token, stopped_at, stopped_reason, stopped_by_name, safety_checklist ),
       procedures ( id, status, content )
     `)
     .eq('id', projectId)

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, AlertTriangle, FileText, CheckCircle2, ShieldCheck, FileSignature, Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import IncidentPDF from './IncidentPDF';
-import { getIncidentDetail, updateIncidentInvestigation } from '../actions';
+import { getIncidentDetail, getIncidentReportSigners, updateIncidentInvestigation } from '../actions';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
@@ -21,6 +21,7 @@ export default function IncidentInvestigationPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [incidentData, setIncidentData] = useState<any>(null);
+  const [reportNames, setReportNames] = useState<{ reporterName: string | null; investigatorName: string | null }>({ reporterName: null, investigatorName: null });
 
   // State investigasi
   const [investigation, setInvestigation] = useState({
@@ -41,6 +42,7 @@ export default function IncidentInvestigationPage() {
           tindakanPencegahan: data.rca_preventive || '',
           status: data.status || 'Menunggu Investigasi'
         });
+        setReportNames(await getIncidentReportSigners(incidentId));
       } catch (e) {
         console.error(e);
       } finally {
@@ -226,11 +228,23 @@ export default function IncidentInvestigationPage() {
              </span>
           </div>
           <div className="flex-1 w-full bg-slate-500">
-             <PDFViewer width="100%" height="100%" className="border-none">
-               <IncidentPDF 
-                  incidentId={incidentId} 
-                  investigation={investigation} 
-               />
+<PDFViewer width="100%" height="100%" className="border-none">
+                <IncidentPDF 
+                   incidentId={incidentId} 
+                   investigation={investigation}
+                   incident={{
+                      vendorName: incidentData.projects?.vendor_profiles?.company_name || 'Internal / Unknown',
+                      projectName: incidentData.projects?.name || '-',
+                      type: incidentData.type,
+                      incident_date: incidentData.incident_date,
+                      incident_time: incidentData.incident_time,
+                      location: incidentData.location,
+                      chronology: incidentData.chronology,
+                      immediateAction: incidentData.immediate_action || null,
+                      reporterName: reportNames.reporterName,
+                      investigatorName: reportNames.investigatorName,
+                   }}
+                />
              </PDFViewer>
           </div>
         </div>

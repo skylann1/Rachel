@@ -504,3 +504,89 @@ export interface PtwGasTestEntry {
   keterangan: string;
   namaPelaksana: string;
 }
+
+/**
+ * Satu baris "E. SAFETY CHECKLIST" yang diisi via web selama PTW aktif.
+ * `days[i]` = status Hari ke-(i+1): true = Sudah, false = Belum, null =
+ * belum ditandai. `keterangan` satu per baris (bukan per hari), sesuai
+ * form asli yang cuma punya satu kolom Keterangan per baris.
+ */
+export interface PtwSafetyChecklistEntry {
+  days: (boolean | null)[];
+  keterangan: string;
+}
+
+/** Key = hasil flattenSafetyChecklist(...).key. Baris yang belum disentuh boleh tidak ada di objek ini. */
+export type PtwSafetyChecklistData = Record<string, PtwSafetyChecklistEntry>;
+
+/**
+ * Satu baris checklist siap-render/siap-simpan, hasil "meratakan" struktur
+ * item + subItems pada PtwTypeDefinition. SATU-SATUNYA tempat yang boleh
+ * menghasilkan key checklist — PDF (PtwPDF.tsx) dan form isian web
+ * (PtwSafetyChecklistForm.tsx) SAMA-SAMA memakai fungsi ini supaya key
+ * yang tersimpan selalu konsisten antara keduanya.
+ */
+export interface PtwSafetyChecklistRow {
+  /** null untuk baris judul kelompok (groupOnly) — tidak checkable, tidak disimpan. */
+  key: string | null;
+  marker: string;
+  label: string;
+  indent: boolean;
+  bold: boolean;
+  checkable: boolean;
+}
+
+export function flattenSafetyChecklist(typeDef: PtwTypeDefinition): PtwSafetyChecklistRow[] {
+  const rows: PtwSafetyChecklistRow[] = [];
+  typeDef.checklist.forEach((item, index) => {
+    rows.push({
+      key: item.groupOnly ? null : item.id,
+      marker: item.groupOnly ? '' : `${String.fromCharCode(97 + index)}.`,
+      label: item.label,
+      indent: false,
+      bold: !!item.groupOnly,
+      checkable: !item.groupOnly,
+    });
+    (item.subItems || []).forEach((s, si) => {
+      rows.push({
+        key: `${item.id}.${si}`,
+        marker: s.marker,
+        label: s.label,
+        indent: s.indent ?? true,
+        bold: false,
+        checkable: true,
+      });
+    });
+  });
+  return rows;
+}
+
+/**
+ * Tanggal kalender untuk tiap kolom "Hari ke-N", dibatasi
+ * PTW_MAX_VALID_DAYS. Kosong kalau validFrom tidak ada/tidak valid — form
+ * isian menampilkan 0 kolom hari untuk PTW lama tanpa masa berlaku
+ * tersimpan, bukan menebak rentangnya.
+ */
+export function ptwValidDayDates(validFrom?: string | null, validTo?: string | null): string[] {
+  if (!validFrom) return [];
+  const start = new Date(`${validFrom}T00:00:00`);
+  if (isNaN(start.getTime())) return [];
+
+  let count = PTW_MAX_VALID_DAYS;
+  if (validTo) {
+    const end = new Date(`${validTo}T00:00:00`);
+    if (!isNaN(end.getTime())) {
+      const diffDays = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+      if (diffDays > 0) count = Math.min(diffDays, PTW_MAX_VALID_DAYS);
+    }
+  }
+
+  const toLocalIsoDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    return toLocalIsoDate(d);
+  });
+}

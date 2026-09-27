@@ -98,3 +98,31 @@ dan role `admin` tidak pernah boleh diberikan dari jalur ini.
       sendiri dengan `role = 'admin'` — pastikan ditolak dengan pesan
       "Role admin tidak dapat diberikan dari halaman ini." (tanpa ini
       admin org bisa mempromosikan dirinya jadi superadmin lintas org).
+
+## Migrasi terbaru (sweep riset, jalankan di SQL editor sesuai urutan ini)
+
+Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
+(dan migrasi `schema_swa_toolbox_checkin.sql` — default kolom
+`toolbox_meetings.meeting_date` harus sudah ada):
+
+1. `schema_ptw_vendor_update_policy.sql` — versi diperbarui: halaman ini
+   masih berisi perbaikan policy UPDATE PTW oleh vendor (scoping org +
+   status `Review Internal Vendor`). Aman dijalankan ulang (DROP + CREATE).
+2. `schema_inspections_rls.sql` — menambahkan 5 policy RLS pada tabel
+   `inspections` (internal baca semua, vendor baca punya sendiri,
+   internal insert/update, vendor update punya sendiri). Aman dijalankan
+   ulang.
+3. `schema_vendor_documents_bucket.sql` — membuat bucket storage
+   `vendor-documents` (public) + policy SELECT/INSERT untuk pengguna
+   terautentikasi. Aman dijalankan ulang.
+4. `schema_meeting_date_timezone.sql` — set default `meeting_date` ke
+   tanggal Asia/Jakarta (bukan `CURRENT_DATE` zona sesi). **Bukan
+   idempotent untuk efek samping**, cukup sekali.
+5. `schema_ptw_numbering.sql` — tabel counter `ptw_numbering` + fungsi
+   `get_next_ptw_number()` untuk penomoran PTW yang atomik (pengganti
+   `count()+1` dari sisi aplikasi yang rawan race). Wajib ada SEBELUM
+   deploy kode aplikasi terbaru (approval actions memanggil RPC-nya).
+   Aman dijalankan ulang.
+6. `schema_jsa_step_kebutuhan.sql` — kolom `jsa_steps.kebutuhan` (JSONB,
+   default `{}`) untuk kebutuhan sumber daya per langkah JSA (asal prosedur
+   kerja, dipakai prefill PTW). Additive — aman dijalankan ulang.

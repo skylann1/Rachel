@@ -9,7 +9,7 @@ interface Candidate { id: string; full_name: string; }
 export default function AssignPgsolPanel({
   projectId, docType, stageKey, candidates, currentAssigneeIds, locked,
 }: {
-  projectId: string; docType: 'procedure' | 'jsa'; stageKey: string;
+  projectId: string; docType: 'procedure' | 'jsa' | 'ptw'; stageKey: string;
   candidates: Candidate[]; currentAssigneeIds: string[]; locked: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>(currentAssigneeIds);

@@ -1,14 +1,6 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Font, Image } from '@react-pdf/renderer';
-
-// Register fonts
-Font.register({
-  family: 'Helvetica',
-  fonts: [
-    { src: 'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-regular-webfont.ttf' },
-    { src: 'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 'bold' }
-  ]
-});
+import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
+import { kebutuhanSummary, isKebutuhanEmpty } from '@/lib/procedure-kebutuhan';
 
 const B = '#000';
 // Colors extracted directly from docs/templates/JSA EXAMPLE.xlsx (theme + dxf fills)
@@ -417,10 +409,11 @@ const renderControlCell = (control: any) => {
   );
 };
 
-export default function JsaPDF({ projectId, steps, signatories, preparer, team }: any) {
+export default function JsaPDF({ projectId, steps, signatories, preparer, team, projectInfo }: any) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const reviewer = signatories?.reviewer ?? null;
   const approver = signatories?.approver ?? null;
+  const preparerName = preparer?.nama || 'Vendor Representative';
   const teamRows = (team && team.length > 0) ? team : Array.from({ length: 4 }).map(() => ({ nama: '', jabatan: '' }));
 
   return (
@@ -435,7 +428,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
             </View>
             <View style={styles.titleCenter}>
               <View style={styles.companyNameRow}>
-                <Text style={styles.companyName}>CV. JAYA PUTRA BAHARI</Text>
+                <Text style={styles.companyName}>{projectInfo?.companyName || 'CV. JAYA PUTRA BAHARI'}</Text>
               </View>
               <View style={styles.titleRow}>
                 <Text style={styles.title}>FORMULIR ANALISA KESELAMATAN KERJA / JOB SAFETY ANALYSIS FORM</Text>
@@ -452,10 +445,10 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
         <View style={styles.infoSection}>
           <View style={styles.infoLeft}>
             <View style={styles.infoRow}><Text style={styles.infoLabel}>No JSA</Text><Text style={styles.infoValue}>: JSA-{projectId?.split('-')[1] || '001'}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama Pekerjaan</Text><Text style={styles.infoValue}>: Pekerjaan Perbaikan (Sesuai Proyek)</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Lokasi</Text><Text style={styles.infoValue}>: Area Proyek</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama Paket Pekerjaan</Text><Text style={styles.infoValue}>: Kontrak {projectId}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nomor Kontrak</Text><Text style={styles.infoValue}>: {projectId}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama Pekerjaan</Text><Text style={styles.infoValue}>: {projectInfo?.name || 'Pekerjaan Perbaikan (Sesuai Proyek)'}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Lokasi</Text><Text style={styles.infoValue}>: {projectInfo?.location || 'Area Proyek'}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama Paket Pekerjaan</Text><Text style={styles.infoValue}>: {projectInfo?.name || `Kontrak ${projectId}`}</Text></View>
+            <View style={styles.infoRow}><Text style={styles.infoLabel}>Nomor Kontrak</Text><Text style={styles.infoValue}>: {projectInfo?.contract_number || projectId}</Text></View>
             <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal Kontrak</Text><Text style={styles.infoValue}>: {currentDate}</Text></View>
           </View>
         </View>
@@ -473,7 +466,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
             <View style={styles.signatureBox}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
               <View style={styles.signatureArea}>
-                <Text style={styles.signatureStamp}>Already Sign</Text>
+                <Text style={styles.signatureStamp}>APPROVED</Text>
               </View>
             </View>
           </View>
@@ -488,7 +481,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
             <View style={styles.signatureBox}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
               <View style={styles.signatureArea}>
-                <Text style={styles.signatureStamp}>Already Sign</Text>
+                <Text style={styles.signatureStamp}>APPROVED</Text>
               </View>
             </View>
           </View>
@@ -504,7 +497,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
             <View style={[styles.signatureBox, { borderLeftWidth: 0 }]}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
               <View style={styles.signatureArea}>
-                <Text style={styles.signatureStamp}>Already Sign</Text>
+                <Text style={styles.signatureStamp}>APPROVED</Text>
               </View>
             </View>
           </View>
@@ -584,7 +577,14 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
         {steps.map((step: any, index: number) => (
             <View key={step.id || index} style={styles.tRow} wrap={false}>
               <View style={[styles.tCell, styles.colNo, styles.textCenter]}><Text>{index + 1}</Text></View>
-              <View style={[styles.tCell, styles.colLangkah]}><Text>{step.langkah || ''}</Text></View>
+              <View style={[styles.tCell, styles.colLangkah]}>
+                  <Text>{step.langkah || ''}</Text>
+                  {step.kebutuhan && !isKebutuhanEmpty(step.kebutuhan) && (
+                    <Text style={{ fontStyle: 'italic', fontSize: 6, color: '#444', marginTop: 3 }}>
+                      Kebutuhan: {kebutuhanSummary(step.kebutuhan)}
+                    </Text>
+                  )}
+                </View>
               <View style={[styles.tCell, styles.colJenisBahaya]}><Text>{step.jenisBahaya || ''}</Text></View>
               <View style={[styles.tCell, styles.colSebab]}><Text>{step.sebab || ''}</Text></View>
               <View style={[styles.tCell, styles.colPotensi]}><Text>{step.potensiBahaya || ''}</Text></View>
@@ -596,7 +596,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
 
               <RiskBlockData risk={step.residualRisk} rpnStyle={getRpnStyle(step.residualRisk?.rpn || 0)} variant="residual" />
 
-              <View style={[styles.tCell, styles.colParaf]}><Text></Text></View>
+              <View style={[styles.tCell, styles.colParaf]}><Text style={{ fontSize: 5, textAlign: 'center' }}>APPROVED</Text></View>
             </View>
           ))}
           
@@ -604,7 +604,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
 
         {/* ttd note */}
         <View style={{ alignItems: 'flex-end', marginTop: 3 }}>
-          <Text style={{ fontSize: 4, fontStyle: 'italic' }}>ttd</Text>
+          <Text style={{ fontSize: 4, fontStyle: 'italic' }}>APPROVED</Text>
         </View>
 
         {/* Team Penyusun JSA */}
@@ -622,7 +622,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team }
               <View style={[styles.teamCell, { width: '32%' }]}><Text>{member?.nama || ''}</Text></View>
               <View style={[styles.teamCell, { width: '32%' }]}><Text>{member?.jabatan || ''}</Text></View>
               <View style={[styles.teamCell, { width: '30%', borderRightWidth: 0, alignItems: 'center' }]}>
-                {member?.nama ? <Text style={styles.signatureStamp}>Already Sign</Text> : null}
+                <Text style={[styles.signatureStamp, { fontSize: 6 }]}>APPROVED</Text>
               </View>
             </View>
           ))}

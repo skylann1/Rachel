@@ -201,6 +201,9 @@ export async function approveProcedure(procedureId: string) {
 
   if (current.status === PROCEDURE_STATUS.reviewPgsol) {
     stageKey = 'procedure.review_pgsol';
+    nextStatus = PROCEDURE_STATUS.reviewHsePgsol;
+  } else if (current.status === PROCEDURE_STATUS.reviewHsePgsol) {
+    stageKey = 'procedure.hse_pgsol';
     nextStatus = PROCEDURE_STATUS.menungguReviewPM;
   } else if (current.status === PROCEDURE_STATUS.menungguReviewPM) {
     stageKey = 'procedure.review';
@@ -229,8 +232,10 @@ export async function approveProcedure(procedureId: string) {
 
   const { data: profile } = await supabase.from('internal_profiles').select('id').eq('id', user.id).single();
   const updatePayload: any = stageKey === 'procedure.review_pgsol'
-    ? { status: PROCEDURE_STATUS.menungguReviewPM }
-    : { status: PROCEDURE_STATUS.approved, reviewed_by: profile?.id };
+    ? { status: PROCEDURE_STATUS.reviewHsePgsol }
+    : stageKey === 'procedure.hse_pgsol'
+      ? { status: PROCEDURE_STATUS.menungguReviewPM }
+      : { status: PROCEDURE_STATUS.approved, reviewed_by: profile?.id };
 
   // .eq('status', current.status) jadi optimistic lock terakhir (pola sama
   // dengan approveJsa/approvePtw): kalau seseorang menolak dokumen ini
@@ -252,28 +257,45 @@ export async function approveProcedure(procedureId: string) {
   if (proc?.project_id) {
     await logDocumentEvent(supabase, {
       docType: 'procedure', docId: procedureId, projectId: proc.project_id, actorId: user.id,
-      action: nextStatus === PROCEDURE_STATUS.approved ? 'Direview & Disetujui PM' : 'Direview PGSOL',
+      action: nextStatus === PROCEDURE_STATUS.approved ? 'Direview & Disetujui PM'
+        : nextStatus === PROCEDURE_STATUS.reviewHsePgsol ? 'Direview PGSOL'
+        : 'Direview HSE PGSOL',
     });
   }
 
+  if (nextStatus === PROCEDURE_STATUS.reviewHsePgsol) {
+    await notifyAssignees({
+      projectId: current.project_id, docType: 'procedure', stageKey: 'procedure.hse_pgsol',
+      type: 'action_required',
+      title: 'Prosedur Kerja Menunggu Review HSE PGSOL',
+      message: `Prosedur Kerja untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu review HSE Anda.`,
+      link: `/dashboard/projects/${proc?.project_id}`,
+    });
+  }
   if (nextStatus === PROCEDURE_STATUS.menungguReviewPM) {
     await notifyAssignees({
       projectId: current.project_id, docType: 'procedure', stageKey: 'procedure.review',
       type: 'action_required',
       title: 'Prosedur Kerja Menunggu Review PM',
-      message: `Prosedur Kerja untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu review Anda.`,
+      message: `Prosedur Kerja untuk proyek "${proj?.name}" telah direview HSE PGSOL dan menunggu review Anda.`,
       link: `/dashboard/projects/${proc?.project_id}`,
     });
   }
 
   if (proj?.vendor_id) {
+    const vendorTitle = nextStatus === PROCEDURE_STATUS.approved ? `Prosedur Kerja Disetujui`
+      : nextStatus === PROCEDURE_STATUS.reviewHsePgsol ? `Prosedur Kerja Telah Direview PGSOL`
+      : `Prosedur Kerja Telah Direview HSE PGSOL`;
+    const vendorMessage = nextStatus === PROCEDURE_STATUS.approved
+      ? `Prosedur Kerja untuk proyek "${proj.name}" telah disetujui. Silakan lanjutkan pengajuan JSA.`
+      : nextStatus === PROCEDURE_STATUS.reviewHsePgsol
+        ? `Prosedur Kerja untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu review HSE PGSOL.`
+        : `Prosedur Kerja untuk proyek "${proj.name}" telah direview HSE PGSOL dan kini menunggu review PM.`;
     await createNotification({
       userId: proj.vendor_id,
       type: nextStatus === PROCEDURE_STATUS.approved ? 'approval' : 'info',
-      title: nextStatus === PROCEDURE_STATUS.approved ? `Prosedur Kerja Disetujui` : `Prosedur Kerja Telah Direview PGSOL`,
-      message: nextStatus === PROCEDURE_STATUS.approved
-        ? `Prosedur Kerja untuk proyek "${proj.name}" telah disetujui. Silakan lanjutkan pengajuan JSA.`
-        : `Prosedur Kerja untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu review PM.`,
+      title: vendorTitle,
+      message: vendorMessage,
       link: `/vendor/dashboard/projects/${proc?.project_id}`,
     });
   }
@@ -293,6 +315,9 @@ export async function rejectProcedure(procedureId: string, note: string) {
   if (currentCheck.status === PROCEDURE_STATUS.reviewPgsol) {
     stageKey = 'procedure.review_pgsol';
     penolak = 'PGSOL';
+  } else if (currentCheck.status === PROCEDURE_STATUS.reviewHsePgsol) {
+    stageKey = 'procedure.hse_pgsol';
+    penolak = 'HSE PGSOL';
   } else if (currentCheck.status === PROCEDURE_STATUS.menungguReviewPM) {
     stageKey = 'procedure.review';
     penolak = 'PM';
@@ -306,12 +331,15 @@ export async function rejectProcedure(procedureId: string, note: string) {
 
   await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
   await resetStageAssignments(supabase, currentCheck.project_id, 'procedure', stageKey);
-  if (stageKey === 'procedure.review') {
-    // Reject di tahap PM (kedua) mengembalikan Prosedur sampai ke Draft
-    // (bukan cuma ke tahap PGSOL), jadi tahap review_pgsol ikut di-reset
-    // supaya konsisten dengan restart penuh — pola sama dengan rejectPtw
-    // mereset ketiga tahapnya.
+  // Reject mengembalikan Prosedur sampai ke Draft, jadi SETIAP tahap
+  // eksternal yang sudah lolos sebelum tahap yang menolak ini harus ikut
+  // di-reset — kalau tidak, resubmission akan langsung dianggap "sudah
+  // approved" di tahap itu dan meloncatinya.
+  if (stageKey === 'procedure.hse_pgsol' || stageKey === 'procedure.review') {
     await resetStageAssignments(supabase, currentCheck.project_id, 'procedure', 'procedure.review_pgsol');
+  }
+  if (stageKey === 'procedure.review') {
+    await resetStageAssignments(supabase, currentCheck.project_id, 'procedure', 'procedure.hse_pgsol');
   }
 
   const { data: proc } = await supabase.from('procedures').select('content, project_id, projects ( name, vendor_id )').eq('id', procedureId).single();
@@ -360,14 +388,18 @@ export async function approveJsa(jsaId: string) {
 
   if (current.status === JSA_STATUS.reviewPgsol) {
     stageKey = 'jsa.review_pgsol';
+    nextStatus = JSA_STATUS.reviewHsePgsol;
+  } else if (current.status === JSA_STATUS.reviewHsePgsol) {
+    stageKey = 'jsa.hse_pgsol';
     nextStatus = JSA_STATUS.approvalPgn;
   } else if (current.status === JSA_STATUS.approvalPgn) {
     stageKey = 'jsa.approve_pgn';
     nextStatus = JSA_STATUS.approved;
-    // Pemisahan wewenang: reviewer dan approver wajib dua orang berbeda,
+    // Pemisahan wewenang: reviewer (HSE PGSOL, orang PGSOL terakhir yang
+    // menyentuh JSA sebelum PGN) dan approver PGN wajib dua orang berbeda,
     // terlepas dari siapa yang di-assign ke tahap ini.
     if (current.reviewer_id && current.reviewer_id === user.id) {
-      throw new Error("JSA harus disetujui oleh orang yang berbeda dari yang melakukan review. Silakan minta Approver PGN lain untuk menyetujui.");
+      throw new Error("JSA harus disetujui oleh orang yang berbeda dari yang melakukan review HSE PGSOL. Silakan minta Approver PGN lain untuk menyetujui.");
     }
   } else {
     throw new Error("JSA tidak dalam tahap yang bisa disetujui.");
@@ -396,8 +428,10 @@ export async function approveJsa(jsaId: string) {
   }
 
   const updatePayload: any = stageKey === 'jsa.review_pgsol'
-    ? { reviewer_id: user.id, reviewed_at: new Date().toISOString(), status: JSA_STATUS.approvalPgn }
-    : { approver_id: user.id, approved_at: new Date().toISOString(), status: JSA_STATUS.approved };
+    ? { status: JSA_STATUS.reviewHsePgsol }
+    : stageKey === 'jsa.hse_pgsol'
+      ? { reviewer_id: user.id, reviewed_at: new Date().toISOString(), status: JSA_STATUS.approvalPgn }
+      : { approver_id: user.id, approved_at: new Date().toISOString(), status: JSA_STATUS.approved };
 
   // .eq('status', current.status) jadi optimistic lock terakhir (pola yang sama
   // dengan approvePtw): kalau assignee lain menolak JSA ini persis di sela-sela
@@ -418,28 +452,45 @@ export async function approveJsa(jsaId: string) {
   if (current.project_id) {
     await logDocumentEvent(supabase, {
       docType: 'jsa', docId: jsaId, projectId: current.project_id, actorId: user.id,
-      action: nextStatus === JSA_STATUS.approved ? 'Disetujui PGN' : 'Direview PGSOL',
+      action: nextStatus === JSA_STATUS.approved ? 'Disetujui PGN'
+        : nextStatus === JSA_STATUS.reviewHsePgsol ? 'Direview PGSOL'
+        : 'Direview HSE PGSOL',
     });
   }
 
+  if (nextStatus === JSA_STATUS.reviewHsePgsol) {
+    await notifyAssignees({
+      projectId: current.project_id, docType: 'jsa', stageKey: 'jsa.hse_pgsol',
+      type: 'action_required',
+      title: 'JSA Menunggu Review HSE PGSOL',
+      message: `JSA untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu review HSE Anda.`,
+      link: `/dashboard/projects/${jsa?.project_id}`,
+    });
+  }
   if (nextStatus === JSA_STATUS.approvalPgn) {
     await notifyAssignees({
       projectId: current.project_id, docType: 'jsa', stageKey: 'jsa.approve_pgn',
       type: 'action_required',
       title: 'JSA Menunggu Persetujuan PGN',
-      message: `JSA untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu persetujuan Anda.`,
+      message: `JSA untuk proyek "${proj?.name}" telah direview HSE PGSOL dan menunggu persetujuan Anda.`,
       link: `/dashboard/projects/${jsa?.project_id}`,
     });
   }
 
   if (proj?.vendor_id) {
+    const vendorTitle = nextStatus === JSA_STATUS.approved ? `JSA Disetujui — Lanjut ke PTW`
+      : nextStatus === JSA_STATUS.reviewHsePgsol ? `JSA Telah Direview PGSOL`
+      : `JSA Telah Direview HSE PGSOL`;
+    const vendorMessage = nextStatus === JSA_STATUS.approved
+      ? `JSA untuk proyek "${proj.name}" telah disetujui PGN. Anda dapat melanjutkan ke pengajuan PTW.`
+      : nextStatus === JSA_STATUS.reviewHsePgsol
+        ? `JSA untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu review HSE PGSOL.`
+        : `JSA untuk proyek "${proj.name}" telah direview HSE PGSOL dan kini menunggu persetujuan PGN.`;
     await createNotification({
       userId: proj.vendor_id,
       type: nextStatus === JSA_STATUS.approved ? 'approval' : 'info',
-      title: nextStatus === JSA_STATUS.approved ? `JSA Disetujui — Lanjut ke PTW` : `JSA Telah Direview PGSOL`,
-      message: nextStatus === JSA_STATUS.approved
-        ? `JSA untuk proyek "${proj.name}" telah disetujui PGN. Anda dapat melanjutkan ke pengajuan PTW.`
-        : `JSA untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu persetujuan PGN.`,
+      title: vendorTitle,
+      message: vendorMessage,
       link: `/vendor/dashboard/projects/${jsa?.project_id}`,
     });
   }
@@ -459,6 +510,9 @@ export async function rejectJsa(jsaId: string, note: string) {
   if (current.status === JSA_STATUS.reviewPgsol) {
     stageKey = 'jsa.review_pgsol';
     penolak = 'PGSOL';
+  } else if (current.status === JSA_STATUS.reviewHsePgsol) {
+    stageKey = 'jsa.hse_pgsol';
+    penolak = 'HSE PGSOL';
   } else if (current.status === JSA_STATUS.approvalPgn) {
     stageKey = 'jsa.approve_pgn';
     penolak = 'PGN';
@@ -472,12 +526,15 @@ export async function rejectJsa(jsaId: string, note: string) {
 
   await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
   await resetStageAssignments(supabase, current.project_id, 'jsa', stageKey);
-  if (stageKey === 'jsa.approve_pgn') {
-    // Penolakan PGN mengembalikan dokumen sampai ke tahap review PGSOL (di
-    // bawah), sehingga tahap review_pgsol akan berjalan lagi juga — reset
-    // baris assignment-nya supaya konsisten dengan status dokumen yang
-    // restart penuh, bukan cuma tahap approve_pgn.
+  // Reject mengembalikan JSA sampai ke Draft, jadi SETIAP tahap eksternal
+  // yang sudah lolos sebelum tahap yang menolak ini harus ikut di-reset —
+  // kalau tidak, resubmission akan langsung dianggap "sudah approved" di
+  // tahap itu dan meloncatinya.
+  if (stageKey === 'jsa.hse_pgsol' || stageKey === 'jsa.approve_pgn') {
     await resetStageAssignments(supabase, current.project_id, 'jsa', 'jsa.review_pgsol');
+  }
+  if (stageKey === 'jsa.approve_pgn') {
+    await resetStageAssignments(supabase, current.project_id, 'jsa', 'jsa.hse_pgsol');
   }
 
   // Kembali ke Draft (bukan langsung ke Review PGSOL) — vendor harus lolos
@@ -529,7 +586,13 @@ export async function approvePtw(ptwId: string) {
   let stageKey = '';
   let updatePayloadIfComplete: any = {};
 
-  if (current.status === PTW_STATUS.menungguApprovalPM) {
+  if (current.status === PTW_STATUS.reviewPgsol) {
+    stageKey = 'ptw.review_pgsol';
+    updatePayloadIfComplete = { status: PTW_STATUS.reviewHsePgsol };
+  } else if (current.status === PTW_STATUS.reviewHsePgsol) {
+    stageKey = 'ptw.hse_pgsol';
+    updatePayloadIfComplete = { status: PTW_STATUS.menungguApprovalPM };
+  } else if (current.status === PTW_STATUS.menungguApprovalPM) {
     stageKey = 'ptw.approve_pm';
     updatePayloadIfComplete = { authority_id: user.id, authority_approved_at: new Date().toISOString(), status: PTW_STATUS.reviewPtwIssuer };
   } else if (current.status === PTW_STATUS.reviewPtwIssuer) {
@@ -590,9 +653,13 @@ export async function approvePtw(ptwId: string) {
   if (ptw?.project_id) {
     const stageAction = updatePayloadIfComplete.status === PTW_STATUS.aktif
       ? `Nomor PTW Diterbitkan & Aktif (${updatePayloadIfComplete.ptw_number})`
-      : updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer
-        ? 'Disetujui PTW Authority (PM)'
-        : 'Disetujui PTW Issuer';
+      : updatePayloadIfComplete.status === PTW_STATUS.reviewHsePgsol
+        ? 'Direview PGSOL'
+        : updatePayloadIfComplete.status === PTW_STATUS.menungguApprovalPM
+          ? 'Direview HSE PGSOL'
+          : updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer
+            ? 'Disetujui PTW Authority (PM)'
+            : 'Disetujui PTW Issuer';
     await logDocumentEvent(supabase, {
       docType: 'ptw', docId: ptwId, projectId: ptw.project_id, actorId: user.id,
       action: stageAction,
@@ -612,7 +679,21 @@ export async function approvePtw(ptwId: string) {
     });
   }
 
-  if (updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer) {
+  if (updatePayloadIfComplete.status === PTW_STATUS.reviewHsePgsol) {
+    await notifyAssignees({
+      projectId: ptw!.project_id, docType: 'ptw', stageKey: 'ptw.hse_pgsol',
+      type: 'action_required', title: 'PTW Menunggu Review HSE PGSOL',
+      message: `PTW untuk proyek "${proj?.name}" telah direview PGSOL dan menunggu review HSE Anda.`,
+      link: `/dashboard/projects/${ptw?.project_id}`,
+    });
+  } else if (updatePayloadIfComplete.status === PTW_STATUS.menungguApprovalPM) {
+    await notifyAssignees({
+      projectId: ptw!.project_id, docType: 'ptw', stageKey: 'ptw.approve_pm',
+      type: 'action_required', title: 'PTW Menunggu Persetujuan PM',
+      message: `PTW untuk proyek "${proj?.name}" telah direview HSE PGSOL dan menunggu persetujuan Anda.`,
+      link: `/dashboard/projects/${ptw?.project_id}`,
+    });
+  } else if (updatePayloadIfComplete.status === PTW_STATUS.reviewPtwIssuer) {
     await notifyAssignees({
       projectId: ptw!.project_id, docType: 'ptw', stageKey: 'ptw.review_issuer',
       type: 'action_required', title: 'PTW Menunggu Review Issuer',
@@ -653,7 +734,11 @@ export async function rejectPtw(ptwId: string, note: string) {
   if (!current?.project_id) throw new Error("PTW ini tidak terhubung ke proyek.");
 
   let stageKey = '';
-  if (current.status === PTW_STATUS.menungguApprovalPM) {
+  if (current.status === PTW_STATUS.reviewPgsol) {
+    stageKey = 'ptw.review_pgsol';
+  } else if (current.status === PTW_STATUS.reviewHsePgsol) {
+    stageKey = 'ptw.hse_pgsol';
+  } else if (current.status === PTW_STATUS.menungguApprovalPM) {
     stageKey = 'ptw.approve_pm';
   } else if (current.status === PTW_STATUS.reviewPtwIssuer) {
     stageKey = 'ptw.review_issuer';
@@ -670,10 +755,10 @@ export async function rejectPtw(ptwId: string, note: string) {
   await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
   await resetStageAssignments(supabase, current.project_id, 'ptw', stageKey);
   // Penolakan di tahap manapun mengembalikan PTW sampai ke Draft (bukan cuma
-  // ke tahap sebelumnya seperti JSA), jadi ketiga tahap PTW harus direset
+  // ke tahap sebelumnya seperti JSA), jadi kelima tahap PTW harus direset
   // supaya semuanya `pending` lagi saat vendor mengajukan ulang — meniru alur
-  // resubmission `savePtw` yang mengembalikan dokumen ke menungguApprovalPM.
-  const otherStageKeys = ['ptw.approve_pm', 'ptw.review_issuer', 'ptw.numbering_hsse'].filter(k => k !== stageKey);
+  // resubmission `savePtw` yang mengembalikan dokumen ke reviewInternalVendor.
+  const otherStageKeys = ['ptw.review_pgsol', 'ptw.hse_pgsol', 'ptw.approve_pm', 'ptw.review_issuer', 'ptw.numbering_hsse'].filter(k => k !== stageKey);
   for (const key of otherStageKeys) {
     await resetStageAssignments(supabase, current.project_id, 'ptw', key);
   }

@@ -15,7 +15,7 @@ export default async function PgsolProjectsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Proyek</h1>
-        <p className="text-sm text-slate-500 mt-1">Kelola siapa yang mereview Prosedur Kerja & JSA tahap PGSOL untuk tiap proyek.</p>
+        <p className="text-sm text-slate-500 mt-1">Kelola siapa yang mereview Prosedur Kerja, JSA, & PTW tahap PGSOL untuk tiap proyek.</p>
       </div>
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <table className="min-w-full divide-y divide-slate-200">
@@ -42,7 +42,7 @@ export default async function PgsolProjectsPage() {
               );
             })}
             {projects.length === 0 && (
-              <tr><td colSpan={3} className="px-6 py-12 text-center text-sm text-slate-500">Belum ada proyek dengan Prosedur Kerja atau JSA diajukan.</td></tr>
+              <tr><td colSpan={3} className="px-6 py-12 text-center text-sm text-slate-500">Belum ada proyek dengan Prosedur Kerja, JSA, atau PTW diajukan.</td></tr>
             )}
           </tbody>
         </table>

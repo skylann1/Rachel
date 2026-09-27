@@ -36,7 +36,9 @@ export async function updateSession(request: NextRequest) {
   const isVendorPath = request.nextUrl.pathname.startsWith("/vendor");
   const isPgsolPath = request.nextUrl.pathname.startsWith("/pgsol");
   const isDashboardPath = request.nextUrl.pathname.startsWith("/dashboard");
-  const isDashboardApprovalPath = request.nextUrl.pathname.startsWith("/dashboard/approval");
+  const isDashboardApprovalPath =
+    request.nextUrl.pathname.startsWith("/dashboard/approval") ||
+    request.nextUrl.pathname.startsWith("/dashboard/projects");
 
   const isAuthLogin = request.nextUrl.pathname === "/auth/login";
   const isVendorLogin = request.nextUrl.pathname === "/vendor/login";
@@ -88,8 +90,13 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
       }
     } else if (isPgsol(type)) {
-      // Pengecualian: user PGSOL boleh masuk /dashboard/approval (halaman
-      // yang sama dipakai pgsol_reviewer hari ini) meski home-nya /pgsol.
+      // Pengecualian: user PGSOL boleh masuk /dashboard/approval (daftar
+      // dokumen menunggu review) dan /dashboard/projects/[id] (halaman detail
+      // tempat tombol Setujui/Tolak PGSOL benar-benar berada — tanpa ini
+      // tombol "Review" di /dashboard/approval memantul balik ke
+      // /pgsol/dashboard dan reviewer PGSOL tidak pernah bisa menindaklanjuti
+      // apa pun). Akses ke aksi approve/reject tetap dibatasi per-tombol oleh
+      // hasPermission di AdminProjectClient, jadi ini aman dibuka.
       if ((isDashboardPath && !isDashboardApprovalPath) || isVendorPath || isAuthPath) {
         const url = request.nextUrl.clone();
         url.pathname = "/pgsol/dashboard";

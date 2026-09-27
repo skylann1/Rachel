@@ -16,15 +16,17 @@ import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
+import PtwSafetyChecklistForm from '@/components/ptw/PtwSafetyChecklistForm';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending } from '@/lib/jsa-status';
-import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, isProcedurePending } from '@/lib/procedure-status';
 import { StageAssignmentRow } from '@/lib/stage-assignments';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { EXPIRY_TONE } from '@/lib/document-expiry';
 import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
 import { buildCheckinUrl } from '@/lib/site-ops';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { HseAssistantPanel, type HseAnomaly } from '@/components/ai/HseAssistantPanel';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
@@ -160,13 +162,21 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
 const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
   'prosedur-review': {
     title: 'Selesaikan Review PGSOL?',
-    desc: 'Anda menyatakan Prosedur Kerja sudah sesuai standar kerja aman. Dokumen akan diteruskan ke PM untuk persetujuan akhir.',
+    desc: 'Anda menyatakan Prosedur Kerja sudah sesuai standar kerja aman. Dokumen akan diteruskan ke HSE PGSOL untuk verifikasi lanjutan.',
+  },
+  'prosedur-hse': {
+    title: 'Selesaikan Review HSE PGSOL?',
+    desc: 'Anda menyatakan aspek HSE Prosedur Kerja sudah memadai. Dokumen akan diteruskan ke PM untuk persetujuan akhir.',
   },
   prosedur: { title: 'Setujui Prosedur Kerja?', desc: 'Dokumen SOP akan ditandai disetujui dan vendor dapat melanjutkan ke tahap JSA.' },
   jsa: { title: 'Setujui Job Safety Analysis?', desc: 'JSA akan ditandai disetujui pada tahap ini dan lanjut ke tahap berikutnya.' },
   'jsa-review': {
     title: 'Selesaikan Review PGSOL?',
-    desc: 'Anda menyatakan JSA sudah benar secara teknis. JSA akan diteruskan ke PGN untuk persetujuan akhir oleh orang yang berbeda.',
+    desc: 'Anda menyatakan JSA sudah benar secara teknis. JSA akan diteruskan ke HSE PGSOL untuk verifikasi lanjutan.',
+  },
+  'jsa-hse': {
+    title: 'Selesaikan Review HSE PGSOL?',
+    desc: 'Anda menyatakan aspek HSE JSA sudah memadai. JSA akan diteruskan ke PGN untuk persetujuan akhir oleh orang yang berbeda.',
   },
   'jsa-approve': {
     title: 'Setujui JSA sebagai PGN?',
@@ -249,7 +259,7 @@ export default function AdminProjectClient({
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [fullScreenPreview, setFullScreenPreview] = useState<'prosedur' | 'jsa' | 'ptw' | null>(null);
   const [hseLoading, setHseLoading] = useState(false);
-  const [hseAnomalies, setHseAnomalies] = useState<{ id: number; auto_comment: string }[] | null>(null);
+  const [hseResult, setHseResult] = useState<{ score: number; summary: string; anomalies: HseAnomaly[] } | null>(null);
   const [hseError, setHseError] = useState<string | null>(null);
   const [qrModalToken, setQrModalToken] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
@@ -282,7 +292,7 @@ export default function AdminProjectClient({
   const prosedurRevisions = prosedur?.content?.revisions || [];
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
-  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : prosedur?.status === PROCEDURE_STATUS.menungguReviewPM ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
+  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : isProcedurePending(prosedur?.status) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
   const jsaStatus = jsa?.status === JSA_STATUS.approved ? 'Approved' : isJsaPending(jsa?.status) ? 'Pending' : jsa?.rejection_note ? 'Rejected' : jsa ? 'Draft' : 'Draft';
 
   // PTW tahap proyek: hijau hanya kalau SEMUA tipe PTW yang diajukan sudah Aktif.
@@ -335,7 +345,8 @@ export default function AdminProjectClient({
     return { approved: rows.filter(r => r.status === 'approved').length, total: rows.length };
   };
 
-  const isProsedurTahapPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPgsol;
+  const isProsedurTahapReviewPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPgsol;
+  const isProsedurTahapHsePgsol = prosedur?.status === PROCEDURE_STATUS.reviewHsePgsol;
   const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur?.status];
   const procStageKey = procPerm ? `${procPerm.module}.${procPerm.action}` : '';
   const hasProsedurPermission = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
@@ -347,6 +358,7 @@ export default function AdminProjectClient({
   //   Review PGSOL    -> permission jsa.review_pgsol
   //   Persetujuan PGN -> permission jsa.approve_pgn, DAN bukan orang yang mereview
   const isTahapReviewPgsol = jsa?.status === JSA_STATUS.reviewPgsol;
+  const isTahapHsePgsol = jsa?.status === JSA_STATUS.reviewHsePgsol;
   const jsaPerm = JSA_STAGE_PERMISSION[jsa?.status];
   const jsaStageKey = jsaPerm ? `${jsaPerm.module}.${jsaPerm.action}` : '';
   const jsaSudahDireviewOlehSaya = jsa?.status === JSA_STATUS.approvalPgn && jsa?.reviewer_id === currentUserId;
@@ -404,7 +416,7 @@ export default function AdminProjectClient({
     if (!jsa?.jsa_steps?.length) return;
     setHseLoading(true);
     setHseError(null);
-    setHseAnomalies(null);
+    setHseResult(null);
     try {
       const jsaData = jsa.jsa_steps.map((step: any) => {
         let bahayaObj: any = {}; let tindakanObj: any = {};
@@ -426,7 +438,7 @@ export default function AdminProjectClient({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error || 'Gagal menjalankan analisis AI.');
-      setHseAnomalies(body.anomalies || []);
+      setHseResult({ score: body.score, summary: body.summary, anomalies: body.anomalies || [] });
     } catch (err) {
       setHseError(err instanceof Error ? err.message : 'Gagal menjalankan analisis AI.');
     } finally {
@@ -512,9 +524,9 @@ export default function AdminProjectClient({
         <ApproveModal
           labelKey={
             approveTarget.type === 'jsa'
-              ? (isTahapReviewPgsol ? 'jsa-review' : 'jsa-approve')
+              ? (isTahapReviewPgsol ? 'jsa-review' : isTahapHsePgsol ? 'jsa-hse' : 'jsa-approve')
               : approveTarget.type === 'prosedur'
-                ? (isProsedurTahapPgsol ? 'prosedur-review' : 'prosedur')
+                ? (isProsedurTahapReviewPgsol ? 'prosedur-review' : isProsedurTahapHsePgsol ? 'prosedur-hse' : 'prosedur')
                 : approveTarget.type
           }
           warning={approveTargetPtwWarning}
@@ -745,13 +757,15 @@ export default function AdminProjectClient({
                            <FileSignature className="w-5 h-5 text-amber-600" />
                            <h3 className="text-lg font-bold text-amber-900">Prosedur Kerja (SOP)</h3>
                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
-                             {isProsedurTahapPgsol ? 'Tahap 1 — Review PGSOL' : 'Tahap 2 — Menunggu Review PM'}
+                             {isProsedurTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : isProsedurTahapHsePgsol ? 'Tahap 2 — Review HSE PGSOL' : 'Tahap 3 — Menunggu Review PM'}
                            </span>
                          </div>
                          <p className="text-amber-700 text-sm">
-                           {isProsedurTahapPgsol
-                             ? 'Verifikasi teknis: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke PM.'
-                             : 'Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.'}
+                           {isProsedurTahapReviewPgsol
+                             ? 'Verifikasi teknis: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke HSE PGSOL.'
+                             : isProsedurTahapHsePgsol
+                               ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada SOP sudah memadai sebelum diteruskan ke PM.'
+                               : 'Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.'}
                          </p>
                          <StageProgress {...prosedurProgress} />
                        </div>
@@ -759,7 +773,7 @@ export default function AdminProjectClient({
                          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                            <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
                            <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                             {isProsedurTahapPgsol ? 'Review & Teruskan ke PM' : 'Setujui SOP'}
+                             {isProsedurTahapReviewPgsol ? 'Review & Teruskan ke HSE PGSOL' : isProsedurTahapHsePgsol ? 'Review & Teruskan ke PM' : 'Setujui SOP'}
                            </button>
                          </div>
                        )}
@@ -813,13 +827,15 @@ export default function AdminProjectClient({
                            <ShieldAlert className="w-5 h-5 text-amber-600" />
                            <h3 className="text-lg font-bold text-amber-900">Job Safety Analysis (JSA)</h3>
                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
-                             {isTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : 'Tahap 2 — Persetujuan PGN'}
+                             {isTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : isTahapHsePgsol ? 'Tahap 2 — Review HSE PGSOL' : 'Tahap 3 — Persetujuan PGN'}
                            </span>
                          </div>
                          <p className="text-amber-700 text-sm">
                            {isTahapReviewPgsol
                              ? 'Verifikasi teknis: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar.'
-                             : 'Otorisasi akhir: JSA sudah direview PGSOL. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
+                             : isTahapHsePgsol
+                               ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada JSA ini sudah memadai sebelum diteruskan ke PGN.'
+                               : 'Otorisasi akhir: JSA sudah direview PGSOL. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
                          </p>
                          <StageProgress {...jsaProgress} />
                        </div>
@@ -837,7 +853,7 @@ export default function AdminProjectClient({
                            <>
                              <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
                              <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                               {isTahapReviewPgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
+                               {isTahapReviewPgsol ? 'Review & Teruskan ke HSE PGSOL' : isTahapHsePgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
                              </button>
                            </>
                          )}
@@ -849,29 +865,40 @@ export default function AdminProjectClient({
                         <p className="text-sm text-rose-700">{hseError}</p>
                       </div>
                     )}
-                    {hseAnomalies && hseAnomalies.length === 0 && (
-                      <div className="flex items-start gap-3 bg-emerald-50 border-b border-emerald-100 px-4 sm:px-6 py-4">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                        <p className="text-sm text-emerald-700">AI tidak menemukan langkah berisiko tinggi dengan mitigasi lemah.</p>
-                      </div>
-                    )}
-                    {hseAnomalies && hseAnomalies.length > 0 && (
-                      <div className="bg-violet-50 border-b border-violet-100 px-4 sm:px-6 py-4 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-violet-600" />
-                          <p className="text-sm font-bold text-violet-900">{hseAnomalies.length} langkah ditandai AI untuk revisi</p>
-                        </div>
-                        {hseAnomalies.map(a => {
-                          const step = jsa?.jsa_steps?.find((s: any) => s.step_number === a.id);
-                          return (
-                            <div key={a.id} className="bg-white border border-violet-200 rounded-xl p-4">
-                              <p className="text-xs font-bold text-violet-700 uppercase tracking-wider mb-1">
-                                Langkah {a.id}{step?.pekerjaan ? ` — ${step.pekerjaan}` : ''}
-                              </p>
-                              <p className="text-sm text-slate-700">{a.auto_comment}</p>
-                            </div>
-                          );
-                        })}
+                    {hseResult && (
+                      <div className="border-b border-violet-100 p-4 sm:p-6 bg-slate-50">
+                        <HseAssistantPanel
+                          score={hseResult.score}
+                          summary={hseResult.summary}
+                          anomalies={hseResult.anomalies}
+                          getStepLabel={(id) => {
+                            const step = jsa?.jsa_steps?.find((s: any) => s.step_number === id);
+                            return `Langkah ${id}${step?.pekerjaan ? ` — ${step.pekerjaan}` : ''}`;
+                          }}
+                          renderStepDetail={(id) => {
+                            const step = jsa?.jsa_steps?.find((s: any) => s.step_number === id);
+                            if (!step) return <p className="text-xs text-slate-500">Data langkah tidak ditemukan.</p>;
+                            let bahayaObj: any = {}; let tindakanObj: any = {};
+                            try { bahayaObj = typeof step.bahaya === 'string' ? JSON.parse(step.bahaya) : step.bahaya || {}; } catch (e) {}
+                            try { tindakanObj = typeof step.tindakan === 'string' ? JSON.parse(step.tindakan) : step.tindakan || {}; } catch (e) {}
+                            const mitigasi = tindakanObj.mitigasi;
+                            const mitigasiText = typeof mitigasi === 'object' && mitigasi
+                              ? Object.entries(mitigasi).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('; ')
+                              : mitigasi;
+                            return (
+                              <div className="space-y-2 text-xs">
+                                <div className="flex items-start gap-2">
+                                  <span className="font-bold text-slate-500 uppercase shrink-0 w-24">Potensi Bahaya</span>
+                                  <span className="text-slate-700 flex-1">{bahayaObj.potensiBahaya || '—'}</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="font-bold text-slate-500 uppercase shrink-0 w-24">Mitigasi</span>
+                                  <span className="text-slate-700 flex-1">{mitigasiText || '—'}</span>
+                                </div>
+                              </div>
+                            );
+                          }}
+                        />
                       </div>
                     )}
                     <div className="bg-slate-100 p-2">
@@ -996,6 +1023,7 @@ export default function AdminProjectClient({
                               workEnd={row.work_end}
                               hotWorkTypes={row.hot_work_types || []}
                               gasTestFrequency={row.gas_test_frequency || {}}
+                              checklistData={row.safety_checklist || {}}
                               jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                               siblings={ptws}
                               signatories={ptwSignatories?.[row.id]}
@@ -1182,6 +1210,14 @@ export default function AdminProjectClient({
                                  <QrCode className="w-4 h-4" /> QR Check-in Lapangan
                                </button>
                              )}
+                             <PtwSafetyChecklistForm
+                               ptwId={row.id}
+                               ptwType={row.ptw_type || 'dingin'}
+                               validFrom={row.valid_from}
+                               validTo={row.valid_to}
+                               initialChecklist={row.safety_checklist || {}}
+                               editable={rowEffective === PTW_STATUS.aktif}
+                             />
                              <BlobProvider document={
                                <PtwPDF
                                  projectId={project.id}
@@ -1204,6 +1240,7 @@ export default function AdminProjectClient({
                                  workEnd={row.work_end}
                                  hotWorkTypes={row.hot_work_types || []}
                                  gasTestFrequency={row.gas_test_frequency || {}}
+                                 checklistData={row.safety_checklist || {}}
                                  jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                  siblings={ptws}
                                  signatories={ptwSignatories?.[row.id]}

@@ -97,7 +97,9 @@ export async function getMyTasks(): Promise<TaskItem[]> {
               id: proc.id,
               title: proc.status === PROCEDURE_STATUS.reviewPgsol
                 ? `Review Prosedur Kerja (PGSOL)`
-                : `Review Prosedur Kerja (PM)`,
+                : proc.status === PROCEDURE_STATUS.reviewHsePgsol
+                  ? `Review Prosedur Kerja (HSE PGSOL)`
+                  : `Review Prosedur Kerja (PM)`,
               type: 'Prosedur',
               projectName: proj?.name || 'Unknown Project', vendorName: companyName || 'Internal',
               date: proc.created_at, url: `/dashboard/projects/${proc.project_id}`,
@@ -159,7 +161,9 @@ export async function getMyTasks(): Promise<TaskItem[]> {
               id: jsa.id,
               title: jsa.status === JSA_STATUS.reviewPgsol
                 ? `Review JSA (PGSOL)`
-                : `Persetujuan JSA (PGN)`,
+                : jsa.status === JSA_STATUS.reviewHsePgsol
+                  ? `Review JSA (HSE PGSOL)`
+                  : `Persetujuan JSA (PGN)`,
               type: 'JSA',
               projectName: proj?.name || 'Unknown Project',
               vendorName: companyName || 'Internal',

@@ -236,3 +236,60 @@ untuk proyek yang bersangkutan.
 - [ ] `/dashboard/my-task` untuk reviewer PGSOL menampilkan tugas Prosedur
       Kerja hanya selagi benar ditugaskan dengan baris pending — tidak ada
       entri phantom selagi dokumen masih `Draft`.
+
+---
+
+# Urutan Migrasi — Gerbang HSE PGSOL (Prosedur/JSA/PTW) + Gerbang PGSOL untuk PTW
+
+Jalankan setelah semua migrasi di atas (Fase 1 s/d Fase 3.1) sudah selesai:
+
+1. `schema_ptw_pgsol_gate_vendor_policy.sql`
+
+Tidak ada file migrasi lain untuk fase ini — status/stage-key baru
+(`procedure.hse_pgsol`, `jsa.hse_pgsol`, `ptw.review_pgsol`, `ptw.hse_pgsol`)
+murni kode aplikasi, `stage_key`/`doc_type`/`status` adalah kolom TEXT polos
+tanpa constraint. Permission `hse_pgsol`/`review_pgsol` yang baru TIDAK
+di-auto-grant ke role manapun (keputusan sadar) — PGSOL admin harus membuat
+atau mengedit role lewat halaman Role & Permission sendiri.
+
+## ⚠️ Cutover — dua risiko fail-closed berbeda arah
+
+**1. Migrasi RLS di atas WAJIB dijalankan SEBELUM (atau paling lambat
+bersamaan dengan, tidak pernah SESUDAH) deploy kode aplikasi.** Tanpanya,
+setiap PTW yang vendor selesaikan review internalnya akan diam-diam gagal
+pindah status sama sekali (RLS menolak UPDATE-nya tanpa error eksplisit di
+UI) — PTW itu macet permanen di `Review Internal Vendor`.
+
+**2. Setiap Prosedur Kerja/JSA/PTW yang mencapai status `Review PGSOL` atau
+`Review HSE PGSOL` akan macet sampai admin PGSOL:**
+   - membuat/mengedit role dan mencentang permission `hse_pgsol` (Prosedur
+     & JSA) dan `review_pgsol`+`hse_pgsol` (PTW) lewat halaman Role &
+     Permission,
+   - lalu mengisi 6 slot assignment (Reviewer + HSE, untuk masing-masing
+     Prosedur Kerja, JSA, PTW) di `/pgsol/dashboard/projects/{id}/assign`
+     per proyek yang sedang berjalan.
+
+Tidak ada auto-grant untuk permission baru ini (beda dari Fase 3.1 yang
+langsung menggrant `procedure.review_pgsol` ke role `pgsol_reviewer`) —
+ini keputusan sadar, bukan celah yang terlewat.
+
+- [ ] Sebelum atau segera setelah deploy: umumkan ke admin PGSOL bahwa
+      halaman assign sekarang punya 6 slot (Reviewer + HSE untuk Prosedur
+      Kerja/JSA/PTW), dan proyek yang sedang berjalan butuh diisi ulang.
+
+## Verifikasi manual
+
+- [ ] Ajukan PTW baru sebagai vendor sampai tahap Review Internal Vendor,
+      lalu approve sebagai reviewer internal vendor — status harus maju ke
+      `Review PGSOL` (BUKAN gagal diam-diam, BUKAN langsung ke
+      `Menunggu Approval PM`).
+- [ ] Assign seorang PGSOL Reviewer ke `ptw.review_pgsol` dan seorang PGSOL
+      HSE ke `ptw.hse_pgsol` untuk proyek itu. Approve sebagai Reviewer —
+      status maju ke `Review HSE PGSOL`. Approve sebagai HSE — status maju
+      ke `Menunggu Approval PM`, alur PM/Issuer/Penomoran HSSE yang sudah
+      ada berjalan seperti biasa dari situ.
+- [ ] Reject JSA di tahap `Review HSE PGSOL` — pastikan status balik ke
+      `Draft`, dan baris assignment `jsa.review_pgsol` ikut ter-reset ke
+      `pending` (query `stage_assignments` langsung, atau ajukan ulang dan
+      pastikan Reviewer PGSOL diminta review lagi, bukan langsung lompat
+      ke HSE).

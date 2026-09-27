@@ -1,20 +1,12 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Font, Image } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 import {
   PTW_TYPES, APD_ITEMS, PtwType, PTW_GAS_TEST_TYPES, PTW_GAS_FORM_TYPES, GAS_TEST_STANDARDS,
-  PtwGasTestEntry, PtwGasTestFrequency, HOT_WORK_JOB_TYPES, PtwChecklistSub,
+  PtwGasTestEntry, PtwGasTestFrequency, HOT_WORK_JOB_TYPES,
   hazardColumnsFor, APD_CATEGORY_LABELS, APD_OTHERS_LABEL,
+  flattenSafetyChecklist, PtwSafetyChecklistData,
 } from '@/lib/ptw-types';
 import type { PtwSignatories, PtwSignatory } from '@/lib/ptw-signatories';
-
-// Register fonts
-Font.register({
-  family: 'Helvetica',
-  fonts: [
-    { src: 'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-regular-webfont.ttf' },
-    { src: 'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 'bold' }
-  ]
-});
 
 const B = '#000';
 // Form asli hanya mengarsir blok Verifikasi dan tiga kotak di bagian bawah;
@@ -190,6 +182,8 @@ interface PtwPDFProps {
   siblings?: PtwSibling[];
   /** Nama & tanggal penandatangan; kosong saat masih draft. */
   signatories?: PtwSignatories | null;
+  /** Isian Sudah/Belum/Keterangan per hari, kosong kalau belum pernah diisi. */
+  checklistData?: PtwSafetyChecklistData;
 }
 
 const formatDate = (value?: string | null) => {
@@ -223,6 +217,7 @@ export default function PtwPDF({
   jsaNumber,
   siblings = [],
   signatories,
+  checklistData = {},
 }: PtwPDFProps) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const typeDef = PTW_TYPES.find(t => t.id === ptwType) || PTW_TYPES[0];
@@ -279,7 +274,7 @@ export default function PtwPDF({
         </View>
         <View style={[styles.signNameRow, { height: 10 }]}>
           <Text style={[styles.signNameLabel, ink as any]}>Tanda Tangan</Text>
-          <Text style={styles.signNameVal}></Text>
+          <Text style={[styles.signNameVal, { textAlign: 'center', fontWeight: 'bold', fontSize: fs }]}>APPROVED</Text>
         </View>
         <View style={styles.signNameRow}>
           <Text style={[styles.signNameLabel, ink as any]}>Tanggal</Text>
@@ -294,25 +289,33 @@ export default function PtwPDF({
   };
 
   /** Satu baris checklist: kolom Ceklist, item, 7 pasang Sudah/Belum, keterangan. */
-  const ChecklistRow = ({ marker, label, indent = false, bold = false, split = true }: {
+  const ChecklistRow = ({ marker, label, indent = false, bold = false, split = true, days, keterangan }: {
     marker: string; label: string; indent?: boolean; bold?: boolean; split?: boolean;
+    days?: (boolean | null)[]; keterangan?: string;
   }) => (
     <View style={styles.tRow}>
       <View style={[styles.tCell, { width: '4%', alignItems: 'center' }]}><Text>{marker}</Text></View>
       <View style={[styles.tCell, { width: '31%' }]}>
         <Text style={{ fontSize: 4, lineHeight: 1.0, paddingLeft: indent ? 6 : 0, fontWeight: bold ? 'bold' : 'normal' }}>{label}</Text>
       </View>
-      {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-        <View key={d} style={[styles.tCell, { width: '8%', padding: 0, flexDirection: 'row' }]}>
-          {split ? (
-            <>
-              <View style={{ flex: 1, borderRightWidth: 1, borderColor: B }}></View>
-              <View style={{ flex: 1 }}></View>
-            </>
-          ) : null}
-        </View>
-      ))}
-      <View style={[styles.tCell, { width: '9%', borderRightWidth: 0 }]}><Text></Text></View>
+      {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+        const dayState = days?.[d - 1];
+        return (
+          <View key={d} style={[styles.tCell, { width: '8%', padding: 0, flexDirection: 'row' }]}>
+            {split ? (
+              <>
+                <View style={{ flex: 1, borderRightWidth: 1, borderColor: B, alignItems: 'center', justifyContent: 'center' }}>
+                  {dayState === true ? <Text style={{ fontSize: 4 }}>{'✓'}</Text> : null}
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  {dayState === false ? <Text style={{ fontSize: 4 }}>{'✓'}</Text> : null}
+                </View>
+              </>
+            ) : null}
+          </View>
+        );
+      })}
+      <View style={[styles.tCell, { width: '9%', borderRightWidth: 0 }]}><Text style={{ fontSize: 4 }}>{keterangan || ''}</Text></View>
     </View>
   );
 
@@ -490,18 +493,17 @@ export default function PtwPDF({
 
               {/* Table Body — sub-item jadi baris tersendiri karena pada form
                   asli masing-masing punya kolom Sudah/Belum sendiri. */}
-              {typeDef.checklist.map((item, index) => (
-                <React.Fragment key={item.id}>
-                  <ChecklistRow
-                    marker={item.groupOnly ? '' : `${String.fromCharCode(97 + index)}.`}
-                    label={item.label}
-                    bold={item.groupOnly}
-                    split={!item.groupOnly}
-                  />
-                  {(item.subItems || []).map((s: PtwChecklistSub, si) => (
-                    <ChecklistRow key={si} marker={s.marker} label={s.label} indent={s.indent ?? true} />
-                  ))}
-                </React.Fragment>
+              {flattenSafetyChecklist(typeDef).map((row, i) => (
+                <ChecklistRow
+                  key={row.key ?? `hdr-${i}`}
+                  marker={row.marker}
+                  label={row.label}
+                  indent={row.indent}
+                  bold={row.bold}
+                  split={row.checkable}
+                  days={row.key ? checklistData[row.key]?.days : undefined}
+                  keterangan={row.key ? checklistData[row.key]?.keterangan : undefined}
+                />
               ))}
 
               {/* Frekuensi uji gas — ada pada form panas, listrik, ruang
@@ -609,11 +611,11 @@ export default function PtwPDF({
                    <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
+                   <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
-                   <View style={styles.tableCell}><Text></Text></View>
-                   <View style={styles.tableCell}><Text></Text></View>
+                   <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                 </View>
 
               </View>
@@ -642,7 +644,7 @@ export default function PtwPDF({
                          <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text></Text></View>
                          <View style={styles.tableCell}><Text></Text></View>
                          <View style={styles.tableCell}><Text></Text></View>
-                         <View style={styles.tableCell}><Text></Text></View>
+                         <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                       </View>
                   </View>
                 </View>
@@ -705,7 +707,7 @@ export default function PtwPDF({
                 <Text style={[styles.gasLogCell, { width: '12%' }]}>{row.combustibleHasil || '-'} / {row.combustibleSesuai ? 'Sesuai' : 'Tidak Sesuai'}</Text>
                 <Text style={[styles.gasLogCell, { width: '17%' }]}>{row.keterangan || '-'}</Text>
                 <Text style={[styles.gasLogCell, { width: '15%' }]}>{row.namaPelaksana || '-'}</Text>
-                <Text style={[styles.gasLogCell, { width: '17%', borderRightWidth: 0 }]}></Text>
+                <Text style={[styles.gasLogCell, { width: '17%', borderRightWidth: 0, textAlign: 'center', fontWeight: 'bold', fontSize: 4 }]}>APPROVED</Text>
               </View>
             ))
           )}
