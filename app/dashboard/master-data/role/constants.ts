@@ -42,7 +42,8 @@ export const allPermissionModules = [
     items: [
       { key: 'view', label: 'Melihat Daftar Prosedur Kerja', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'review_vendor', label: 'Review Internal Vendor — Prosedur Kerja', allowedTypes: ['vendor'] },
-      { key: 'review_pgsol', label: 'Review Prosedur Kerja — Tahap PGSOL', allowedTypes: ['pgsol'] },
+      { key: 'review_pgsol', label: 'Review Prosedur Kerja — Tahap Reviewer PGSOL', allowedTypes: ['pgsol'] },
+      { key: 'hse_pgsol', label: 'Review Prosedur Kerja — Tahap HSE PGSOL', allowedTypes: ['pgsol'] },
       { key: 'review', label: 'Review & Approve Prosedur Kerja', allowedTypes: ['pgn', 'pgsol'] },
     ]
   },
@@ -54,8 +55,9 @@ export const allPermissionModules = [
       { key: 'view', label: 'Melihat Daftar JSA', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'create', label: 'Membuat Pengajuan JSA Baru', allowedTypes: ['vendor'] },
       { key: 'review_vendor', label: 'Review Internal Vendor — JSA', allowedTypes: ['vendor'] },
-      { key: 'review_pgsol', label: 'Review JSA — Tahap PGSOL', allowedTypes: ['pgsol'] },
-      { key: 'manage_assignment_pgsol', label: 'Menunjuk Reviewer PGSOL per Proyek', allowedTypes: ['pgsol'] },
+      { key: 'review_pgsol', label: 'Review JSA — Tahap Reviewer PGSOL', allowedTypes: ['pgsol'] },
+      { key: 'hse_pgsol', label: 'Review JSA — Tahap HSE PGSOL', allowedTypes: ['pgsol'] },
+      { key: 'manage_assignment_pgsol', label: 'Menunjuk Reviewer/HSE PGSOL per Proyek', allowedTypes: ['pgsol'] },
       { key: 'approve_pgn', label: 'Approve JSA — Tahap PGN', allowedTypes: ['pgn'] },
       { key: 'delete', label: 'Menghapus Data JSA', allowedTypes: ['pgn'] },
     ]
@@ -63,10 +65,12 @@ export const allPermissionModules = [
   {
     id: 'ptw',
     title: 'Modul PTW (Permit to Work)',
-    description: 'Hak akses terkait manajemen Surat Izin Kerja Aman — tiga tahap approval berurutan.',
+    description: 'Hak akses terkait manajemen Surat Izin Kerja Aman — lima tahap approval berurutan.',
     items: [
       { key: 'view', label: 'Melihat Daftar PTW', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'review_vendor', label: 'Review Internal Vendor — PTW', allowedTypes: ['vendor'] },
+      { key: 'review_pgsol', label: 'Review PTW — Tahap Reviewer PGSOL', allowedTypes: ['pgsol'] },
+      { key: 'hse_pgsol', label: 'Review PTW — Tahap HSE PGSOL', allowedTypes: ['pgsol'] },
       { key: 'approve_pm', label: 'Approval Tahap PM (PTW Authority)', allowedTypes: ['pgn'] },
       { key: 'review_issuer', label: 'Review Tahap PTW Issuer', allowedTypes: ['pgn'] },
       { key: 'numbering_hsse', label: 'Penomoran & Penerbitan PTW (HSSE)', allowedTypes: ['pgn'] },
