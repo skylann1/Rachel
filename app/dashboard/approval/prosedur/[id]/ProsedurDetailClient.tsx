@@ -44,11 +44,14 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
   const canApprove = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
 
   // Keterangan tahap — sadar-status. Prosedur kini punya gerbang PGSOL
-  // sebelum PM, jadi teks lama ("diajukan untuk direview oleh PM") tidak
-  // lagi benar saat status masih Review PGSOL.
+  // (Reviewer lalu HSE) sebelum PM, jadi teks lama ("diajukan untuk
+  // direview oleh PM") tidak lagi benar saat status masih Review PGSOL
+  // atau Review HSE PGSOL.
   const statusBlurb =
     prosedur.status === PROCEDURE_STATUS.reviewPgsol
-      ? 'Dokumen prosedur kerja ini sedang menunggu verifikasi teknis oleh PGSOL sebelum diteruskan ke PM.'
+      ? 'Dokumen prosedur kerja ini sedang menunggu verifikasi teknis oleh PGSOL sebelum diteruskan ke review HSE PGSOL.'
+      : prosedur.status === PROCEDURE_STATUS.reviewHsePgsol
+      ? 'Dokumen prosedur kerja ini telah direview teknis PGSOL dan sedang menunggu review HSE PGSOL sebelum diteruskan ke PM.'
       : prosedur.status === PROCEDURE_STATUS.menungguReviewPM
       ? 'Dokumen prosedur kerja ini telah direview PGSOL dan diajukan untuk persetujuan akhir oleh PM.'
       : prosedur.status === PROCEDURE_STATUS.approved
@@ -130,8 +133,10 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
             prosedur.status === PROCEDURE_STATUS.draft ? 'bg-slate-100 text-slate-600' :
             prosedur.status === PROCEDURE_STATUS.reviewPgsol ? 'bg-amber-100 text-amber-700' :
+            prosedur.status === PROCEDURE_STATUS.reviewHsePgsol ? 'bg-amber-100 text-amber-700' :
             prosedur.status === PROCEDURE_STATUS.menungguReviewPM ? 'bg-orange-100 text-orange-600' :
-            'bg-green-100 text-green-700'
+            prosedur.status === PROCEDURE_STATUS.approved ? 'bg-green-100 text-green-700' :
+            'bg-rose-100 text-rose-700'
           }`}>
             {prosedur.status}
           </span>
