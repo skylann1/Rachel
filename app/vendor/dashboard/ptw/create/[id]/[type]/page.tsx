@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Users, Truck, Stamp, ShieldAlert, FileText, HardHat, FlaskConical, Plus, Trash2, CalendarClock, Flame, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Users, Truck, Stamp, ShieldAlert, FileText, HardHat, FlaskConical, Plus, Trash2, CalendarClock, Flame, AlertTriangle, Sparkles } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import { savePtw, getPtw, getPtwList, getProjectPeriod, getJsaPrefillNeeds } from '../actions';
@@ -74,6 +74,10 @@ export default function PTWCreatePage() {
   const [isLoadingRoster, setIsLoadingRoster] = useState(true);
   const [docId, setDocId] = useState<string | null>(null);
 
+  // Baris yang ter-prefill otomatis dari kebutuhan langkah JSA yang disetujui —
+  // dipakai untuk badge "dari JSA" pada selector pekerja & peralatan.
+  const [jsaPrefillIds, setJsaPrefillIds] = useState<{ workers: string[]; equipment: string[] }>({ workers: [], equipment: [] });
+
   React.useEffect(() => {
     if (!typeDef) {
       router.replace(`/vendor/dashboard/ptw/create/${encodeURIComponent(projectId)}`);
@@ -124,6 +128,10 @@ export default function PTWCreatePage() {
             apdPrefill[cat] = [...list];
           }
           setSelectedApd(apdPrefill);
+          setJsaPrefillIds({
+            workers: jsaPrefill.workers.map(w => w.id),
+            equipment: jsaPrefill.equipment.map(e => e.id),
+          });
         } else if (siblings.length > 0) {
           // 2) Kalau belum ada kebutuhan di JSA — bantu isi awal dari tipe PTW
           // lain di proyek yang sama (kemungkinan besar tim/alat & jadwalnya
@@ -475,6 +483,15 @@ export default function PTWCreatePage() {
             </div>
             <p className="text-xs text-slate-500 mb-4">Pilih pekerja dari Data Master Pekerja yang akan ditugaskan di proyek ini.</p>
 
+            {(jsaPrefillIds.workers.length > 0 || jsaPrefillIds.equipment.length > 0) && (
+              <div className="flex items-start gap-2 bg-violet-50 border border-violet-200 rounded-xl p-3 mb-4 text-xs text-violet-800">
+                <Sparkles className="w-4 h-4 text-violet-600 shrink-0 mt-px" />
+                <span>
+                  Isian ini disalin otomatis dari kebutuhan langkah JSA yang sudah disetujui (ditandai <b>dari JSA</b>). Kamu tetap bisa menambah atau mengubah sebelum mengajukan.
+                </span>
+              </div>
+            )}
+
             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
               {isLoadingRoster ? (
                 <p className="text-sm text-slate-400 text-center py-4">Memuat data pekerja...</p>
@@ -493,7 +510,12 @@ export default function PTWCreatePage() {
                       onChange={() => togglePekerja(p.id)}
                     />
                     <div>
-                      <div className="font-bold text-sm text-slate-800">{p.full_name}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold text-sm text-slate-800">{p.full_name}</div>
+                        {jsaPrefillIds.workers.includes(p.id) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-700 bg-violet-100 rounded-full px-2 py-0.5">dari JSA</span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 mt-0.5">
                         {p.position} • Kompetensi: {p.competencies.length > 0 ? p.competencies.map(c => c.title).join(', ') : 'Tidak Ada'}
                       </div>
@@ -533,7 +555,12 @@ export default function PTWCreatePage() {
                       onChange={() => togglePeralatan(p.id)}
                     />
                     <div>
-                      <div className="font-bold text-sm text-slate-800">{p.name}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold text-sm text-slate-800">{p.name}</div>
+                        {jsaPrefillIds.equipment.includes(p.id) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-700 bg-violet-100 rounded-full px-2 py-0.5">dari JSA</span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 mt-0.5">{p.category} • SILO: {p.certificate_number || '—'}</div>
                     </div>
                   </label>

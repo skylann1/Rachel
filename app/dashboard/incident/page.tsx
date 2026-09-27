@@ -7,6 +7,7 @@ import { getInternalIncidents } from './actions';
 
 export default function InternalIncidentInboxPage() {
   const [incidents, setIncidents] = useState<any[]>([]);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -24,6 +25,18 @@ export default function InternalIncidentInboxPage() {
     }
     load();
   }, []);
+
+  const visibleIncidents = incidents.filter((inc) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      inc.id.toLowerCase().includes(q) ||
+      String(inc.vendor).toLowerCase().includes(q) ||
+      String(inc.type).toLowerCase().includes(q) ||
+      String(inc.location).toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
@@ -48,6 +61,8 @@ export default function InternalIncidentInboxPage() {
             </div>
             <input
               type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all"
               placeholder="Cari ID Insiden atau Vendor..."
             />
@@ -67,14 +82,14 @@ export default function InternalIncidentInboxPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {incidents.length === 0 ? (
+              {visibleIncidents.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-500">
                     Belum ada insiden yang dilaporkan.
                   </td>
                 </tr>
               ) : (
-                incidents.map((inc) => (
+                visibleIncidents.map((inc) => (
                   <tr key={inc.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4">
                       <div className="font-bold text-slate-800">{inc.id}</div>

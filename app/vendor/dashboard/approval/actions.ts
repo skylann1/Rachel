@@ -7,7 +7,7 @@ import { JSA_STATUS } from "@/lib/jsa-status";
 import { PTW_STATUS } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { getStageAssignments, isStageFullyApproved, resetStageAssignments } from "@/lib/stage-assignments";
-import { notifyAssignees } from "@/app/dashboard/inbox/actions";
+import { notifyAssignees, notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 
 export type VendorReviewDocType = 'procedure' | 'jsa' | 'ptw';
 
@@ -167,13 +167,32 @@ export async function rejectVendorInternalReview(docType: VendorReviewDocType, d
     updatePayload.rejection_note = note;
   }
 
-  const { error } = await supabase.from(config.table).update(updatePayload).eq('id', docId);
+  const { data: updated, error } = await supabase
+    .from(config.table)
+    .update(updatePayload)
+    .eq('id', docId)
+    .eq('status', current.status)
+    .select('id');
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error("Dokumen ini baru saja diproses oleh pengguna lain. Muat ulang halaman untuk melihat status terbaru.");
+  }
 
   await logDocumentEvent(supabase, {
     docType, docId, projectId: current.project_id, actorId: user.id,
     action: 'Ditolak Review Internal Vendor — Revisi Diperlukan', notes: note,
   });
+
+  const { data: project } = await supabase.from('projects').select('name, vendor_id').eq('id', current.project_id).single();
+  if (project?.vendor_id) {
+    await notifyOrgMembers({
+      orgId: project.vendor_id,
+      type: 'warning',
+      title: 'Dokumen Ditolak Review Internal — Perlu Revisi',
+      message: `Dokumen untuk proyek "${project?.name}" ditolak pada review internal vendor. Catatan: "${note}". Silakan perbaiki dan ajukan ulang.`,
+      link: `/vendor/dashboard/projects/${current.project_id}`,
+    });
+  }
 
   revalidatePath(`/vendor/dashboard/projects/${current.project_id}`);
 }

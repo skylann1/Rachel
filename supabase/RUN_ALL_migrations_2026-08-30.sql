@@ -293,11 +293,11 @@ DROP POLICY IF EXISTS "Vendors can update PTW for their projects" ON public.ptw;
 CREATE POLICY "Vendors can update PTW for their projects"
 ON public.ptw FOR UPDATE TO authenticated
 USING (
-  status IN ('Draft', 'Menunggu Approval PM')
+  status IN ('Draft', 'Review Internal Vendor', 'Menunggu Approval PM')
   AND EXISTS (SELECT 1 FROM public.projects p WHERE p.id = project_id AND p.vendor_id = public.current_vendor_org_id())
 )
 WITH CHECK (
-  status IN ('Draft', 'Menunggu Approval PM')
+  status IN ('Draft', 'Review Internal Vendor', 'Menunggu Approval PM')
   AND EXISTS (SELECT 1 FROM public.projects p WHERE p.id = project_id AND p.vendor_id = public.current_vendor_org_id())
 );
 
@@ -618,3 +618,4 @@ WHERE name = 'pgsol_reviewer'
 -- Lanjut ke checklist verifikasi manual di README_org_migration_order.md
 -- dan README_stage_assignment_migration_order.md.
 -- =====================================================================
+

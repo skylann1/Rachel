@@ -2,7 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { createNotification } from "@/app/dashboard/inbox/actions";
+import { notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 import { hasPermissionForUser } from "@/utils/permissions";
 import { writeStageAssignment, PGN_STAGE_KEYS } from "@/lib/stage-assignments";
 
@@ -44,8 +44,8 @@ export async function createProject(formData: FormData) {
   }
 
   if (vendor_id) {
-    await createNotification({
-      userId: vendor_id,
+    await notifyOrgMembers({
+      orgId: vendor_id,
       type: 'action_required',
       title: 'Proyek Baru Ditugaskan',
       message: `Anda ditugaskan pada proyek "${name}". Silakan ajukan Prosedur Kerja untuk memulai.`,

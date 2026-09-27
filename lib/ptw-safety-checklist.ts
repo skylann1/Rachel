@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { hasPermissionForUser } from "@/utils/permissions";
 import { getEffectivePtwStatus, PTW_STATUS } from "@/lib/ptw-status";
 import type { PtwSafetyChecklistData } from "@/lib/ptw-types";
 
@@ -27,6 +28,16 @@ export async function updatePtwSafetyChecklist(
   checklist: PtwSafetyChecklistData
 ): Promise<{ error?: string }> {
   const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: 'Silakan login terlebih dahulu.' };
+  }
+
+  const allowed = await hasPermissionForUser(supabase, user.id, 'ptw', 'edit_safety_checklist');
+  if (!allowed) {
+    return { error: 'Role Anda tidak memiliki izin untuk mengisi safety checklist PTW. Hubungi admin untuk menambahkan permission ptw.edit_safety_checklist.' };
+  }
 
   const { data: ptw, error: fetchError } = await supabase
     .from('ptw')

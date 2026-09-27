@@ -131,11 +131,23 @@ export async function triggerStopWork(token: string, params: { reporterName: str
   const message = `Stop Work Authority dipicu oleh ${params.reporterName.trim()} di proyek "${projectName}". Alasan: "${params.reason.trim()}".`;
 
   if (project?.vendor_id) {
-    await createNotification({
-      userId: project.vendor_id, type: 'warning',
-      title: 'Stop Work Authority — Pekerjaan Dihentikan',
-      message, link: `/vendor/dashboard/projects/${ptw.project_id}`,
-    });
+    // Halaman /checkin/[token] tidak punya session, jadi semua query lewat
+    // admin client (tanpa RLS). notifyOrgMembers tidak bisa dipakai di sini —
+    // dia memakai client ber-RLS yang butuh session internal. Resolve anggota
+    // organisasi vendor langsung lewat admin client.
+    const { data: vendorMembers } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('org_id', project.vendor_id);
+    if (vendorMembers && vendorMembers.length > 0) {
+      await supabase.from('notifications').insert(
+        vendorMembers.map(m => ({
+          user_id: m.id, type: 'warning',
+          title: 'Stop Work Authority — Pekerjaan Dihentikan',
+          message, link: `/vendor/dashboard/projects/${ptw.project_id}`,
+        }))
+      );
+    }
   }
   if (project?.assigned_inspector) {
     await createNotification({

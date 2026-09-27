@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { 
   FileText, ArrowRight, ShieldCheck, Hammer, 
-  UploadCloud, CheckCircle2, X, HardHat, Info, Download, Plus, Trash2, GripVertical, Boxes
+  UploadCloud, CheckCircle2, X, HardHat, Info, Download, Plus, Trash2, GripVertical, Boxes, History
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
@@ -352,6 +352,31 @@ export default function ProsedurKerjaForm() {
           </div>
         </div>
       </div>
+
+      {/* Riwayat Revisi */}
+      {revisions.length > 0 && (
+        <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="w-4 h-4 text-amber-600" />
+            <h2 className="font-bold text-slate-800 text-sm">Riwayat Revisi</h2>
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{revisions.length}x</span>
+          </div>
+          <ol className="space-y-3">
+            {[...revisions].sort((a, b) => (b.revNo ?? 0) - (a.revNo ?? 0)).map((rev, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="shrink-0 font-black text-amber-600 text-sm">Rev {rev.revNo}</span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium text-slate-400">{rev.date}</p>
+                  <p className="text-sm text-slate-700 leading-relaxed">{rev.note || 'Tidak ada catatan.'}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="text-[11px] text-slate-400 mt-4 pt-3 border-t border-slate-100">
+            Catatan revisi diberikan saat prosedur ditolak. Pastikan setiap perbaikan sesuai catatan sebelum mengajukan ulang.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
         

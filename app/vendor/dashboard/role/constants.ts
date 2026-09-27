@@ -68,6 +68,7 @@ export const allPermissionModules = [
     description: 'Hak akses terkait manajemen Surat Izin Kerja Aman — lima tahap approval berurutan.',
     items: [
       { key: 'view', label: 'Melihat Daftar PTW', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
+      { key: 'edit_safety_checklist', label: 'Mengisi & Mengedit Safety Checklist PTW', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'review_vendor', label: 'Review Internal Vendor — PTW', allowedTypes: ['vendor'] },
       { key: 'review_pgsol', label: 'Review PTW — Tahap Reviewer PGSOL', allowedTypes: ['pgsol'] },
       { key: 'hse_pgsol', label: 'Review PTW — Tahap HSE PGSOL', allowedTypes: ['pgsol'] },

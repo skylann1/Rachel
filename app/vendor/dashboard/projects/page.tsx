@@ -1,10 +1,30 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Search, Briefcase, MapPin, Calendar, ArrowRight, FileSignature } from 'lucide-react';
-import { createClient } from '@/utils/supabase/server';
+import { Search, Briefcase, MapPin, Calendar, ArrowRight, FileSignature, Loader2, CalendarClock } from 'lucide-react';
+import { getVendorProjects } from './actions';
 import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
 import { PROCEDURE_STATUS, isProcedurePending } from '@/lib/procedure-status';
 import { JSA_STATUS } from '@/lib/jsa-status';
+import { getExpiry } from '@/lib/document-expiry';
+
+type ProsedurDocRow = { status: string };
+type PtwRow = { status: string; valid_to: string | null };
+interface VendorProjectRow {
+  id: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  progress: number | null;
+  contract_number: string | null;
+  procedures: ProsedurDocRow[] | ProsedurDocRow | null;
+  jsa: ProsedurDocRow[] | ProsedurDocRow | null;
+  ptw: PtwRow[] | PtwRow | null;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -25,22 +45,46 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default async function VendorProjectsPage() {
-  const supabase = await createClient();
-  const { data: projects } = await supabase
-    .from('projects')
-    .select(`
-      id, name, description, location, start_date, end_date, status, progress, contract_number,
-      procedures(status), jsa(status), ptw(status, valid_to)
-    `)
-    .order('created_at', { ascending: false });
+export default function VendorProjectsPage() {
+  const [projects, setProjects] = useState<VendorProjectRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
 
-  const filteredProjects = projects || [];
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const data = await getVendorProjects();
+      if (alive) {
+        setProjects(data);
+        setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const filteredProjects = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter(p =>
+      [p.name, p.location, p.contract_number].filter(Boolean).join(' ').toLowerCase().includes(q)
+    );
+  }, [projects, query]);
+
+  // Sisa masa berlaku PTW aktif terdekat — untuk peringatan di kartu.
+  const getPtwExpiry = (project: VendorProjectRow) => {
+    const ptws: PtwRow[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+    const validTo = ptws
+      .map(p => ({ eff: getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date), vt: p.valid_to ?? project.end_date }))
+      .filter(x => x.eff === PTW_STATUS.aktif && Boolean(x.vt))
+      .map(x => x.vt)
+      .sort()[0] || null;
+    return validTo ? getExpiry(validTo) : null;
+  };
 
   // Determine next action based on project status
-  const getComputedStatus = (project: any) => {
+  const getComputedStatus = (project: VendorProjectRow) => {
     // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda).
-    const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+    const ptws: PtwRow[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
     const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
     const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
 
@@ -57,7 +101,7 @@ export default async function VendorProjectsPage() {
     return project.status;
   };
 
-  const getActionButton = (project: any) => {
+  const getActionButton = (project: VendorProjectRow) => {
     const computedStatus = getComputedStatus(project);
     switch (computedStatus) {
       case PROCEDURE_STATUS.menungguReviewPM:
@@ -152,6 +196,8 @@ export default async function VendorProjectsPage() {
           </div>
           <input
             type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm transition-all"
             placeholder="Cari nama proyek atau lokasi..."
           />
@@ -159,7 +205,12 @@ export default async function VendorProjectsPage() {
       </div>
 
       {/* Projects Grid */}
-      {filteredProjects.length === 0 ? (
+      {loading ? (
+        <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
+          <Loader2 className="w-8 h-8 text-slate-300 animate-spin mx-auto mb-3" />
+          <p className="text-sm font-medium text-slate-500">Memuat proyek...</p>
+        </div>
+      ) : projects.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
           <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Briefcase className="w-8 h-8 text-slate-400" />
@@ -167,11 +218,28 @@ export default async function VendorProjectsPage() {
           <h3 className="font-bold text-slate-700 mb-1">Belum Ada Proyek</h3>
           <p className="text-sm text-slate-500">Proyek Anda akan muncul di sini setelah Admin/PM menetapkan pekerjaan untuk perusahaan Anda.</p>
         </div>
+      ) : filteredProjects.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
+          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Search className="w-8 h-8 text-slate-400" />
+          </div>
+          <h3 className="font-bold text-slate-700 mb-1">Tidak Ada Proyek Cocok</h3>
+          <p className="text-sm text-slate-500">Tidak ada proyek yang cocok dengan &ldquo;{query}&rdquo;.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filteredProjects.map((project) => (
+          {filteredProjects.map((project) => {
+            const ptwExpiry = getPtwExpiry(project);
+            return (
             <div key={project.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex flex-col relative overflow-hidden">
-              
+
+              {ptwExpiry?.status === 'expiring' && (
+                <div className="flex items-center gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                  <CalendarClock className="w-4 h-4 shrink-0" />
+                  <span>PTW aktif berakhir {ptwExpiry.daysLeft} hari lagi — ajukan ulang/perpanjang sebelum jatuh tempo.</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -184,11 +252,11 @@ export default async function VendorProjectsPage() {
                 </div>
                 <StatusBadge status={getComputedStatus(project)} />
               </div>
-             
+
              <div className="mb-5 text-sm text-slate-600 leading-relaxed line-clamp-2">
                 {project.description || 'Pekerjaan sesuai dengan kontrak dan Prosedur K3 PGN.'}
              </div>
-             
+
              <div className="space-y-3 mb-6">
                <div className="flex items-center gap-3 text-sm text-slate-600">
                   <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
@@ -207,8 +275,8 @@ export default async function VendorProjectsPage() {
                   <span className="text-xs font-black text-primary">{project.progress || 0}%</span>
                </div>
                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-1000 ease-in-out ${(project.progress || 0) === 100 ? 'bg-emerald-500' : 'bg-primary'}`} 
+                  <div
+                    className={`h-full rounded-full transition-all duration-1000 ease-in-out ${(project.progress || 0) === 100 ? 'bg-emerald-500' : 'bg-primary'}`}
                     style={{ width: `${project.progress || 0}%` }}
                   />
                </div>
@@ -220,7 +288,8 @@ export default async function VendorProjectsPage() {
             </div>
 
           </div>
-        ))}
+        );
+          })}
       </div>
     )}
     </div>

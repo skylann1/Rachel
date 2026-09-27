@@ -1,14 +1,5 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer';
-
-// Register fonts
-Font.register({
-  family: 'Helvetica',
-  fonts: [
-    { src: 'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-regular-webfont.ttf' },
-    { src: 'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 'bold' }
-  ]
-});
+import { Page, Text, View, Document, StyleSheet } from '@react-pdf/renderer';
 
 // Styles for Portrait Investigation Report
 const styles = StyleSheet.create({

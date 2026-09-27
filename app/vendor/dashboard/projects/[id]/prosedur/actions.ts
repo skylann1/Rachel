@@ -20,12 +20,33 @@ export async function saveProsedur(projectId: string, payload: any) {
   let procedureId = existing?.id;
 
   if (existing) {
-    const { error } = await supabase
+    // Guard status: dokumen yang sudah berjalan melewati tahap review
+    // internal vendor (misal sudah Disetujui) tidak boleh diajukan ulang.
+    // Kalau dibiarkan, resubmit akan mereset stage_assignments yang sudah
+    // 'approved' -- dan writeStageAssignment menolak menyunting baris itu,
+    // sehingga ronde baru macet permanen tanpa jalan keluar selain SQL manual.
+    const { data: current } = await supabase
+      .from('procedures')
+      .select('status')
+      .eq('id', existing.id)
+      .single();
+    if (!current) throw new Error('Prosedur Kerja tidak ditemukan.');
+    const resubmittable = [PROCEDURE_STATUS.draft, PROCEDURE_STATUS.reviewInternalVendor];
+    if (!resubmittable.includes(current.status)) {
+      throw new Error('Prosedur Kerja tidak bisa diajukan ulang karena sudah berjalan ke tahap berikutnya.');
+    }
+
+    const { data: updated, error } = await supabase
       .from('procedures')
       .update({ content: payload, status: PROCEDURE_STATUS.reviewInternalVendor })
-      .eq('id', existing.id);
+      .eq('id', existing.id)
+      .eq('status', current.status)
+      .select('id');
 
     if (error) throw new Error(error.message);
+    if (!updated || updated.length === 0) {
+      throw new Error('Prosedur Kerja baru saja diproses oleh pengguna lain. Muat ulang halaman untuk melihat status terbaru.');
+    }
   } else {
     const { data: created, error } = await supabase
       .from('procedures')
@@ -79,5 +100,12 @@ export async function getProsedur(projectId: string) {
   if (error && error.code !== 'PGRST116') {
     console.error(error);
   }
-  return data;
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('name, location, contract_number')
+    .eq('id', projectId)
+    .maybeSingle();
+
+  return { ...data, project: project || null };
 }

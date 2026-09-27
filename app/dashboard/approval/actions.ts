@@ -2,7 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { createNotification } from "@/app/dashboard/inbox/actions";
+import { createNotification, notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 import { JSA_STATUS } from "@/lib/jsa-status";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { PTW_STATUS } from "@/lib/ptw-status";
@@ -291,8 +291,8 @@ export async function approveProcedure(procedureId: string) {
       : nextStatus === PROCEDURE_STATUS.reviewHsePgsol
         ? `Prosedur Kerja untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu review HSE PGSOL.`
         : `Prosedur Kerja untuk proyek "${proj.name}" telah direview HSE PGSOL dan kini menunggu review PM.`;
-    await createNotification({
-      userId: proj.vendor_id,
+    await notifyOrgMembers({
+      orgId: proj.vendor_id,
       type: nextStatus === PROCEDURE_STATUS.approved ? 'approval' : 'info',
       title: vendorTitle,
       message: vendorMessage,
@@ -352,7 +352,8 @@ export async function rejectProcedure(procedureId: string, note: string) {
   const { error } = await supabase
     .from('procedures')
     .update({ status: PROCEDURE_STATUS.draft, content: updatedContent })
-    .eq('id', procedureId);
+    .eq('id', procedureId)
+    .eq('status', currentCheck.status);
   if (error) throw new Error(error.message);
 
   if (proc?.project_id) {
@@ -364,8 +365,8 @@ export async function rejectProcedure(procedureId: string, note: string) {
 
   const proj: any = Array.isArray(proc?.projects) ? proc?.projects[0] : proc?.projects;
   if (proj?.vendor_id) {
-    await createNotification({
-      userId: proj.vendor_id,
+    await notifyOrgMembers({
+      orgId: proj.vendor_id,
       type: 'warning',
       title: `Prosedur Kerja Ditolak ${penolak} — Revisi Diperlukan`,
       message: `Prosedur untuk proyek "${proj.name}" ditolak oleh ${penolak}. Catatan: "${note}". Silakan perbaiki dan ajukan ulang.`,
@@ -486,8 +487,8 @@ export async function approveJsa(jsaId: string) {
       : nextStatus === JSA_STATUS.reviewHsePgsol
         ? `JSA untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu review HSE PGSOL.`
         : `JSA untuk proyek "${proj.name}" telah direview HSE PGSOL dan kini menunggu persetujuan PGN.`;
-    await createNotification({
-      userId: proj.vendor_id,
+    await notifyOrgMembers({
+      orgId: proj.vendor_id,
       type: nextStatus === JSA_STATUS.approved ? 'approval' : 'info',
       title: vendorTitle,
       message: vendorMessage,
@@ -552,7 +553,8 @@ export async function rejectJsa(jsaId: string, note: string) {
       reviewer_id: null, reviewed_at: null,
       approver_id: null, approved_at: null,
     })
-    .eq('id', jsaId);
+    .eq('id', jsaId)
+    .eq('status', current.status);
   if (error) throw new Error(error.message);
 
   const { data: jsa } = await supabase.from('jsa').select('project_id, projects ( name, vendor_id )').eq('id', jsaId).single();
@@ -564,8 +566,8 @@ export async function rejectJsa(jsaId: string, note: string) {
     });
   }
   if (proj?.vendor_id) {
-    await createNotification({
-      userId: proj.vendor_id,
+    await notifyOrgMembers({
+      orgId: proj.vendor_id,
       type: 'warning',
       title: `JSA Ditolak ${penolak} — Perlu Perbaikan`,
       message: `JSA untuk proyek "${proj.name}" ditolak oleh ${penolak}. Catatan: "${note}". Harap perbaiki dan ajukan ulang.`,
@@ -626,9 +628,16 @@ export async function approvePtw(ptwId: string) {
 
   if (stageKey === 'ptw.numbering_hsse') {
     const year = new Date().getFullYear();
-    const { count } = await supabase.from('ptw').select('*', { count: 'exact', head: true }).like('ptw_number', `PTW-${year}-%`);
-    const nextNum = String((count || 0) + 1).padStart(3, '0');
-    updatePayloadIfComplete = { hsse_id: user.id, ptw_number: `PTW-${year}-${nextNum}`, status: PTW_STATUS.aktif };
+    // Nomor diambil dari counter atomik (RPC get_next_ptw_number): `count+1`
+    // dari sisi aplikasi rawan balapan — dua PTW yang dinomori nyaris
+    // bersamaan bisa dapat nomor sama. Function-nya INSERT ... ON CONFLICT
+    // ... RETURNING, satu statement, sehingga aman dari race. Tabel
+    // ptw_numbering dibuat di supabase/schema_ptw_numbering.sql.
+    const { data: ptwNumber, error: numError } = await supabase.rpc('get_next_ptw_number', { p_year: year });
+    if (numError || typeof ptwNumber !== 'string' || !ptwNumber) {
+      throw new Error(numError?.message || 'Gagal mendapatkan nomor PTW berikutnya.');
+    }
+    updatePayloadIfComplete = { hsse_id: user.id, ptw_number: ptwNumber, status: PTW_STATUS.aktif };
   }
 
   // .eq('status', current.status) tetap jadi optimistic lock terakhir:
@@ -668,8 +677,8 @@ export async function approvePtw(ptwId: string) {
 
   if (proj?.vendor_id) {
     const isPtwActive = ptw?.status === PTW_STATUS.aktif;
-    await createNotification({
-      userId: proj.vendor_id,
+    await notifyOrgMembers({
+      orgId: proj.vendor_id,
       type: isPtwActive ? 'approval' : 'info',
       title: isPtwActive ? `PTW Diterbitkan: ${ptw?.ptw_number}` : `PTW: Tahap ${ptw?.status}`,
       message: isPtwActive
@@ -766,7 +775,8 @@ export async function rejectPtw(ptwId: string, note: string) {
   const { error } = await supabase
     .from('ptw')
     .update({ status: PTW_STATUS.draft, rejection_note: note, authority_id: null, authority_approved_at: null, issuer_id: null, issuer_approved_at: null })
-    .eq('id', ptwId);
+    .eq('id', ptwId)
+    .eq('status', current.status);
   if (error) throw new Error(error.message);
 
   // Notify vendor
@@ -779,8 +789,8 @@ export async function rejectPtw(ptwId: string, note: string) {
     });
   }
   if (proj?.vendor_id) {
-    await createNotification({
-      userId: proj.vendor_id,
+    await notifyOrgMembers({
+      orgId: proj.vendor_id,
       type: 'warning',
       title: `PTW Ditolak — Perlu Perbaikan`,
       message: `PTW untuk proyek "${proj.name}" ditolak. Catatan: "${note}". Harap perbaiki dan ajukan ulang.`,
@@ -822,8 +832,8 @@ export async function resumePtw(ptwId: string) {
     });
   }
   if (proj?.vendor_id) {
-    await createNotification({
-      userId: proj.vendor_id,
+    await notifyOrgMembers({
+      orgId: proj.vendor_id,
       type: 'approval',
       title: `PTW Aktif Kembali`,
       message: `Stop Work Authority untuk PTW ${ptw?.ptw_number ?? ''} pada proyek "${proj.name}" telah dicabut. Pekerjaan dapat dilanjutkan.`,

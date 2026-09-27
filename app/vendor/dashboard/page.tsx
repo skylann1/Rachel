@@ -13,7 +13,8 @@ import {
   Clock,
   Activity,
   ShieldCheck,
-  FolderOpen
+  FolderOpen,
+  CalendarClock
 } from 'lucide-react';
 import { getVendorDashboardData, getVendorRecentActivity, getVendorChartsData } from './actions';
 import { VendorDashboardCharts } from '@/components/vendor/vendor-dashboard-charts';
@@ -46,6 +47,7 @@ export default async function VendorDashboardPage() {
     { label: 'Total Proyek', value: stats.total, icon: Briefcase, gradient: 'from-blue-500 to-blue-600' },
     { label: 'JSA Menunggu Review', value: stats.pendingJsa, icon: FileSignature, gradient: 'from-amber-500 to-amber-600' },
     { label: 'PTW Aktif', value: stats.activePtw, icon: ShieldCheck, gradient: 'from-emerald-500 to-emerald-600' },
+    { label: 'PTW Hampir Kedaluwarsa', value: stats.expiringPtw, icon: CalendarClock, gradient: 'from-orange-500 to-amber-600' },
     { label: 'Butuh Tindakan', value: stats.needsAction, icon: AlertTriangle, gradient: 'from-rose-500 to-rose-600' },
   ];
 
@@ -92,7 +94,7 @@ export default async function VendorDashboardPage() {
       </div>
 
       {/* ── Stat tiles ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '60ms' }}>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '60ms' }}>
         {statTiles.map((stat, i) => {
           const Icon = stat.icon;
           return (
@@ -111,6 +113,22 @@ export default async function VendorDashboardPage() {
           );
         })}
       </div>
+
+      {/* ── PTW near-expiry alert ─────────────────────────────────── */}
+      {stats.expiringPtw > 0 && (
+        <Link
+          href="/vendor/dashboard/projects"
+          className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-800 hover:bg-amber-100 transition-colors animate-in fade-in slide-in-from-bottom-4 duration-500"
+          style={{ animationDelay: '80ms' }}
+        >
+          <CalendarClock className="w-5 h-5 text-amber-600 shrink-0 mt-px" />
+          <div>
+            <p className="font-bold">Peringatan: {stats.expiringPtw} PTW aktif akan kembali berakhir dalam 30 hari.</p>
+            <p className="text-xs text-amber-700 mt-0.5">Ajukan ulang atau perpanjang sebelum jatuh tempo agar pekerjaan tidak terhenti.</p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-amber-600 shrink-0 ml-auto self-center" />
+        </Link>
+      )}
 
       {/* ── Charts ──────────────────────────────────────────────── */}
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '90ms' }}>
@@ -158,6 +176,16 @@ export default async function VendorDashboardPage() {
                       <span className={`inline-flex px-2.5 py-1 rounded-lg text-[11px] font-bold border ${PTW_BADGE[project.ptwStatus] ?? PTW_BADGE['Belum Terbit']}`}>
                         PTW: {project.ptwStatus}
                       </span>
+                      {project.ptwExpiry?.status === 'expiring' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-amber-50 text-amber-700 border-amber-200/60">
+                          <CalendarClock className="w-3 h-3" /> {project.ptwExpiry.daysLeft} hari lagi
+                        </span>
+                      )}
+                      {project.ptwExpiry?.status === 'expired' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-rose-50 text-rose-700 border-rose-200/60">
+                          kedaluwarsa
+                        </span>
+                      )}
                     </div>
 
                     <ArrowRight className="w-4 h-4 text-slate-300 shrink-0 transition-all group-hover:text-primary group-hover:translate-x-0.5 hidden sm:block" />

@@ -7,6 +7,8 @@
  * labelnya konsisten di seluruh aplikasi.
  */
 
+import { todayNoonUtc } from '@/lib/site-ops';
+
 export type ExpiryStatus = 'valid' | 'expiring' | 'expired' | 'unknown';
 
 /** Ambang default: dokumen dianggap "segera berakhir" 30 hari sebelum jatuh tempo. */
@@ -24,11 +26,10 @@ export function getExpiry(validTo: string | null | undefined, warnDays = EXPIRY_
   const due = new Date(validTo);
   if (isNaN(due.getTime())) return { status: 'unknown', daysLeft: null };
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
+  const dueNoon = new Date(`${validTo}T12:00:00Z`);
+  const todayNoon = todayNoonUtc();
 
-  const daysLeft = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  const daysLeft = Math.round((dueNoon.getTime() - todayNoon.getTime()) / 86_400_000);
 
   if (daysLeft < 0) return { status: 'expired', daysLeft };
   if (daysLeft <= warnDays) return { status: 'expiring', daysLeft };

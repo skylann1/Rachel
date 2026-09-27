@@ -9,12 +9,34 @@ export function buildCheckinUrl(fieldToken: string, origin?: string): string {
   return `${base}/checkin/${fieldToken}`;
 }
 
+/**
+ * "Hari ini" menurut kalender Asia/Jakarta, bukan timezone server.
+ *
+ * Server (Vercel et al.) umumnya berjalan di UTC; kalau pakai `new Date()`
+ * langsung, di sekitar tengah malam WIB hasilnya bisa berbeda satu hari dari
+ * `CURRENT_DATE` di Postgres — bikin cek "berlaku sampai hari ini", PTW
+ * expired, dan `meeting_date` drift. Semua perbandingan tanggal harian di
+ * kode domain ini wajib lewat helper ini.
+ */
 export function todayDateString(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Jakarta',
+  }).formatToParts(new Date());
+  const p: Record<string, string> = {};
+  for (const part of parts) p[part.type] = part.value;
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/**
+ * Versi "hari ini" yang bisa diurai kembali dengan aman oleh `new Date(...)`
+ * tanpa netralisasi zona waktu: nilai tengah hari UTC. Dipakai oleh kode yang
+ * menghitung selisih hari (misal masa berlaku dokumen).
+ */
+export function todayNoonUtc(): Date {
+  return new Date(`${todayDateString()}T12:00:00Z`);
 }
 
 export async function getTodayToolboxMeeting(supabase: any, ptwId: string) {

@@ -265,6 +265,7 @@ export default function AdminProjectClient({
   const [resumingId, setResumingId] = useState<string | null>(null);
 
   const canResumeWork = !!permissions?.['ptw']?.includes('resume_work');
+  const canEditSafetyChecklist = !!permissions?.['ptw']?.includes('edit_safety_checklist');
 
   const handleResumePtw = async (ptwId: string) => {
     setResumingId(ptwId);
@@ -1216,7 +1217,7 @@ export default function AdminProjectClient({
                                validFrom={row.valid_from}
                                validTo={row.valid_to}
                                initialChecklist={row.safety_checklist || {}}
-                               editable={rowEffective === PTW_STATUS.aktif}
+                               editable={rowEffective === PTW_STATUS.aktif && canEditSafetyChecklist}
                              />
                              <BlobProvider document={
                                <PtwPDF

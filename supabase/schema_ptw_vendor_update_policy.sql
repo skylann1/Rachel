@@ -17,19 +17,21 @@ CREATE POLICY "Vendors can update PTW for their projects"
 ON public.ptw FOR UPDATE
 TO authenticated
 USING (
-  status IN ('Draft', 'Menunggu Approval PM')
+  status IN ('Draft', 'Review Internal Vendor', 'Menunggu Approval PM')
   AND EXISTS (
     SELECT 1 FROM public.projects p
-    WHERE p.id = project_id AND p.vendor_id = auth.uid()
+    WHERE p.id = project_id AND p.vendor_id = current_vendor_org_id()
   )
 )
 WITH CHECK (
-  -- Hasil update hanya boleh kembali ke antrean approval tahap pertama;
-  -- vendor tidak bisa mempromosikan PTW-nya sendiri ke tahap berikutnya.
-  status IN ('Draft', 'Menunggu Approval PM')
+  -- Hasil update hanya boleh kembali ke antrean approval tahap pertama
+  -- (dan tahap review internal vendor pada Fase 3, yang juga dikerjakan
+  -- staff vendor sendiri); vendor tidak bisa mempromosikan PTW-nya sendiri
+  -- ke tahap berikutnya.
+  status IN ('Draft', 'Review Internal Vendor', 'Menunggu Approval PM')
   AND EXISTS (
     SELECT 1 FROM public.projects p
-    WHERE p.id = project_id AND p.vendor_id = auth.uid()
+    WHERE p.id = project_id AND p.vendor_id = current_vendor_org_id()
   )
 );
 

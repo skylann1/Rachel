@@ -13,6 +13,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   const { data: { user } } = await supabase.auth.getUser();
 
   const canManageAssignments = await hasPermission('masterData', 'manage_org_staff');
+  const canEditSafetyChecklist = await hasPermission('ptw', 'edit_safety_checklist');
   const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', user?.id).single();
   const actorOrgId = actorProfile?.org_id ?? '';
 
@@ -93,6 +94,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       siteCheckins={siteCheckins ?? []}
       toolboxMeetings={toolboxMeetings ?? []}
       canManageAssignments={canManageAssignments}
+      canEditSafetyChecklist={canEditSafetyChecklist}
       assignmentSlots={assignmentSlots}
     />
   );

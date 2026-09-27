@@ -6,6 +6,7 @@ import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES } from "@/lib/p
 import { JSA_STATUS, isJsaPending } from "@/lib/jsa-status";
 import { PROCEDURE_STATUS, isProcedurePending } from "@/lib/procedure-status";
 import { getVendorIncidents } from "@/app/vendor/dashboard/incident/actions";
+import { getExpiry } from "@/lib/document-expiry";
 
 // Mirrors the real status strings written by the approval workflow
 // (see app/dashboard/approval/actions.ts and app/vendor/dashboard/projects/[id]/VendorProjectClient.tsx)
@@ -34,9 +35,9 @@ export async function getVendorDashboardData() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, needsAction: 0 } };
+  if (!user) return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, expiringPtw: 0, needsAction: 0 } };
   const vendorOrgId = await getCallerVendorOrgId(supabase);
-  if (!vendorOrgId) return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, needsAction: 0 } };
+  if (!vendorOrgId) return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, expiringPtw: 0, needsAction: 0 } };
 
   // Fetch projects
   const { data: projectsData, error: projectsError } = await supabase
@@ -54,20 +55,31 @@ export async function getVendorDashboardData() {
 
   if (projectsError) {
     console.error(projectsError);
-    return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, needsAction: 0 } };
+    return { projects: [], stats: { total: 0, pendingJsa: 0, activePtw: 0, expiringPtw: 0, needsAction: 0 } };
   }
 
-  let totalProjects = projectsData.length;
+  const totalProjects = projectsData.length;
   let pendingJsa = 0;
   let activePtw = 0;
+  let expiringPtw = 0;
   let needsAction = 0;
 
   const formattedProjects = projectsData.map(p => {
     const jsaStatus = mapJsaStatus(p.jsa?.[0]);
-    const ptwStatus = mapPtwStatus(p.ptw ?? [], p.end_date);
+    const ptws: { status: string; rejection_note?: string | null; valid_to?: string | null }[] = p.ptw ?? [];
+    const ptwStatus = mapPtwStatus(ptws, p.end_date);
+
+    // Sisa masa berlaku PTW yang masih aktif — tanggal jatuh tempo terdekat.
+    const activeValidTo: string | null = ptws
+      .map(ptw => ({ effective: getEffectivePtwStatus(ptw.status, ptw.valid_to ?? p.end_date), validTo: ptw.valid_to ?? null }))
+      .filter(x => x.effective === PTW_STATUS.aktif && x.validTo)
+      .map(x => x.validTo as string)
+      .sort()[0] || null;
+    const ptwExpiry = activeValidTo ? getExpiry(activeValidTo) : { status: 'none' as const, daysLeft: null };
 
     if (jsaStatus === 'Pending') pendingJsa++;
     if (ptwStatus === 'Aktif') activePtw++;
+    if (ptwExpiry.status === 'expiring') expiringPtw++;
     if (jsaStatus === 'Rejected' || ptwStatus === 'Ditolak') needsAction++;
 
     return {
@@ -75,7 +87,8 @@ export async function getVendorDashboardData() {
       name: p.name,
       jsaStatus,
       ptwStatus,
-      date: p.start_date || 'N/A'
+      date: p.start_date || 'N/A',
+      ptwExpiry,
     };
   });
 
@@ -85,6 +98,7 @@ export async function getVendorDashboardData() {
       total: totalProjects,
       pendingJsa,
       activePtw,
+      expiringPtw,
       needsAction
     }
   };

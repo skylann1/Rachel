@@ -1,4 +1,6 @@
-﻿/**
+﻿import { todayDateString } from '@/lib/site-ops';
+
+/**
  * Alur persetujuan PTW — review internal vendor, lalu PGSOL (Reviewer,
  * lalu HSE), lalu tiga tahap internal PGN.
  *
@@ -69,10 +71,10 @@ export const PTW_STAGE_PERMISSION: Record<string, { module: string; action: stri
  */
 export function isPtwExpired(rawStatus: string | null | undefined, endDate: string | null | undefined): boolean {
   if (rawStatus !== PTW_STATUS.aktif || !endDate) return false;
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
-  return end < now;
+  // Bandingkan string tanggal YYYY-MM-DD (nilai DATE dari DB, tanpa zona
+  // waktu) terhadap "hari ini" menurut Asia/Jakarta — `new Date()` murni
+  // tidak dipakai karena server bisa beda waktu satu hari dengan DB.
+  return endDate < todayDateString();
 }
 
 export function getEffectivePtwStatus<T extends string | null | undefined>(rawStatus: T, endDate?: string | null): T | 'Expired' {

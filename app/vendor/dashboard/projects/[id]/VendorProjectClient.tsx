@@ -57,7 +57,7 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
   );
 }
 
-export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, assignmentSlots }: {
+export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots }: {
   project: any; currentUserId: string; jsaSignatories?: any; ptwSignatories?: Record<string, any>;
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
   siteCheckins?: any[];
@@ -65,6 +65,8 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   toolboxMeetings?: any[];
   /** true kalau caller punya masterData.manage_org_staff — menentukan apakah tab Assignment Reviewer ditampilkan. */
   canManageAssignments: boolean;
+  /** true kalau caller punya ptw.edit_safety_checklist — mengontrol mode edit form Safety Checklist PTW. */
+  canEditSafetyChecklist: boolean;
   assignmentSlots: any[];
 }) {
   const [activeTab, setActiveTab] = useState('ringkasan');
@@ -467,7 +469,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                             validFrom={row.valid_from}
                             validTo={row.valid_to}
                             initialChecklist={row.safety_checklist || {}}
-                            editable={rowStatus === 'Approved'}
+                            editable={rowStatus === 'Approved' && canEditSafetyChecklist}
                           />
 
                           <div className="flex gap-3">
