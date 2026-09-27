@@ -461,6 +461,8 @@ Replace with:
 
 - [ ] **Step 3: Edit `approveProcedure`'s notifications**
 
+**Note (discovered during execution):** this file's committed HEAD uses `createNotification({userId: ...})` for vendor-facing notifications, not `notifyOrgMembers({orgId: ...})` (that helper belongs to unrelated, still-uncommitted work elsewhere) — the Find/Replace below already reflects the real, correct function.
+
 Find:
 
 ```ts
@@ -475,8 +477,8 @@ Find:
   }
 
   if (proj?.vendor_id) {
-    await notifyOrgMembers({
-      orgId: proj.vendor_id,
+    await createNotification({
+      userId: proj.vendor_id,
       type: nextStatus === PROCEDURE_STATUS.approved ? 'approval' : 'info',
       title: nextStatus === PROCEDURE_STATUS.approved ? `Prosedur Kerja Disetujui` : `Prosedur Kerja Telah Direview PGSOL`,
       message: nextStatus === PROCEDURE_STATUS.approved
@@ -518,8 +520,8 @@ Replace with:
       : nextStatus === PROCEDURE_STATUS.reviewHsePgsol
         ? `Prosedur Kerja untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu review HSE PGSOL.`
         : `Prosedur Kerja untuk proyek "${proj.name}" telah direview HSE PGSOL dan kini menunggu review PM.`;
-    await notifyOrgMembers({
-      orgId: proj.vendor_id,
+    await createNotification({
+      userId: proj.vendor_id,
       type: nextStatus === PROCEDURE_STATUS.approved ? 'approval' : 'info',
       title: vendorTitle,
       message: vendorMessage,
@@ -691,6 +693,8 @@ Replace with:
 
 - [ ] **Step 3: Edit `approveJsa`'s notifications**
 
+**Note (discovered during Task 3's execution):** this file's committed HEAD uses `createNotification({userId: ...})` for vendor-facing notifications, not `notifyOrgMembers({orgId: ...})` (that helper belongs to unrelated, still-uncommitted work elsewhere) — the Find/Replace below already reflects the real, correct function.
+
 Find:
 
 ```ts
@@ -705,8 +709,8 @@ Find:
   }
 
   if (proj?.vendor_id) {
-    await notifyOrgMembers({
-      orgId: proj.vendor_id,
+    await createNotification({
+      userId: proj.vendor_id,
       type: nextStatus === JSA_STATUS.approved ? 'approval' : 'info',
       title: nextStatus === JSA_STATUS.approved ? `JSA Disetujui — Lanjut ke PTW` : `JSA Telah Direview PGSOL`,
       message: nextStatus === JSA_STATUS.approved
@@ -748,8 +752,8 @@ Replace with:
       : nextStatus === JSA_STATUS.reviewHsePgsol
         ? `JSA untuk proyek "${proj.name}" telah direview PGSOL dan kini menunggu review HSE PGSOL.`
         : `JSA untuk proyek "${proj.name}" telah direview HSE PGSOL dan kini menunggu persetujuan PGN.`;
-    await notifyOrgMembers({
-      orgId: proj.vendor_id,
+    await createNotification({
+      userId: proj.vendor_id,
       type: nextStatus === JSA_STATUS.approved ? 'approval' : 'info',
       title: vendorTitle,
       message: vendorMessage,
