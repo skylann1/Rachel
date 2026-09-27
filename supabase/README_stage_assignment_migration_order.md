@@ -293,3 +293,27 @@ ini keputusan sadar, bukan celah yang terlewat.
       `pending` (query `stage_assignments` langsung, atau ajukan ulang dan
       pastikan Reviewer PGSOL diminta review lagi, bukan langsung lompat
       ke HSE).
+
+---
+
+# Fix — RLS UPDATE vendor untuk Prosedur Kerja & JSA tidak punya whitelist status
+
+`schema_procedure_jsa_vendor_update_policy.sql` (dijalankan langsung, di
+luar urutan fase — ditemukan saat audit RLS Prosedur Kerja setelah
+`schema_ptw_pgsol_gate_vendor_policy.sql` di atas). Policy vendor UPDATE
+lama untuk `procedures`/`jsa` (`schema_update_rls_policies.sql`) cuma cek
+kepemilikan proyek, TANPA `WITH CHECK` sama sekali — secara teori vendor
+bisa memanggil Supabase client langsung dan menyetel `status` proyek
+mereka sendiri ke nilai apa pun, termasuk lompat langsung ke "Disetujui",
+melewati semua tahap review. Kode aplikasi tidak pernah melakukan ini,
+tapi RLS harus menegakkannya sendiri, bukan cuma dipercayakan ke kode.
+
+Sudah dijalankan ke Supabase live dan diverifikasi lewat `pg_policies`.
+Vendor sekarang hanya boleh UPDATE baris yang masih `Draft`/`Review
+Internal Vendor`, dan hasil akhirnya dibatasi ke `Draft`/`Review Internal
+Vendor`/`Review PGSOL` — persis set status yang sudah dipakai
+`saveProsedur`/`saveJsa` dan `approveVendorInternalReview`/
+`rejectVendorInternalReview`. Policy UPDATE milik internal PGN/PGSOL
+(`Internal users can update all procedures/jsa`) SENGAJA tidak disentuh —
+tahapnya dinamis lewat `roles.permissions` + `stage_assignments`, bukan
+celah yang lupa ditutup seperti punya vendor.
