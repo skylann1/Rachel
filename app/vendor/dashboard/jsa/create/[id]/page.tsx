@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ShieldAlert, CheckCircle2, FileText } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
-import { HseAssistantPanel } from '@/components/ai/HseAssistantPanel';
 import { aggregatePointNeeds, kebutuhanSummary, isKebutuhanEmpty, StepKebutuhan } from '@/lib/procedure-kebutuhan';
 
 const PDFViewer = dynamic(
@@ -52,24 +51,6 @@ export default function JSACreatePage() {
   const [projectInfo, setProjectInfo] = useState<{ name: string; contract_number: string | null; location: string | null; companyName: string | null } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [docId, setDocId] = useState<string | null>(null);
-
-  // New Unified AI HSE Assistant State
-  const [hseLoading, setHseLoading] = useState(false);
-  const [hseResult, setHseResult] = useState<{
-    score: number;
-    summary: string;
-    anomalies: {
-      id: number;
-      severity: 'critical' | 'warning' | 'info';
-      category: string;
-      auto_comment: string;
-      suggested_hazard?: string;
-      suggested_mitigation?: string;
-    }[];
-  } | null>(null);
-  const [hseError, setHseError] = useState<string | null>(null);
-  const [highlightedStepId, setHighlightedStepId] = useState<number | null>(null);
-  const jsaRowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
   React.useEffect(() => {
     async function loadData() {
@@ -247,60 +228,6 @@ export default function JSACreatePage() {
     }));
   };
 
-  const applyAISuggestion = (stepId: number, hazard?: string, mitigasi?: string) => {
-    setJsaSteps(jsaSteps.map(step => {
-      if (step.id === stepId) {
-        return {
-          ...step,
-          potensiBahaya: hazard || step.potensiBahaya,
-          mitigasi: { ...step.mitigasi, administrasi: mitigasi || step.mitigasi.administrasi }
-        };
-      }
-      return step;
-    }));
-  };
-
-  /** Unified AI HSE Assistant — Analyze Entire JSA */
-  const handleHseAssistant = async () => {
-    setHseLoading(true);
-    setHseError(null);
-    setHseResult(null);
-    setHighlightedStepId(null);
-    try {
-      const jsaData = jsaSteps.map((step, idx) => ({
-        id: step.id,
-        langkah: step.langkah,
-        jenisBahaya: step.jenisBahaya,
-        sebab: step.sebab,
-        potensiBahaya: step.potensiBahaya,
-        mitigasi: typeof step.mitigasi === 'object' 
-          ? Object.entries(step.mitigasi).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join('; ')
-          : step.mitigasi,
-      }));
-      const res = await fetch('/api/ai/hse-assistant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsaData }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(body?.error || 'Gagal mengecek JSA dengan AI.');
-      setHseResult(body);
-    } catch (err) {
-      setHseError(err instanceof Error ? err.message : 'Gagal mengecek JSA dengan AI.');
-    } finally {
-      setHseLoading(false);
-    }
-  };
-
-  const scrollToStep = useCallback((stepId: number) => {
-    setHighlightedStepId(stepId);
-    const row = jsaRowRefs.current[stepId];
-    if (row) {
-      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    setTimeout(() => setHighlightedStepId(null), 2000);
-  }, []);
-
   const handleSimpan = async () => {
     setIsSaving(true);
     try {
@@ -322,6 +249,9 @@ export default function JSACreatePage() {
     return 'bg-emerald-300 text-black';
   };
 
+  // Minimal satu langkah kerja harus terisi sebelum JSA bisa diajukan.
+  const canSubmitJsa = jsaSteps.some(s => (s.langkah || '').trim().length > 0);
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-12 px-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200 gap-4">
@@ -335,51 +265,18 @@ export default function JSACreatePage() {
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <button onClick={handleHseAssistant} disabled={hseLoading} className="flex-1 md:flex-none justify-center px-5 py-3 bg-violet-50 text-violet-700 border border-violet-200 text-sm font-bold rounded-xl hover:bg-violet-100 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm">
-            {hseLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-            {hseResult ? 'Analisis Ulang AI' : 'Cek JSA dengan AI'}
-          </button>
-          <button onClick={handleSimpan} disabled={isSaving} className="flex-1 md:flex-none justify-center px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
+          <button onClick={handleSimpan} disabled={isSaving || !canSubmitJsa} className="flex-1 md:flex-none justify-center px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
             {isSaving ? (
               <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</span>
             ) : (
               <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Submit JSA</span>
             )}
           </button>
+          {!canSubmitJsa && (
+            <p className="w-full md:text-right text-xs font-semibold text-rose-600">Isi minimal satu langkah pekerjaan sebelum menekan Submit.</p>
+          )}
         </div>
       </div>
-
-      {hseError && (
-        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-sm text-rose-700 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
-          <p>{hseError}</p>
-        </div>
-      )}
-
-      {/* --- AI Score Dashboard + Anomaly Panel --- */}
-      {hseResult && (
-        <div className="mb-6">
-          <HseAssistantPanel
-            score={hseResult.score}
-            summary={hseResult.summary}
-            anomalies={hseResult.anomalies}
-            getStepLabel={(id) => {
-              const idx = jsaSteps.findIndex(s => s.id === id);
-              const step = jsaSteps.find(s => s.id === id);
-              return `Langkah ${idx + 1}${step?.langkah ? ` — ${step.langkah}` : ''}`;
-            }}
-            onLocateStep={scrollToStep}
-            renderSuggestionAction={(a) => (
-              <button
-                onClick={() => applyAISuggestion(a.id, a.suggested_hazard, a.suggested_mitigation)}
-                className="px-3 py-1 text-[10px] font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-full shadow-sm flex items-center gap-1"
-              >
-                Terapkan Saran
-              </button>
-            )}
-          />
-        </div>
-      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
@@ -434,38 +331,13 @@ export default function JSACreatePage() {
             </thead>
             <tbody>
               {jsaSteps.map((step, index) => {
-                const anomaly = hseResult?.anomalies.find(a => a.id === step.id);
-                const isHighlighted = highlightedStepId === step.id;
-                
-                const borderColor = anomaly
-                  ? anomaly.severity === 'critical' ? 'border-l-4 border-l-rose-500'
-                    : anomaly.severity === 'warning' ? 'border-l-4 border-l-amber-400'
-                    : 'border-l-4 border-l-sky-400'
-                  : 'border-l-4 border-l-transparent';
-                
-                const bgColor = isHighlighted
-                  ? 'bg-violet-100 animate-pulse'
-                  : anomaly
-                    ? anomaly.severity === 'critical' ? 'bg-rose-50/50'
-                      : anomaly.severity === 'warning' ? 'bg-amber-50/50'
-                      : 'bg-sky-50/30'
-                    : 'bg-white hover:bg-slate-50';
-
                 return (
-                  <tr 
-                    key={step.id} 
-                    ref={el => { jsaRowRefs.current[step.id] = el; }}
-                    className={`${borderColor} ${bgColor} transition-all duration-500 border-b border-slate-200`}
+                  <tr
+                    key={step.id}
+                    className="border-l-4 border-l-transparent bg-white hover:bg-slate-50 border-b border-slate-200"
                   >
                     <td className="border border-slate-300 p-2 text-center align-top font-bold text-slate-500">
-                      <div className="flex flex-col items-center gap-2">
-                        {index + 1}
-                        {anomaly && (
-                          <span className={`inline-block w-3 h-3 rounded-full shrink-0 ${
-                            anomaly.severity === 'critical' ? 'bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.6)]' : anomaly.severity === 'warning' ? 'bg-amber-400 animate-pulse' : 'bg-sky-400'
-                          }`} title="AI menemukan anomali pada baris ini" />
-                        )}
-                      </div>
+                      {index + 1}
                     </td>
                     <td className="border border-slate-300 p-1 align-top">
                       <textarea value={step.langkah} onChange={(e) => updateStepText(step.id, 'langkah', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-white/50 resize-y rounded" placeholder="Tuliskan langkah pekerjaan..." />

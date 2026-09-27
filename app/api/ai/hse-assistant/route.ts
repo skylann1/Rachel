@@ -51,6 +51,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { data: profile } = await supabase.from('profiles').select('type').eq('id', user.id).single();
+    if (profile?.type !== 'pgn') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { jsaData } = await req.json();
 
     if (!jsaData || !Array.isArray(jsaData)) {
