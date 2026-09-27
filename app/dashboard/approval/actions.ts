@@ -257,7 +257,9 @@ export async function approveProcedure(procedureId: string) {
   if (proc?.project_id) {
     await logDocumentEvent(supabase, {
       docType: 'procedure', docId: procedureId, projectId: proc.project_id, actorId: user.id,
-      action: nextStatus === PROCEDURE_STATUS.approved ? 'Direview & Disetujui PM' : 'Direview PGSOL',
+      action: nextStatus === PROCEDURE_STATUS.approved ? 'Direview & Disetujui PM'
+        : nextStatus === PROCEDURE_STATUS.reviewHsePgsol ? 'Direview PGSOL'
+        : 'Direview HSE PGSOL',
     });
   }
 
@@ -450,7 +452,9 @@ export async function approveJsa(jsaId: string) {
   if (current.project_id) {
     await logDocumentEvent(supabase, {
       docType: 'jsa', docId: jsaId, projectId: current.project_id, actorId: user.id,
-      action: nextStatus === JSA_STATUS.approved ? 'Disetujui PGN' : 'Direview PGSOL',
+      action: nextStatus === JSA_STATUS.approved ? 'Disetujui PGN'
+        : nextStatus === JSA_STATUS.reviewHsePgsol ? 'Direview PGSOL'
+        : 'Direview HSE PGSOL',
     });
   }
 
@@ -751,9 +755,9 @@ export async function rejectPtw(ptwId: string, note: string) {
   await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
   await resetStageAssignments(supabase, current.project_id, 'ptw', stageKey);
   // Penolakan di tahap manapun mengembalikan PTW sampai ke Draft (bukan cuma
-  // ke tahap sebelumnya seperti JSA), jadi ketiga tahap PTW harus direset
+  // ke tahap sebelumnya seperti JSA), jadi kelima tahap PTW harus direset
   // supaya semuanya `pending` lagi saat vendor mengajukan ulang — meniru alur
-  // resubmission `savePtw` yang mengembalikan dokumen ke menungguApprovalPM.
+  // resubmission `savePtw` yang mengembalikan dokumen ke reviewInternalVendor.
   const otherStageKeys = ['ptw.review_pgsol', 'ptw.hse_pgsol', 'ptw.approve_pm', 'ptw.review_issuer', 'ptw.numbering_hsse'].filter(k => k !== stageKey);
   for (const key of otherStageKeys) {
     await resetStageAssignments(supabase, current.project_id, 'ptw', key);

@@ -36,9 +36,9 @@ export async function savePgsolAssignment(
   if (!user) return { error: 'Unauthorized' };
 
   // Satu permission menggerbangi kemampuan menugaskan reviewer PGSOL untuk
-  // KEDUA doc_type (jsa & procedure) — sengaja tidak dipecah jadi permission
-  // baru per doc_type supaya grant yang sudah ada di production (Fase 2)
-  // tidak perlu dimigrasikan ulang. Lihat spec untuk keputusan ini.
+  // KETIGA doc_type (jsa, procedure & ptw) — sengaja tidak dipecah jadi
+  // permission baru per doc_type supaya grant yang sudah ada di production
+  // (Fase 2) tidak perlu dimigrasikan ulang. Lihat spec untuk keputusan ini.
   const allowed = await hasPermissionForUser(supabase, user.id, 'jsa', 'manage_assignment_pgsol');
   if (!allowed) return { error: 'Anda tidak memiliki izin untuk menunjuk reviewer PGSOL.' };
 
