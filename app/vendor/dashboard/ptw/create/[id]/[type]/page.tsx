@@ -109,6 +109,25 @@ export default function PTWCreatePage() {
       setRosterPeralatan(equipment);
       setIsLoadingRoster(false);
 
+      // Kebutuhan JSA disaring dulu terhadap katalog/form yang berlaku
+      // (APD_ITEMS, hazardSourcesFor(ptwType)) supaya butir yang benar-benar
+      // diterapkan sama persis dengan yang dirender di mode ringkas.
+      const hasJsaPrefill =
+        jsaPrefill.workers.length > 0 ||
+        jsaPrefill.equipment.length > 0 ||
+        Object.values(jsaPrefill.apd).some(list => list.length > 0) ||
+        jsaPrefill.hazards.length > 0;
+      const apdCatalog = APD_ITEMS as Record<string, string[]>;
+      const apdPrefill: Record<string, string[]> = {};
+      for (const [cat, list] of Object.entries(jsaPrefill.apd)) {
+        const validItems = (apdCatalog[cat] || []).filter(item => list.includes(item));
+        if (validItems.length > 0) apdPrefill[cat] = validItems;
+      }
+      // hazardSourcesFor(ptwType) dipanggil langsung (bukan lewat closure
+      // `hazardSources`) supaya efek ini tidak perlu bergantung pada array
+      // yang dihitung ulang tiap render.
+      const hazardPrefill = jsaPrefill.hazards.filter(h => hazardSourcesFor(ptwType).includes(h));
+
       if (data) {
         setDocId(data.id);
         // Merevisi PTW tipe ini yang sudah pernah diajukan.
@@ -126,29 +145,17 @@ export default function PTWCreatePage() {
       } else {
         // Belum pernah diajukan untuk tipe ini.
         // 1) Prefill dari kebutuhan langkah JSA yang sudah disetujui (auto-check
-        //    pekerja/peralatan/APD) — masih bisa diubah oleh vendor.
-        const hasJsaPrefill =
-          jsaPrefill.workers.length > 0 ||
-          jsaPrefill.equipment.length > 0 ||
-          Object.values(jsaPrefill.apd).some(list => list.length > 0);
-
+        //    pekerja/peralatan/APD/bahaya) — masih bisa diubah oleh vendor.
         if (hasJsaPrefill) {
           setSelectedPekerja(jsaPrefill.workers.map(w => w.id));
           setSelectedPeralatan(jsaPrefill.equipment.map(e => e.id));
-          const apdPrefill: Record<string, string[]> = {};
-          for (const [cat, list] of Object.entries(jsaPrefill.apd)) {
-            apdPrefill[cat] = [...list];
-          }
           setSelectedApd(apdPrefill);
-          // hazardSourcesFor(ptwType) dipanggil langsung (bukan lewat closure
-          // `hazardSources`) supaya efek ini tidak perlu bergantung pada
-          // array yang dihitung ulang tiap render.
-          setSelectedHazards(jsaPrefill.hazards.filter(h => hazardSourcesFor(ptwType).includes(h)));
+          setSelectedHazards(hazardPrefill);
           setJsaPrefillIds({
             workers: jsaPrefill.workers.map(w => w.id),
             equipment: jsaPrefill.equipment.map(e => e.id),
-            apd: jsaPrefill.apd,
-            hazards: jsaPrefill.hazards,
+            apd: apdPrefill,
+            hazards: hazardPrefill,
           });
         } else if (siblings.length > 0) {
           // 2) Kalau belum ada kebutuhan di JSA — bantu isi awal dari tipe PTW
@@ -166,12 +173,17 @@ export default function PTWCreatePage() {
         }
       }
 
-      // Blok tanpa prefill langsung tampil lengkap; kalau tidak, vendor
-      // menghadapi daftar kosong. Termasuk kasus revisi PTW (prefill dilewati).
-      setShowAllPekerja(jsaPrefill.workers.length === 0);
-      setShowAllPeralatan(jsaPrefill.equipment.length === 0);
-      setShowAllApd(!Object.values(jsaPrefill.apd).some(list => list.length > 0));
-      setShowAllHazards(jsaPrefill.hazards.length === 0);
+      // Mode ringkas per blok mengikuti apa yang BENAR-BENAR diterapkan ke
+      // form, bukan sekadar apa yang ter-fetch dari JSA — pada PTW revisi
+      // (`data` terisi) prefill JSA sengaja dilewati, jadi keempat blok wajib
+      // tampil lengkap agar vendor tidak menghadapi daftar kosong.
+      const appliedPrefill = (!data && hasJsaPrefill)
+        ? { workers: jsaPrefill.workers, equipment: jsaPrefill.equipment, apd: apdPrefill, hazards: hazardPrefill }
+        : { workers: [], equipment: [], apd: {} as Record<string, string[]>, hazards: [] as string[] };
+      setShowAllPekerja(appliedPrefill.workers.length === 0);
+      setShowAllPeralatan(appliedPrefill.equipment.length === 0);
+      setShowAllApd(!Object.values(appliedPrefill.apd).some(list => list.length > 0));
+      setShowAllHazards(appliedPrefill.hazards.length === 0);
 
       // Belum ada acuan sama sekali — mulai dari tanggal proyek, dipotong
       // ke batas 7 hari supaya vendor tidak langsung kena error.
@@ -420,7 +432,7 @@ export default function PTWCreatePage() {
 
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-slate-700">Sumber Bahaya (Pilih yang relevan)</span>
-              <button type="button" onClick={() => setShowAllHazards(v => !v)}
+              <button type="button" onClick={() => setShowAllHazards(v => !v)} aria-expanded={showAllHazards}
                 className="text-[11px] font-bold text-primary hover:text-primary/80">
                 {showAllHazards ? 'Tampilkan dari JSA saja' : 'Tampilkan semua'}
               </button>
@@ -439,7 +451,7 @@ export default function PTWCreatePage() {
                 <HardHat className="w-4 h-4 text-slate-500" />
                 <span className="text-sm font-bold text-slate-700">Alat Pelindung Diri (APD)</span>
               </div>
-              <button type="button" onClick={() => setShowAllApd(v => !v)}
+              <button type="button" onClick={() => setShowAllApd(v => !v)} aria-expanded={showAllApd}
                 className="text-[11px] font-bold text-primary hover:text-primary/80">
                 {showAllApd ? 'Tampilkan dari JSA saja' : 'Tampilkan semua'}
               </button>
@@ -530,14 +542,15 @@ export default function PTWCreatePage() {
                 <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Users className="w-5 h-5" /></div>
                 <h2 className="text-lg font-bold text-slate-800">Pilih Pekerja Bertugas</h2>
               </div>
-              <button type="button" onClick={() => setShowAllPekerja(v => !v)}
+              <button type="button" onClick={() => setShowAllPekerja(v => !v)} aria-expanded={showAllPekerja}
                 className="text-[11px] font-bold text-primary hover:text-primary/80">
                 {showAllPekerja ? 'Tampilkan dari JSA saja' : 'Tampilkan semua'}
               </button>
             </div>
             <p className="text-xs text-slate-500 mb-4">Pilih pekerja dari Data Master Pekerja yang akan ditugaskan di proyek ini.</p>
 
-            {(jsaPrefillIds.workers.length > 0 || jsaPrefillIds.equipment.length > 0) && (
+            {(jsaPrefillIds.workers.length > 0 || jsaPrefillIds.equipment.length > 0 ||
+              jsaPrefillIds.hazards.length > 0 || Object.values(jsaPrefillIds.apd).some(list => list.length > 0)) && (
               <div className="flex items-start gap-2 bg-violet-50 border border-violet-200 rounded-xl p-3 mb-4 text-xs text-violet-800">
                 <Sparkles className="w-4 h-4 text-violet-600 shrink-0 mt-px" />
                 <span>
@@ -590,7 +603,7 @@ export default function PTWCreatePage() {
                 <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Truck className="w-5 h-5" /></div>
                 <h2 className="text-lg font-bold text-slate-800">Pilih Peralatan / Mesin</h2>
               </div>
-              <button type="button" onClick={() => setShowAllPeralatan(v => !v)}
+              <button type="button" onClick={() => setShowAllPeralatan(v => !v)} aria-expanded={showAllPeralatan}
                 className="text-[11px] font-bold text-primary hover:text-primary/80">
                 {showAllPeralatan ? 'Tampilkan dari JSA saja' : 'Tampilkan semua'}
               </button>
