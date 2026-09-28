@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
-import { aggregatePointNeeds, isKebutuhanEmpty, hasStoredKebutuhan, emptyKebutuhan, StepKebutuhan, TahapanSection } from '@/lib/procedure-kebutuhan';
+import { aggregatePointNeeds, aggregateKebutuhan, isKebutuhanEmpty, hasStoredKebutuhan, emptyKebutuhan, StepKebutuhan, TahapanSection } from '@/lib/procedure-kebutuhan';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
@@ -355,8 +355,12 @@ export default function JSACreatePage() {
                     <td className="border border-slate-300 p-1 align-top">
                       <textarea value={step.langkah} onChange={(e) => updateStepText(step.id, 'langkah', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-white/50 resize-y rounded" placeholder="Tuliskan langkah pekerjaan..." />
                       {(() => {
-                        const cand = aggregatePointNeeds(procSections?.[index]?.points || []);
                         const cur = { ...emptyKebutuhan(), ...step.kebutuhan };
+                        // Union kandidat dari prosedur DENGAN kebutuhan yang sudah tersimpan —
+                        // supaya kalau urutan step bergeser (mis. setelah hapus langkah), item
+                        // yang sudah tersimpan tetap terlihat & bisa dilepas walau prosedur di
+                        // index ini sudah tidak lagi menawarkannya.
+                        const cand = aggregateKebutuhan([aggregatePointNeeds(procSections?.[index]?.points || []), cur]);
                         if (isKebutuhanEmpty(cand)) return null;
                         const chip = (on: boolean, key: string, label: string, onClick: () => void) => (
                           <button key={key} type="button" onClick={onClick}

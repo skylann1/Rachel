@@ -85,10 +85,14 @@ export default function PTWCreatePage() {
   }>({ workers: [], equipment: [], apd: {}, hazards: [] });
 
   // Mode tampilan tiap blok: ringkas (hanya hasil JSA) vs lengkap (daftar penuh).
-  const [showAllPekerja, setShowAllPekerja] = useState(false);
-  const [showAllPeralatan, setShowAllPeralatan] = useState(false);
-  const [showAllApd, setShowAllApd] = useState(false);
-  const [showAllHazards, setShowAllHazards] = useState(false);
+  // Mulai dari `true` (tampil lengkap) supaya sebelum loadData() selesai, blok
+  // tidak sempat terlihat kosong — terutama Sumber Bahaya & APD yang tidak
+  // dilindungi guard `isLoadingRoster`. loadData() akan mempersempitnya begitu
+  // prefill JSA diketahui.
+  const [showAllPekerja, setShowAllPekerja] = useState(true);
+  const [showAllPeralatan, setShowAllPeralatan] = useState(true);
+  const [showAllApd, setShowAllApd] = useState(true);
+  const [showAllHazards, setShowAllHazards] = useState(true);
 
   React.useEffect(() => {
     if (!typeDef) {
@@ -110,11 +114,18 @@ export default function PTWCreatePage() {
       setIsLoadingRoster(false);
 
       // Kebutuhan JSA disaring dulu terhadap katalog/form yang berlaku
-      // (APD_ITEMS, hazardSourcesFor(ptwType)) supaya butir yang benar-benar
-      // diterapkan sama persis dengan yang dirender di mode ringkas.
+      // (roster pekerja/peralatan, APD_ITEMS, hazardSourcesFor(ptwType))
+      // supaya butir yang benar-benar diterapkan sama persis dengan yang
+      // dirender di mode ringkas. Pekerja/peralatan yang sudah dihapus dari
+      // master data (tapi masih tercatat di JSA lama) ikut tersaring di sini,
+      // sama seperti apdPrefill disaring terhadap APD_ITEMS di bawah.
+      const workerIds = new Set(workers.map(w => w.id));
+      const equipmentIds = new Set(equipment.map(e => e.id));
+      const workerPrefill = jsaPrefill.workers.filter(w => workerIds.has(w.id));
+      const equipmentPrefill = jsaPrefill.equipment.filter(e => equipmentIds.has(e.id));
       const hasJsaPrefill =
-        jsaPrefill.workers.length > 0 ||
-        jsaPrefill.equipment.length > 0 ||
+        workerPrefill.length > 0 ||
+        equipmentPrefill.length > 0 ||
         Object.values(jsaPrefill.apd).some(list => list.length > 0) ||
         jsaPrefill.hazards.length > 0;
       const apdCatalog = APD_ITEMS as Record<string, string[]>;
@@ -147,13 +158,13 @@ export default function PTWCreatePage() {
         // 1) Prefill dari kebutuhan langkah JSA yang sudah disetujui (auto-check
         //    pekerja/peralatan/APD/bahaya) — masih bisa diubah oleh vendor.
         if (hasJsaPrefill) {
-          setSelectedPekerja(jsaPrefill.workers.map(w => w.id));
-          setSelectedPeralatan(jsaPrefill.equipment.map(e => e.id));
+          setSelectedPekerja(workerPrefill.map(w => w.id));
+          setSelectedPeralatan(equipmentPrefill.map(e => e.id));
           setSelectedApd(apdPrefill);
           setSelectedHazards(hazardPrefill);
           setJsaPrefillIds({
-            workers: jsaPrefill.workers.map(w => w.id),
-            equipment: jsaPrefill.equipment.map(e => e.id),
+            workers: workerPrefill.map(w => w.id),
+            equipment: equipmentPrefill.map(e => e.id),
             apd: apdPrefill,
             hazards: hazardPrefill,
           });
@@ -178,7 +189,7 @@ export default function PTWCreatePage() {
       // (`data` terisi) prefill JSA sengaja dilewati, jadi keempat blok wajib
       // tampil lengkap agar vendor tidak menghadapi daftar kosong.
       const appliedPrefill = (!data && hasJsaPrefill)
-        ? { workers: jsaPrefill.workers, equipment: jsaPrefill.equipment, apd: apdPrefill, hazards: hazardPrefill }
+        ? { workers: workerPrefill, equipment: equipmentPrefill, apd: apdPrefill, hazards: hazardPrefill }
         : { workers: [], equipment: [], apd: {} as Record<string, string[]>, hazards: [] as string[] };
       setShowAllPekerja(appliedPrefill.workers.length === 0);
       setShowAllPeralatan(appliedPrefill.equipment.length === 0);
