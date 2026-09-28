@@ -37,7 +37,7 @@ export async function getJsaPrefillNeeds(projectId: string): Promise<StepKebutuh
     .limit(1)
     .maybeSingle();
 
-  if (!jsa?.id) return { workers: [], equipment: [], materials: [], apd: {} };
+  if (!jsa?.id) return { workers: [], equipment: [], materials: [], apd: {}, hazards: [] };
 
   const { data: steps } = await supabase
     .from('jsa_steps')
