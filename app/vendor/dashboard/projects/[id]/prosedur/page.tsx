@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { 
-  FileText, ArrowRight, ShieldCheck, Hammer, 
-  UploadCloud, CheckCircle2, X, HardHat, Info, Download, Plus, Trash2, GripVertical, Boxes, History
+import {
+  FileText, ArrowRight, Hammer,
+  UploadCloud, CheckCircle2, X, Info, Download, Plus, Trash2, GripVertical, Boxes, History
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
@@ -15,21 +15,9 @@ import { getEquipment, EquipmentItem } from '@/app/vendor/dashboard/peralatan/ac
 import { getMaterials, MaterialItem } from '@/app/vendor/dashboard/material/actions';
 import { APD_ITEMS, APD_CATEGORY_LABELS, HAZARD_COLUMNS } from '@/lib/ptw-types';
 import {
-  normalizeTahapanPekerjaan, emptyKebutuhan,
+  normalizeTahapanPekerjaan, emptyKebutuhan, deriveDocumentSections,
   TahapanSection, StepKebutuhan,
 } from '@/lib/procedure-kebutuhan';
-
-// Mock list APD
-const apdList = [
-  { id: 'Safety Helmet', label: 'Safety Helmet', icon: HardHat },
-  { id: 'Safety Shoes', label: 'Safety Shoes', icon: ShieldCheck },
-  { id: 'Safety Glasses', label: 'Safety Glasses', icon: ShieldCheck },
-  { id: 'Safety Gloves', label: 'Safety Gloves', icon: ShieldCheck },
-  { id: 'Reflective Vest', label: 'Reflective Vest', icon: ShieldCheck },
-  { id: 'Full Body Harness', label: 'Full Body Harness', icon: ShieldCheck },
-  { id: 'Respirator / Masker', label: 'Respirator / Masker', icon: ShieldCheck },
-  { id: 'Ear Plug / Muff', label: 'Ear Plug / Muff', icon: ShieldCheck },
-];
 
 export default function ProsedurKerjaForm() {
   const router = useRouter();
@@ -66,13 +54,6 @@ export default function ProsedurKerjaForm() {
   // Section 2
   const [scopeOfWork, setScopeOfWork] = useState('- Mobilisasi dan demobilisasi peralatan serta material.\n- Pembongkaran keramik lantai existing.\n- Pembongkaran dinding existing.\n- Pengikisan lapisan cat existing.\n- Pekerjaan pasangan dinding bata.\n- Pekerjaan plesteran dan acian dinding.\n- Pemasangan keramik lantai.\n- Pengecatan dinding.\n- Pengecatan lisplang.\n- Pengecatan plafon.\n- Pemasangan built in railing tangga.\n- Pembersihan area kerja (housekeeping).\n- Demobilisasi peralatan dan penyelesaian pekerjaan.');
   
-  // Section 3
-  const [tools, setTools] = useState<string[]>([]);
-  const [toolInput, setToolInput] = useState('');
-  
-  // Section 4
-  const [selectedApd, setSelectedApd] = useState<string[]>([]);
-
   const [docId, setDocId] = useState<string | null>(null);
 
   // Fetch initial data
@@ -88,11 +69,8 @@ export default function ProsedurKerjaForm() {
           if (content.submissionDate) setSubmissionDate(content.submissionDate);
           setUmum(content.umum || '');
           setScopeOfWork(content.scopeOfWork || '');
-          setTools(content.tools || []);
-          setSelectedApd(content.selectedApd || []);
           setVendorSignature(content.vendorSignature || null);
           setRevisions(content.revisions || []);
-          if (content.perlengkapanLainnya) setPerlengkapanLainnya(content.perlengkapanLainnya);
           if (content.tahapanPekerjaan) setTahapanPekerjaan(normalizeTahapanPekerjaan(content.tahapanPekerjaan));
           if (content.penyelesaianAkhir) setPenyelesaianAkhir(content.penyelesaianAkhir);
         }
@@ -100,10 +78,6 @@ export default function ProsedurKerjaForm() {
     }
     loadData();
   }, [params.id]);
-
-  // Section 5
-  const [perlengkapanLainnya, setPerlengkapanLainnya] = useState<string[]>(['Barricade tape', 'Safety line', 'Rambu-rambu K3', 'APAR', 'Kotak P3K', 'Lampu kerja (bila diperlukan)', 'Tempat sampah/karung limbah', 'Form Permit To Work (PTW)', 'Form JSA', 'Checklist Peralatan']);
-  const [perlengkapanInput, setPerlengkapanInput] = useState('');
 
   // Section 6
   const [tahapanPekerjaan, setTahapanPekerjaan] = useState<TahapanSection[]>(normalizeTahapanPekerjaan([
@@ -180,14 +154,6 @@ export default function ProsedurKerjaForm() {
     setList: React.Dispatch<React.SetStateAction<string[]>>
   ) => {
     setList(list.filter(item => item !== itemToRemove));
-  };
-
-  const toggleApd = (apdId: string) => {
-    if (selectedApd.includes(apdId)) {
-      setSelectedApd(selectedApd.filter(id => id !== apdId));
-    } else {
-      setSelectedApd([...selectedApd, apdId]);
-    }
   };
 
   // Tahapan Pekerjaan Handlers
@@ -295,19 +261,24 @@ export default function ProsedurKerjaForm() {
         : [...k.hazards, hazard],
     }));
 
+  // Section 3/4/5 dokumen tidak lagi diketik manual — diturunkan dari agregat
+  // kebutuhan seluruh sub-langkah TAHAPAN PEKERJAAN. Satu sumber untuk kotak
+  // ringkasan, payload simpan, dan preview PDF.
+  const derivedSections = deriveDocumentSections(tahapanPekerjaan);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
+
     const payload = {
       docNo,
       contractNo,
       submissionDate,
       umum,
       scopeOfWork,
-      tools,
-      selectedApd,
-      perlengkapanLainnya,
+      tools: derivedSections.tools,
+      selectedApd: derivedSections.apd,
+      perlengkapanLainnya: derivedSections.perlengkapanLainnya,
       tahapanPekerjaan,
       penyelesaianAkhir,
       vendorSignature,
@@ -336,9 +307,9 @@ export default function ProsedurKerjaForm() {
     submissionDate,
     umum,
     scopeOfWork,
-    tools,
-    apd: selectedApd,
-    perlengkapanLainnya,
+    tools: derivedSections.tools,
+    apd: derivedSections.apd,
+    perlengkapanLainnya: derivedSections.perlengkapanLainnya,
     tahapanPekerjaan,
     penyelesaianAkhir,
     vendorSignature,
@@ -460,76 +431,42 @@ export default function ProsedurKerjaForm() {
               />
             </div>
 
-            {/* 3. ALAT / TOOLS */}
+            {/* 3. ALAT / TOOLS — turunan dari kebutuhan sub-langkah */}
             <div>
               <label className="text-sm font-bold text-slate-800 block mb-2">3. ALAT / TOOLS</label>
-              <p className="text-xs text-slate-500 mb-2">Ketik nama alat lalu tekan <strong>Enter</strong>.</p>
-              <div className="min-h-[52px] w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary transition-all flex flex-wrap gap-2 items-center">
-                {tools.map(tag => (
-                  <span key={tag} className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary font-bold text-xs rounded-lg border border-primary/20">
-                    {tag}
-                    <button type="button" onClick={() => removeStringItem(tag, tools, setTools)} className="hover:bg-primary/20 p-0.5 rounded-full transition-colors">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
+              <p className="text-xs text-slate-500 mb-2">Terisi otomatis dari peralatan yang dipilih pada tiap sub-langkah Tahapan Pekerjaan.</p>
+              <div className="min-h-[52px] w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl flex flex-wrap gap-2 items-center">
+                {derivedSections.tools.length === 0 ? (
+                  <span className="text-xs text-slate-400 italic">Belum ada peralatan dipilih di Tahapan Pekerjaan.</span>
+                ) : derivedSections.tools.map(item => (
+                  <span key={item} className="inline-flex items-center px-3 py-1 bg-white text-slate-700 font-bold text-xs rounded-lg border border-slate-200">{item}</span>
                 ))}
-                <input 
-                  type="text" 
-                  value={toolInput}
-                  onChange={(e) => setToolInput(e.target.value)}
-                  onKeyDown={(e) => handleAddStringItem(e, tools, setTools, toolInput, setToolInput)}
-                  placeholder="Ketik peralatan..."
-                  className="flex-1 min-w-[150px] bg-transparent border-none outline-none text-sm font-medium text-slate-700 py-1 px-1"
-                />
               </div>
             </div>
 
-            {/* 4. APD */}
+            {/* 4. APD — turunan dari kebutuhan sub-langkah */}
             <div>
-              <label className="text-sm font-bold text-slate-800 block mb-3">4. ALAT PELINDUNG DIRI (APD)</label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {apdList.map((apd) => {
-                  const Icon = apd.icon;
-                  const isChecked = selectedApd.includes(apd.id);
-                  return (
-                    <label key={apd.id} className="relative cursor-pointer group">
-                      <input 
-                        type="checkbox" 
-                        className="peer sr-only" 
-                        checked={isChecked}
-                        onChange={() => toggleApd(apd.id)}
-                      />
-                      <div className={`h-full flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all text-center ${isChecked ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:bg-slate-50'}`}>
-                        <Icon className={`w-6 h-6 mb-2 transition-colors ${isChecked ? 'text-emerald-500' : 'text-slate-400'}`} />
-                        <span className={`text-xs font-bold ${isChecked ? 'text-emerald-700' : 'text-slate-600'}`}>{apd.label}</span>
-                      </div>
-                    </label>
-                  );
-                })}
+              <label className="text-sm font-bold text-slate-800 block mb-2">4. ALAT PELINDUNG DIRI (APD)</label>
+              <p className="text-xs text-slate-500 mb-2">Terisi otomatis dari APD yang dipilih pada tiap sub-langkah Tahapan Pekerjaan.</p>
+              <div className="min-h-[52px] w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl flex flex-wrap gap-2 items-center">
+                {derivedSections.apd.length === 0 ? (
+                  <span className="text-xs text-slate-400 italic">Belum ada APD dipilih di Tahapan Pekerjaan.</span>
+                ) : derivedSections.apd.map(item => (
+                  <span key={item} className="inline-flex items-center px-3 py-1 bg-white text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200">{item}</span>
+                ))}
               </div>
             </div>
 
-            {/* 5. PERLENGKAPAN LAINNYA */}
+            {/* 5. PERLENGKAPAN LAINNYA — turunan dari kebutuhan sub-langkah */}
             <div>
               <label className="text-sm font-bold text-slate-800 block mb-2">5. PERLENGKAPAN LAINNYA</label>
-              <p className="text-xs text-slate-500 mb-2">Ketik perlengkapan lalu tekan <strong>Enter</strong>.</p>
-              <div className="min-h-[52px] w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary transition-all flex flex-wrap gap-2 items-center">
-                {perlengkapanLainnya.map(item => (
-                  <span key={item} className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-700 font-bold text-xs rounded-lg border border-amber-200">
-                    {item}
-                    <button type="button" onClick={() => removeStringItem(item, perlengkapanLainnya, setPerlengkapanLainnya)} className="hover:bg-amber-200 p-0.5 rounded-full transition-colors">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
+              <p className="text-xs text-slate-500 mb-2">Terisi otomatis dari material yang dipilih pada tiap sub-langkah Tahapan Pekerjaan.</p>
+              <div className="min-h-[52px] w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl flex flex-wrap gap-2 items-center">
+                {derivedSections.perlengkapanLainnya.length === 0 ? (
+                  <span className="text-xs text-slate-400 italic">Belum ada material dipilih di Tahapan Pekerjaan.</span>
+                ) : derivedSections.perlengkapanLainnya.map(item => (
+                  <span key={item} className="inline-flex items-center px-3 py-1 bg-white text-amber-700 font-bold text-xs rounded-lg border border-amber-200">{item}</span>
                 ))}
-                <input 
-                  type="text" 
-                  value={perlengkapanInput}
-                  onChange={(e) => setPerlengkapanInput(e.target.value)}
-                  onKeyDown={(e) => handleAddStringItem(e, perlengkapanLainnya, setPerlengkapanLainnya, perlengkapanInput, setPerlengkapanInput)}
-                  placeholder="Ketik perlengkapan lainnya..."
-                  className="flex-1 min-w-[150px] bg-transparent border-none outline-none text-sm font-medium text-slate-700 py-1 px-1"
-                />
               </div>
             </div>
 
