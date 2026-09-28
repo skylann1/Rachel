@@ -13,7 +13,7 @@ import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalR
 import { getWorkers, WorkerItem } from '@/app/vendor/dashboard/pekerja/actions';
 import { getEquipment, EquipmentItem } from '@/app/vendor/dashboard/peralatan/actions';
 import { getMaterials, MaterialItem } from '@/app/vendor/dashboard/material/actions';
-import { APD_ITEMS, APD_CATEGORY_LABELS } from '@/lib/ptw-types';
+import { APD_ITEMS, APD_CATEGORY_LABELS, HAZARD_COLUMNS } from '@/lib/ptw-types';
 import {
   normalizeTahapanPekerjaan, emptyKebutuhan,
   TahapanSection, StepKebutuhan,
@@ -286,6 +286,14 @@ export default function ProsedurKerjaForm() {
       const next = list.includes(item) ? list.filter(x => x !== item) : [...list, item];
       return { ...k, apd: { ...k.apd, [category]: next } };
     });
+
+  const toggleKebutuhanHazard = (sIdx: number, pIdx: number, hazard: string) =>
+    updatePointKebutuhan(sIdx, pIdx, (k) => ({
+      ...k,
+      hazards: k.hazards.includes(hazard)
+        ? k.hazards.filter((h) => h !== hazard)
+        : [...k.hazards, hazard],
+    }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -561,6 +569,7 @@ export default function ProsedurKerjaForm() {
                           (pointKebutuhan?.workers.length || 0) +
                           (pointKebutuhan?.equipment.length || 0) +
                           (pointKebutuhan?.materials.length || 0) +
+                          (pointKebutuhan?.hazards.length || 0) +
                           Object.values(pointKebutuhan?.apd || {}).reduce((n, list) => n + list.length, 0);
                         return (
                           <div key={pIdx}>
@@ -595,7 +604,7 @@ export default function ProsedurKerjaForm() {
                             {kebutuhanOpen && (
                               <div className="ml-9 mt-2 w-[calc(100%-2rem)] border border-slate-200 rounded-lg bg-slate-50 p-3 space-y-3">
                                 <p className="text-[11px] font-bold text-slate-700">
-                                  Kebutuhan — pekerja, peralatan, material & APD (dibawa ke JSA & prefill PTW)
+                                  Kebutuhan — pekerja, peralatan, material, APD & sumber bahaya (dibawa ke JSA &amp; prefill PTW)
                                 </p>
 
                                 <div>
@@ -672,6 +681,25 @@ export default function ProsedurKerjaForm() {
                                             );
                                           })}
                                         </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Sumber Bahaya</p>
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {HAZARD_COLUMNS.map((column, cIdx) => (
+                                      <div key={cIdx} className="flex flex-wrap gap-1.5 content-start">
+                                        {column.map((hz) => {
+                                          const on = pointKebutuhan?.hazards.includes(hz);
+                                          return (
+                                            <button key={hz} type="button" onClick={() => toggleKebutuhanHazard(sIdx, pIdx, hz)}
+                                              className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-600 border-slate-200 hover:border-rose-400'}`}>
+                                              {hz}
+                                            </button>
+                                          );
+                                        })}
                                       </div>
                                     ))}
                                   </div>
