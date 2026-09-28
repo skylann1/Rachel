@@ -75,8 +75,20 @@ export default function PTWCreatePage() {
   const [docId, setDocId] = useState<string | null>(null);
 
   // Baris yang ter-prefill otomatis dari kebutuhan langkah JSA yang disetujui —
-  // dipakai untuk badge "dari JSA" pada selector pekerja & peralatan.
-  const [jsaPrefillIds, setJsaPrefillIds] = useState<{ workers: string[]; equipment: string[] }>({ workers: [], equipment: [] });
+  // dipakai untuk badge "dari JSA" pada selector pekerja & peralatan, dan
+  // untuk menyaring blok ke mode ringkas.
+  const [jsaPrefillIds, setJsaPrefillIds] = useState<{
+    workers: string[];
+    equipment: string[];
+    apd: Record<string, string[]>;
+    hazards: string[];
+  }>({ workers: [], equipment: [], apd: {}, hazards: [] });
+
+  // Mode tampilan tiap blok: ringkas (hanya hasil JSA) vs lengkap (daftar penuh).
+  const [showAllPekerja, setShowAllPekerja] = useState(false);
+  const [showAllPeralatan, setShowAllPeralatan] = useState(false);
+  const [showAllApd, setShowAllApd] = useState(false);
+  const [showAllHazards, setShowAllHazards] = useState(false);
 
   React.useEffect(() => {
     if (!typeDef) {
@@ -91,7 +103,7 @@ export default function PTWCreatePage() {
         projectId ? getPtw(projectId, ptwType) : Promise.resolve(null),
         projectId ? getPtwList(projectId) : Promise.resolve([]),
         projectId ? getProjectPeriod(projectId) : Promise.resolve(null),
-        projectId ? getJsaPrefillNeeds(projectId) : Promise.resolve({ workers: [], equipment: [], materials: [], apd: {} }),
+        projectId ? getJsaPrefillNeeds(projectId) : Promise.resolve({ workers: [], equipment: [], materials: [], apd: {}, hazards: [] }),
       ]);
       setRosterPekerja(workers);
       setRosterPeralatan(equipment);
@@ -128,9 +140,15 @@ export default function PTWCreatePage() {
             apdPrefill[cat] = [...list];
           }
           setSelectedApd(apdPrefill);
+          // hazardSourcesFor(ptwType) dipanggil langsung (bukan lewat closure
+          // `hazardSources`) supaya efek ini tidak perlu bergantung pada
+          // array yang dihitung ulang tiap render.
+          setSelectedHazards(jsaPrefill.hazards.filter(h => hazardSourcesFor(ptwType).includes(h)));
           setJsaPrefillIds({
             workers: jsaPrefill.workers.map(w => w.id),
             equipment: jsaPrefill.equipment.map(e => e.id),
+            apd: jsaPrefill.apd,
+            hazards: jsaPrefill.hazards,
           });
         } else if (siblings.length > 0) {
           // 2) Kalau belum ada kebutuhan di JSA — bantu isi awal dari tipe PTW
@@ -147,6 +165,13 @@ export default function PTWCreatePage() {
           if (mostRecent?.work_end) setWorkEnd(mostRecent.work_end);
         }
       }
+
+      // Blok tanpa prefill langsung tampil lengkap; kalau tidak, vendor
+      // menghadapi daftar kosong. Termasuk kasus revisi PTW (prefill dilewati).
+      setShowAllPekerja(jsaPrefill.workers.length === 0);
+      setShowAllPeralatan(jsaPrefill.equipment.length === 0);
+      setShowAllApd(!Object.values(jsaPrefill.apd).some(list => list.length > 0));
+      setShowAllHazards(jsaPrefill.hazards.length === 0);
 
       // Belum ada acuan sama sekali — mulai dari tanggal proyek, dipotong
       // ke batas 7 hari supaya vendor tidak langsung kena error.
@@ -249,6 +274,19 @@ export default function PTWCreatePage() {
   if (!typeDef) {
     return null;
   }
+
+  const visiblePekerja = showAllPekerja
+    ? rosterPekerja
+    : rosterPekerja.filter(p => jsaPrefillIds.workers.includes(p.id));
+  const visiblePeralatan = showAllPeralatan
+    ? rosterPeralatan
+    : rosterPeralatan.filter(p => jsaPrefillIds.equipment.includes(p.id));
+  const visibleHazards = showAllHazards
+    ? hazardSources
+    : hazardSources.filter(h => jsaPrefillIds.hazards.includes(h));
+  const visibleApdEntries = (Object.entries(APD_ITEMS) as [string, string[]][])
+    .map(([cat, items]) => [cat, showAllApd ? items : items.filter(i => (jsaPrefillIds.apd[cat] || []).includes(i))] as [string, string[]])
+    .filter(([, items]) => items.length > 0);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -380,11 +418,15 @@ export default function PTWCreatePage() {
               <h2 className="text-lg font-bold text-slate-800">Identifikasi Bahaya & APD</h2>
             </div>
 
-            <div className="mb-2">
+            <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-slate-700">Sumber Bahaya (Pilih yang relevan)</span>
+              <button type="button" onClick={() => setShowAllHazards(v => !v)}
+                className="text-[11px] font-bold text-primary hover:text-primary/80">
+                {showAllHazards ? 'Tampilkan dari JSA saja' : 'Tampilkan semua'}
+              </button>
             </div>
-            <div className="flex flex-wrap gap-2 mb-6 max-h-40 overflow-y-auto p-2 border border-slate-100 rounded-xl bg-slate-50">
-              {hazardSources.map((hz, i) => (
+            <div className="flex flex-wrap gap-2 mb-6 mt-2 max-h-40 overflow-y-auto p-2 border border-slate-100 rounded-xl bg-slate-50">
+              {visibleHazards.map((hz, i) => (
                 <label key={i} className="flex items-center gap-2 text-xs bg-white border border-slate-200 px-2 py-1 rounded shadow-sm cursor-pointer hover:bg-slate-50">
                   <input type="checkbox" checked={selectedHazards.includes(hz)} onChange={() => toggleHazard(hz)} className="rounded-sm" />
                   <span>{hz}</span>
@@ -392,12 +434,18 @@ export default function PTWCreatePage() {
               ))}
             </div>
 
-            <div className="mb-2 flex items-center gap-2 mt-6">
-              <HardHat className="w-4 h-4 text-slate-500" />
-              <span className="text-sm font-bold text-slate-700">Alat Pelindung Diri (APD)</span>
+            <div className="flex items-center justify-between mt-6">
+              <div className="flex items-center gap-2">
+                <HardHat className="w-4 h-4 text-slate-500" />
+                <span className="text-sm font-bold text-slate-700">Alat Pelindung Diri (APD)</span>
+              </div>
+              <button type="button" onClick={() => setShowAllApd(v => !v)}
+                className="text-[11px] font-bold text-primary hover:text-primary/80">
+                {showAllApd ? 'Tampilkan dari JSA saja' : 'Tampilkan semua'}
+              </button>
             </div>
-            <div className="grid grid-cols-2 gap-4 border border-slate-100 rounded-xl bg-slate-50 p-4 max-h-60 overflow-y-auto">
-              {Object.entries(APD_ITEMS).map(([cat, items]) => (
+            <div className="grid grid-cols-2 gap-4 mt-2 border border-slate-100 rounded-xl bg-slate-50 p-4 max-h-60 overflow-y-auto">
+              {visibleApdEntries.map(([cat, items]) => (
                 <div key={cat} className="space-y-2">
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{APD_CATEGORY_LABELS[cat] || cat}</div>
                   {items.map(item => (
@@ -477,9 +525,15 @@ export default function PTWCreatePage() {
 
           {/* Pekerja Selector */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Users className="w-5 h-5" /></div>
-              <h2 className="text-lg font-bold text-slate-800">Pilih Pekerja Bertugas</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Users className="w-5 h-5" /></div>
+                <h2 className="text-lg font-bold text-slate-800">Pilih Pekerja Bertugas</h2>
+              </div>
+              <button type="button" onClick={() => setShowAllPekerja(v => !v)}
+                className="text-[11px] font-bold text-primary hover:text-primary/80">
+                {showAllPekerja ? 'Tampilkan dari JSA saja' : 'Tampilkan semua'}
+              </button>
             </div>
             <p className="text-xs text-slate-500 mb-4">Pilih pekerja dari Data Master Pekerja yang akan ditugaskan di proyek ini.</p>
 
@@ -501,7 +555,7 @@ export default function PTWCreatePage() {
                   <Link href="/vendor/dashboard/pekerja" className="text-sm font-bold text-primary hover:underline">Tambah Data Pekerja &rarr;</Link>
                 </div>
               ) : (
-                rosterPekerja.map((p) => (
+                visiblePekerja.map((p) => (
                   <label key={p.id} className={`flex items-center gap-4 p-3 rounded-xl border cursor-pointer transition-colors ${selectedPekerja.includes(p.id) ? 'bg-blue-50/50 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                     <input
                       type="checkbox"
@@ -531,9 +585,15 @@ export default function PTWCreatePage() {
 
           {/* Peralatan Selector */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Truck className="w-5 h-5" /></div>
-              <h2 className="text-lg font-bold text-slate-800">Pilih Peralatan / Mesin</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Truck className="w-5 h-5" /></div>
+                <h2 className="text-lg font-bold text-slate-800">Pilih Peralatan / Mesin</h2>
+              </div>
+              <button type="button" onClick={() => setShowAllPeralatan(v => !v)}
+                className="text-[11px] font-bold text-primary hover:text-primary/80">
+                {showAllPeralatan ? 'Tampilkan dari JSA saja' : 'Tampilkan semua'}
+              </button>
             </div>
             <p className="text-xs text-slate-500 mb-4">Pilih alat dari Data Master Peralatan yang akan dibawa ke lapangan.</p>
 
@@ -546,7 +606,7 @@ export default function PTWCreatePage() {
                   <Link href="/vendor/dashboard/peralatan" className="text-sm font-bold text-primary hover:underline">Tambah Data Peralatan &rarr;</Link>
                 </div>
               ) : (
-                rosterPeralatan.map((p) => (
+                visiblePeralatan.map((p) => (
                   <label key={p.id} className={`flex items-center gap-4 p-3 rounded-xl border cursor-pointer transition-colors ${selectedPeralatan.includes(p.id) ? 'bg-amber-50/50 border-amber-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                     <input
                       type="checkbox"
