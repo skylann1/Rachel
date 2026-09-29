@@ -45,10 +45,13 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+type StatusFilter = 'semua' | 'berjalan' | 'selesai';
+
 export default function VendorProjectsPage() {
   const [projects, setProjects] = useState<VendorProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('semua');
 
   useEffect(() => {
     let alive = true;
@@ -64,11 +67,17 @@ export default function VendorProjectsPage() {
 
   const filteredProjects = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter(p =>
-      [p.name, p.location, p.contract_number].filter(Boolean).join(' ').toLowerCase().includes(q)
-    );
-  }, [projects, query]);
+    return projects
+      .filter(p => {
+        if (statusFilter === 'selesai') return p.status === 'Selesai';
+        if (statusFilter === 'berjalan') return p.status !== 'Selesai';
+        return true;
+      })
+      .filter(p => {
+        if (!q) return true;
+        return [p.name, p.location, p.contract_number].filter(Boolean).join(' ').toLowerCase().includes(q);
+      });
+  }, [projects, query, statusFilter]);
 
   // Sisa masa berlaku PTW aktif terdekat — untuk peringatan di kartu.
   const getPtwExpiry = (project: VendorProjectRow) => {
@@ -164,6 +173,15 @@ export default function VendorProjectsPage() {
             PTW Kedaluwarsa — Ajukan Ulang
           </Link>
         );
+      case 'Selesai':
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-white bg-slate-700 hover:bg-slate-800 py-3 rounded-xl transition-all shadow-sm shadow-slate-700/30"
+          >
+            Lihat Detail Proyek <ArrowRight className="w-4 h-4" />
+          </Link>
+        );
       default:
         return (
           <Link
@@ -181,9 +199,9 @@ export default function VendorProjectsPage() {
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Proyek Aktif</h1>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Proyek Saya</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Daftar pekerjaan/proyek yang sedang dikerjakan atau dalam masa persiapan.
+            Semua pekerjaan/proyek perusahaan Anda — yang sedang berjalan maupun yang sudah selesai.
           </p>
         </div>
       </div>
@@ -201,6 +219,27 @@ export default function VendorProjectsPage() {
             className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm transition-all"
             placeholder="Cari nama proyek atau lokasi..."
           />
+        </div>
+
+        <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl p-1 w-full sm:w-auto">
+          {([
+            { key: 'semua', label: 'Semua' },
+            { key: 'berjalan', label: 'Berjalan' },
+            { key: 'selesai', label: 'Selesai' },
+          ] as const).map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setStatusFilter(tab.key)}
+              className={`flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                statusFilter === tab.key
+                  ? 'bg-white text-primary shadow-sm border border-slate-200'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -224,7 +263,11 @@ export default function VendorProjectsPage() {
             <Search className="w-8 h-8 text-slate-400" />
           </div>
           <h3 className="font-bold text-slate-700 mb-1">Tidak Ada Proyek Cocok</h3>
-          <p className="text-sm text-slate-500">Tidak ada proyek yang cocok dengan &ldquo;{query}&rdquo;.</p>
+          <p className="text-sm text-slate-500">
+            {query
+              ? <>Tidak ada proyek yang cocok dengan &ldquo;{query}&rdquo;.</>
+              : 'Tidak ada proyek pada filter ini.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

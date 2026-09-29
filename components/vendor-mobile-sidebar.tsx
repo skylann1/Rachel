@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 const menuUtama = [
   { name: 'Dashboard Mitra Kerja', href: '/vendor/dashboard', icon: LayoutDashboard },
   { name: 'My Task', href: '/vendor/dashboard/my-task', icon: ClipboardList },
-  { name: 'Proyek Aktif', href: '/vendor/dashboard/projects', icon: Briefcase },
+  { name: 'Proyek Saya', href: '/vendor/dashboard/projects', icon: Briefcase },
   { name: 'Inbox Temuan K3', href: '/vendor/dashboard/inspection', icon: AlertTriangle },
   { name: 'Laporan Insiden', href: '/vendor/dashboard/incident', icon: AlertTriangle, danger: true },
   { name: 'Panduan Alur K3', href: '/vendor/dashboard/panduan', icon: BookOpen },

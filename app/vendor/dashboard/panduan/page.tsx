@@ -215,7 +215,7 @@ export default function VendorPanduanPage() {
             href="/vendor/dashboard/projects"
             className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors shadow-sm shadow-primary/30"
           >
-            Lihat Proyek Aktif <ArrowRight className="w-4 h-4" />
+            Lihat Proyek Saya <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
             href="/vendor/dashboard/my-task"
