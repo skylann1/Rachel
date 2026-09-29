@@ -5,7 +5,7 @@ import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 
-interface RoleActor {
+export interface RoleActor {
   userId: string;
   type: string | null; // tipe organisasi aktor sendiri ('pgn' | 'pgsol' | 'vendor')
   crossOrg: boolean; // true kalau aktor bertipe 'pgn' — boleh kelola role tipe apa pun
@@ -42,7 +42,7 @@ async function requireRoleAccess(): Promise<{ error: string | null; actor: RoleA
 }
 
 /** Menolak mutasi kalau role target bukan tipe aktor sendiri atau role sistem, kecuali aktor crossOrg. */
-async function assertSameRoleType(adminAuthClient: ReturnType<typeof createAdminClient>, actor: RoleActor, roleId: string): Promise<string | null> {
+export async function assertSameRoleType(adminAuthClient: ReturnType<typeof createAdminClient>, actor: RoleActor, roleId: string): Promise<string | null> {
   if (actor.crossOrg) return null;
   const { data: target } = await adminAuthClient.from('roles').select('type, is_system').eq('id', roleId).single();
   if (!target || target.type !== actor.type) {

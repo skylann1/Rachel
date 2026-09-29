@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
+import { assertSameRoleType, type RoleActor } from '../actions';
 
 export async function updateRolePermissions(
   id: string,
@@ -30,15 +31,14 @@ export async function updateRolePermissions(
     // ../actions.ts: aktor org-scoped (bukan crossOrg) cuma boleh mengubah
     // role dengan tipe & is_system yang sama dengan organisasinya sendiri,
     // dan tidak boleh memindahkan role ke tipe lain.
+    const actor: RoleActor = { userId: user.id, type: actorProfile?.type ?? null, crossOrg };
+    const typeError = await assertSameRoleType(supabase, actor, id);
+    if (typeError) return { error: typeError };
+
+    // Extra check: org-scoped actors cannot move roles between types
     if (!crossOrg) {
-      const { data: target } = await supabase.from('roles').select('type, is_system').eq('id', id).single();
-      if (!target || target.type !== actorProfile?.type) {
-        return { error: 'Role ini bukan bagian dari organisasi Anda.' };
-      }
-      if (target.is_system) {
-        return { error: 'Role sistem tidak dapat diubah dari halaman ini.' };
-      }
-      if (type !== target.type) {
+      const { data: target } = await supabase.from('roles').select('type').eq('id', id).single();
+      if (type !== target?.type) {
         return { error: 'Role ini tidak dapat dipindahkan ke tipe lain.' };
       }
     }
