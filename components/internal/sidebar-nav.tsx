@@ -20,6 +20,13 @@ const menuUtama = [
 
 const masterData = [
   { name: 'Manajemen Akun', href: '/dashboard/master-data/account', icon: Users, permission: { module: 'masterData', action: 'view_account' } },
+  // Href sama dengan "Manajemen Akun" di atas — halaman itu sendiri
+  // membedakan tampilan lewat crossOrg (lihat
+  // app/dashboard/master-data/account/page.tsx). De-dup di filter di
+  // bawah mencegah dua entri identik kalau satu aktor kebetulan punya
+  // kedua permission.
+  { name: 'Staff Organisasi', href: '/dashboard/master-data/account', icon: Users, permission: { module: 'masterData', action: 'manage_org_staff' } },
+  { name: 'Kelola Reviewer PGSOL', href: '/dashboard/master-data/project-pgsol-assign', icon: Users, permission: { module: 'jsa', action: 'manage_assignment_pgsol' } },
   { name: 'Role & Permission', href: '/dashboard/master-data/role', icon: Shield, permission: { module: 'masterData', action: 'manage_role' } },
   { name: 'Data Vendor', href: '/dashboard/master-data/vendor', icon: Building2, permission: { module: 'masterData', action: 'view_vendor' } },
   { name: 'Data Proyek', href: '/dashboard/master-data/project', icon: Briefcase, permission: { module: 'masterData', action: 'view_project' } },
@@ -45,7 +52,12 @@ export function SidebarNav({ userPermissions, isCollapsed }: { userPermissions: 
   };
 
   const filteredMenuUtama = menuUtama.filter(item => hasAccess(item.permission.module, item.permission.action));
-  const filteredMasterData = masterData.filter(item => hasAccess(item.permission.module, item.permission.action));
+  const filteredMasterData = masterData
+    .filter(item => hasAccess(item.permission.module, item.permission.action))
+    // Manajemen Akun dan Staff Organisasi mengarah ke href yang sama —
+    // hindari dua entri nav identik kalau satu aktor kebetulan punya
+    // kedua permission (keeps the first match, i.e. "Manajemen Akun").
+    .filter((item, idx, arr) => arr.findIndex(i => i.href === item.href) === idx);
 
   return (
     <nav className="flex-1 overflow-y-auto py-6 px-4 overflow-x-hidden">
