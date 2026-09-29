@@ -317,3 +317,49 @@ Vendor`/`Review PGSOL` — persis set status yang sudah dipakai
 (`Internal users can update all procedures/jsa`) SENGAJA tidak disentuh —
 tahapnya dinamis lewat `roles.permissions` + `stage_assignments`, bukan
 celah yang lupa ditutup seperti punya vendor.
+
+---
+
+# Kolom `jsa_steps.kebutuhan` — dijalankan 2026-09-29
+
+`schema_jsa_step_kebutuhan.sql` (di luar urutan fase). Ditemukan saat audit
+DB live: berkas migrasinya sudah ada di repo sejak fitur kebutuhan
+2026-09-23, tapi **belum pernah dijalankan ke Supabase**, sehingga
+`jsa_steps` tidak punya kolom `kebutuhan` sama sekali. Akibatnya seluruh
+rantai prosedur → JSA → PTW (termasuk fitur sumber bahaya 2026-09-28 yang
+dibangun di atasnya) tidak bisa menyimpan apa pun.
+
+Sudah dijalankan ke Supabase live dan diverifikasi lewat
+`information_schema.columns`. Migrasinya aditif dan idempotent
+(`ADD COLUMN IF NOT EXISTS`), baris lama bernilai `{}` — dan itu memang yang
+diandalkan `hasStoredKebutuhan()` sebagai penanda "belum pernah disimpan",
+sehingga langkah JSA lama disemai ulang dari prosedur, bukan dianggap
+sengaja dikosongkan.
+
+---
+
+# Penomoran PTW macet karena RLS — diperbaiki 2026-09-29
+
+`schema_ptw_numbering_security_definer.sql` (di luar urutan fase). Ditemukan
+saat audit DB live yang sama.
+
+`ptw_numbering` punya RLS aktif dengan **nol policy** (Supabase meng-enable
+RLS otomatis pada tabel baru; `schema_ptw_numbering.sql` tidak pernah membuat
+policy), sementara `get_next_ptw_number()` dibuat SECURITY INVOKER dan
+dipanggil lewat `supabase.rpc()` dengan klien yang terikat RLS
+(`app/dashboard/approval/actions.ts:636`). INSERT/UPDATE counter di dalam
+fungsi itu karenanya selalu ditolak untuk user biasa, dan tahap
+`Menunggu Penomoran HSSE` — langkah TERAKHIR sebelum PTW Aktif — gagal. Efek
+praktisnya: tidak ada PTW yang bisa terbit sama sekali.
+
+Perbaikannya menjadikan fungsi itu SECURITY DEFINER dengan `search_path`
+dipatok, pola yang sama dengan `public.update_ptw_safety_checklist()`.
+Tabel `ptw_numbering` SENGAJA tetap tanpa policy — satu-satunya jalan masuk ke
+counter adalah fungsi ini. Ditambah dua pengetatan: pengecekan
+`is_internal_user()` di dalam fungsi (penomoran murni urusan internal PGN;
+tanpa ini SECURITY DEFINER memungkinkan siapa pun yang login membakar nomor
+PTW sehingga deretnya berlubang), dan EXECUTE dicabut dari `anon`.
+
+Sudah dijalankan ke Supabase live dan diverifikasi: `prosecdef = true`,
+`proconfig = {search_path=public}`, `anon` EXECUTE = false, `authenticated`
+EXECUTE = true, dan counter tidak bergerak (tetap 4) saat verifikasi.
