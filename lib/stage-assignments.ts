@@ -2,7 +2,7 @@
 //
 // Helper bersama untuk baca/tulis stage_assignments — dipakai baik oleh UI
 // assignment (PGN di app/dashboard/master-data/project/actions.ts, PGSOL di
-// app/pgsol/dashboard/projects/actions.ts) maupun oleh actions approval
+// app/dashboard/master-data/project-pgsol-assign/actions.ts) maupun oleh actions approval
 // (app/dashboard/approval/actions.ts) dan filter tugas
 // (app/dashboard/my-task/actions.ts). Bukan Server Action sendiri (tidak ada
 // "use server" di sini) — dipanggil dari dalam file yang sudah "use server".
