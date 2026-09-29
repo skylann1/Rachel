@@ -13,7 +13,12 @@
 ## Global Constraints
 
 - **Ini BUKAN Next.js yang kamu hafal.** Versi di repo ini punya breaking changes. Baca panduan terkait di `node_modules/next/dist/docs/` sebelum menulis kode spesifik Next.js.
-- **Tidak ada test framework di repo ini.** Tidak ada `npm test`. Verifikasi tiap task: `npx tsc --noEmit`, lalu `npm run lint`, lalu `npm run build`. Jangan membuat berkas test, jangan memasang test runner.
+- **Tidak ada test framework di repo ini.** Tidak ada `npm test`. Jangan membuat berkas test, jangan memasang test runner.
+- **`npm` dan `npx` TIDAK terpasang di mesin ini** — hanya `node` (`/c/nvm4w/nodejs/node`). Perintah `npm run ...` akan gagal dengan "command not found". Panggil binary lokal lewat `node`:
+  - Typecheck: `node node_modules/typescript/bin/tsc --noEmit` — **harus exit 0**, ini gerbang yang mengikat.
+  - Lint berkas tersentuh: `node node_modules/eslint/bin/eslint.js <path>` — harus exit 0 untuk berkas yang kamu ubah.
+  - Build: `node node_modules/next/dist/bin/next build`
+- **Lint seluruh repo TIDAK bersih dan tidak pernah bersih** (19.466 masalah pre-existing, 1.374 error, termasuk `scratch/` yang untracked). Jangan menjalankan lint repo-wide dan jangan mencoba memperbaiki temuan pre-existing. Standarnya: berkas yang KAMU sentuh harus lint bersih.
 - **Jangan mengedit berkas `*PDF.tsx` mana pun.** `ProsedurPDF.tsx`, `JsaPDF.tsx`, `PtwPDF.tsx` harus tetap utuh — kesetiaan dokumen adalah batasan keras dari user. Kalau sebuah task terasa menuntut perubahan PDF, berhenti dan laporkan; jangan diedit.
 - **Tidak ada migration.** Jangan membuat berkas `supabase/schema_*.sql` dan jangan menyentuh `supabase/README_*.md`.
 - **Tidak ada permission key atau RLS policy baru.** Jangan menyentuh `utils/permissions.ts`, `lib/stage-assignments.ts`, atau alur approval.
@@ -294,12 +299,14 @@ Ubah teks judul panel (sekitar baris 597–599) supaya menyebut bahaya:
 - [ ] **Step 6: Verifikasi**
 
 ```bash
-npx tsc --noEmit && npm run lint && npm run build
+node node_modules/typescript/bin/tsc --noEmit
+node node_modules/eslint/bin/eslint.js <berkas yang kamu ubah>
+node node_modules/next/dist/bin/next build
 ```
 
 Harapan: ketiganya lolos.
 
-Manual (jalankan `npm run dev`, buka prosedur sebuah proyek sebagai vendor):
+Manual (dijalankan user, bukan agent — `node node_modules/next/dist/bin/next dev`, lalu buka prosedur sebuah proyek sebagai vendor):
 - Buka panel Kebutuhan sebuah bullet → blok "Sumber Bahaya" tampil dengan 6 kolom butir.
 - Centang 2 bahaya → badge hitungan di tombol naik 2.
 - Simpan → muat ulang halaman → kedua bahaya masih tercentang.
@@ -413,7 +420,9 @@ Ganti seluruh blok JSX section 3 (baris ~455–477), 4 (~479–502), dan 5 (~504
 - [ ] **Step 5: Verifikasi**
 
 ```bash
-npx tsc --noEmit && npm run lint && npm run build
+node node_modules/typescript/bin/tsc --noEmit
+node node_modules/eslint/bin/eslint.js <berkas yang kamu ubah>
+node node_modules/next/dist/bin/next build
 ```
 
 Harapan: ketiganya lolos, tanpa peringatan variabel tak terpakai.
@@ -595,7 +604,9 @@ Pastikan variabel indeks langkah pada `map` di sekitar baris 344 memang bernama 
 - [ ] **Step 5: Verifikasi**
 
 ```bash
-npx tsc --noEmit && npm run lint && npm run build
+node node_modules/typescript/bin/tsc --noEmit
+node node_modules/eslint/bin/eslint.js <berkas yang kamu ubah>
+node node_modules/next/dist/bin/next build
 ```
 
 Manual:
@@ -712,7 +723,9 @@ Tambahkan tombol kecil di header keempat blok. Contoh untuk Sumber Bahaya (baris
 - [ ] **Step 6: Verifikasi**
 
 ```bash
-npx tsc --noEmit && npm run lint && npm run build
+node node_modules/typescript/bin/tsc --noEmit
+node node_modules/eslint/bin/eslint.js <berkas yang kamu ubah>
+node node_modules/next/dist/bin/next build
 ```
 
 Manual:
@@ -736,7 +749,9 @@ git commit -m "Show JSA-derived items first on PTW form with show-all toggles"
 Setelah kelima task lolos, jalankan sekali lagi dari repo bersih:
 
 ```bash
-npx tsc --noEmit && npm run lint && npm run build
+node node_modules/typescript/bin/tsc --noEmit
+node node_modules/eslint/bin/eslint.js <berkas yang kamu ubah>
+node node_modules/next/dist/bin/next build
 ```
 
 Pastikan `git status` tidak memuat berkas `supabase/schema_*.sql` baru dan tidak ada berkas `*PDF.tsx` yang termodifikasi — keduanya menandakan penyimpangan dari spec.

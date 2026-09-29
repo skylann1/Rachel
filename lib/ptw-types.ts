@@ -383,6 +383,14 @@ export const PTW_TYPES: PtwTypeDefinition[] = [
 /**
  * Bagian B disusun enam kolom, dibaca ke bawah per kolom persis seperti form
  * asli. Jumlah butir tiap kolom memang tidak sama.
+ *
+ * PERINGATAN: string di sini adalah NILAI YANG DISIMPAN (di `ptw.hazards`,
+ * `jsa_steps.kebutuhan.hazards`, dst.), bukan sekadar label tampilan —
+ * identitas bahaya adalah string itu sendiri. Mengubah ejaan salah satu butir
+ * (termasuk typo 'Ruang Tetutup' di bawah) akan membuat semua data lama yang
+ * tersimpan dengan ejaan lama menjadi yatim: hilang dari chip JSA, tidak ikut
+ * prefill PTW, tapi tetap tercetak di PDF lama. Perbaikan ejaan butuh migrasi
+ * data tersendiri, jangan diedit langsung di sini.
  */
 export const HAZARD_COLUMNS: string[][] = [
   ['Alat listrik', 'Api Terbuka / Percikan', 'Cairan Hidrokarbon', 'Cairan/Gas Bertekanan', 'Moving part', 'Crane / Lifting', 'Getaran', 'Generator/ compressor'],

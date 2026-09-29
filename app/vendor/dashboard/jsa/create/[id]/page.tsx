@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
-import { aggregatePointNeeds, kebutuhanSummary, isKebutuhanEmpty, StepKebutuhan } from '@/lib/procedure-kebutuhan';
+import { aggregatePointNeeds, aggregateKebutuhan, isKebutuhanEmpty, hasStoredKebutuhan, emptyKebutuhan, StepKebutuhan, TahapanSection } from '@/lib/procedure-kebutuhan';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
@@ -48,6 +48,7 @@ export default function JSACreatePage() {
     { id: 1, langkah: '', jenisBahaya: 'Fisika', sebab: '', potensiBahaya: '', faktorPositif: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, inherentRisk: {...defaultRisk}, mitigasi: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, residualRisk: {...defaultRisk} }
   ]);
   const [procSteps, setProcSteps] = useState<string[]>([]);
+  const [procSections, setProcSections] = useState<TahapanSection[]>([]);
   const [projectInfo, setProjectInfo] = useState<{ name: string; contract_number: string | null; location: string | null; companyName: string | null } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [docId, setDocId] = useState<string | null>(null);
@@ -94,9 +95,12 @@ export default function JSACreatePage() {
               return {
                 id: existing.id || Date.now() + Math.random(),
                 langkah: stepDesc, // Always override with SOP step
-                kebutuhan: isKebutuhanEmpty(storedKebutuhan ?? undefined)
-                  ? aggregatePointNeeds(data.procedureSections?.[idx]?.points || [])
-                  : storedKebutuhan,
+                // Semai dari prosedur HANYA kalau belum pernah disimpan sama
+                // sekali (kolom masih `{}`). Objek tersimpan yang array-nya
+                // kosong berarti vendor sengaja melepas semua centangan.
+                kebutuhan: hasStoredKebutuhan(storedKebutuhan)
+                  ? { ...emptyKebutuhan(), ...storedKebutuhan }
+                  : aggregatePointNeeds(data.procedureSections?.[idx]?.points || []),
                 jenisBahaya: hazards.jenisBahaya || (legacyBahaya ? 'Fisika' : 'Fisika'),
                 sebab: hazards.sebab || '',
                 potensiBahaya: hazards.potensiBahaya || legacyBahaya || '',
@@ -150,7 +154,9 @@ export default function JSACreatePage() {
             return {
               id: step.id || Date.now() + Math.random(),
               langkah: step.description || '',
-              kebutuhan: isKebutuhanEmpty(storedKebutuhan ?? undefined) ? undefined : storedKebutuhan ?? undefined,
+              kebutuhan: hasStoredKebutuhan(storedKebutuhan)
+                ? { ...emptyKebutuhan(), ...storedKebutuhan }
+                : undefined,
               jenisBahaya: hazards.jenisBahaya || (legacyBahaya ? 'Fisika' : 'Fisika'),
               sebab: hazards.sebab || '',
               potensiBahaya: hazards.potensiBahaya || legacyBahaya || '',
@@ -167,6 +173,7 @@ export default function JSACreatePage() {
         if (data && data.procedureSteps) {
           setProcSteps(data.procedureSteps);
         }
+        setProcSections(data?.procedureSections || []);
         if (data?.project) {
           setProjectInfo(data.project);
         }
@@ -206,6 +213,12 @@ export default function JSACreatePage() {
 
   const updateStepText = (id: number, field: keyof JsaStepData, value: string) => {
     setJsaSteps(jsaSteps.map(step => step.id === id ? { ...step, [field]: value } : step));
+  };
+
+  const toggleStepKebutuhan = (stepIdx: number, mutate: (k: StepKebutuhan) => StepKebutuhan) => {
+    setJsaSteps(prev => prev.map((s, i) =>
+      i === stepIdx ? { ...s, kebutuhan: mutate({ ...emptyKebutuhan(), ...s.kebutuhan }) } : s
+    ));
   };
 
   const updateInherentRisk = (id: number, field: string, value: string) => {
@@ -341,12 +354,71 @@ export default function JSACreatePage() {
                     </td>
                     <td className="border border-slate-300 p-1 align-top">
                       <textarea value={step.langkah} onChange={(e) => updateStepText(step.id, 'langkah', e.target.value)} className="w-full p-2 min-h-[100px] text-xs border-none focus:ring-1 focus:ring-primary bg-white/50 resize-y rounded" placeholder="Tuliskan langkah pekerjaan..." />
-                      {step.kebutuhan && !isKebutuhanEmpty(step.kebutuhan) && (
-                        <div className="mt-1 px-2 pb-1">
-                          <p className="text-[9px] font-bold text-primary uppercase tracking-wide mb-1">Kebutuhan dari Prosedur</p>
-                          <p className="text-[10px] text-slate-600 leading-relaxed whitespace-pre-line">{kebutuhanSummary(step.kebutuhan)?.split(' · ').map((chunk) => `• ${chunk}`).join('\n')}</p>
-                        </div>
-                      )}
+                      {(() => {
+                        const cur = { ...emptyKebutuhan(), ...step.kebutuhan };
+                        // Union kandidat dari prosedur DENGAN kebutuhan yang sudah tersimpan —
+                        // supaya kalau urutan step bergeser (mis. setelah hapus langkah), item
+                        // yang sudah tersimpan tetap terlihat & bisa dilepas walau prosedur di
+                        // index ini sudah tidak lagi menawarkannya.
+                        const cand = aggregateKebutuhan([aggregatePointNeeds(procSections?.[index]?.points || []), cur]);
+                        if (isKebutuhanEmpty(cand)) return null;
+                        const chip = (on: boolean, key: string, label: string, onClick: () => void) => (
+                          <button key={key} type="button" onClick={onClick}
+                            className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-400 border-slate-200 line-through hover:border-primary'}`}>
+                            {label}
+                          </button>
+                        );
+                        return (
+                          <div className="mt-2 border border-slate-200 rounded-lg bg-slate-50 p-2 space-y-2">
+                            <p className="text-[10px] font-bold text-slate-600">
+                              Kebutuhan dari Prosedur — lepas centang yang tidak dipakai di langkah ini
+                            </p>
+                            {cand.workers.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {cand.workers.map(w => chip(
+                                  cur.workers.some(x => x.id === w.id), `w-${w.id}`, w.label,
+                                  () => toggleStepKebutuhan(index, k => ({ ...k, workers: k.workers.some(x => x.id === w.id) ? k.workers.filter(x => x.id !== w.id) : [...k.workers, w] }))
+                                ))}
+                              </div>
+                            )}
+                            {cand.equipment.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {cand.equipment.map(e => chip(
+                                  cur.equipment.some(x => x.id === e.id), `e-${e.id}`, e.label,
+                                  () => toggleStepKebutuhan(index, k => ({ ...k, equipment: k.equipment.some(x => x.id === e.id) ? k.equipment.filter(x => x.id !== e.id) : [...k.equipment, e] }))
+                                ))}
+                              </div>
+                            )}
+                            {cand.materials.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {cand.materials.map(m => chip(
+                                  cur.materials.some(x => x.id === m.id), `m-${m.id}`, m.label,
+                                  () => toggleStepKebutuhan(index, k => ({ ...k, materials: k.materials.some(x => x.id === m.id) ? k.materials.filter(x => x.id !== m.id) : [...k.materials, m] }))
+                                ))}
+                              </div>
+                            )}
+                            {Object.entries(cand.apd).map(([cat, items]) => items.length > 0 && (
+                              <div key={cat} className="flex flex-wrap gap-1.5">
+                                {items.map(item => chip(
+                                  (cur.apd[cat] || []).includes(item), `a-${cat}-${item}`, item,
+                                  () => toggleStepKebutuhan(index, k => {
+                                    const list = k.apd[cat] || [];
+                                    return { ...k, apd: { ...k.apd, [cat]: list.includes(item) ? list.filter(x => x !== item) : [...list, item] } };
+                                  })
+                                ))}
+                              </div>
+                            ))}
+                            {cand.hazards.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {cand.hazards.map(hz => chip(
+                                  cur.hazards.includes(hz), `h-${hz}`, hz,
+                                  () => toggleStepKebutuhan(index, k => ({ ...k, hazards: k.hazards.includes(hz) ? k.hazards.filter(x => x !== hz) : [...k.hazards, hz] }))
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="border border-slate-300 p-1 align-top">
                       <select value={step.jenisBahaya} onChange={(e) => updateStepText(step.id, 'jenisBahaya', e.target.value)} className="w-full p-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-primary bg-white">

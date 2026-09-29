@@ -32,6 +32,10 @@ export interface StepKebutuhan {
   materials: KebutuhanResource[];
   /** Bentuk persis kolom `ptw.apd`: { kategori: [butir, ...] } dari APD_ITEMS. */
   apd: Record<string, string[]>;
+  /** Butir `HAZARD_SOURCES` (lib/ptw-types.ts) — string mentah, bukan
+   * KebutuhanResource, karena daftar bahaya adalah konstanta kode dan
+   * `ptw.hazards` memang disimpan sebagai array string. */
+  hazards: string[];
 }
 
 /** Satu bullet point TAHAPAN PEKERJAAN — menggantikan `string` legacy. */
@@ -47,7 +51,7 @@ export interface TahapanSection {
 
 /** Bentuk-kosong yang aman untuk diisi chart slot. */
 export function emptyKebutuhan(): StepKebutuhan {
-  return { workers: [], equipment: [], materials: [], apd: {} };
+  return { workers: [], equipment: [], materials: [], apd: {}, hazards: [] };
 }
 
 function isTahapanPoint(p: unknown): p is TahapanPoint {
@@ -92,6 +96,17 @@ function dedupeResources(list: KebutuhanResource[]): KebutuhanResource[] {
   return out;
 }
 
+function dedupeStrings(list: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of list) {
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  return out;
+}
+
 function mergeApd(a: Record<string, string[]> | undefined, b: Record<string, string[]> | undefined): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   const categories = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
@@ -117,18 +132,21 @@ export function aggregateKebutuhan(list: StepKebutuhan[]): StepKebutuhan {
   let equipment: KebutuhanResource[] = [];
   let materials: KebutuhanResource[] = [];
   let apd: Record<string, string[]> = {};
+  let hazards: string[] = [];
   for (const k of list) {
     if (!k) continue;
     workers = [...workers, ...(k.workers || [])];
     equipment = [...equipment, ...(k.equipment || [])];
     materials = [...materials, ...(k.materials || [])];
     apd = mergeApd(apd, k.apd);
+    hazards = [...hazards, ...(k.hazards || [])];
   }
   return {
     workers: dedupeResources(workers),
     equipment: dedupeResources(equipment),
     materials: dedupeResources(materials),
     apd,
+    hazards: dedupeStrings(hazards),
   };
 }
 
@@ -155,6 +173,7 @@ export function kebutuhanSummary(k: StepKebutuhan | undefined): string | null {
   if (k.materials?.length) parts.push(`Material: ${k.materials.map((m) => m.label).join(', ')}`);
   const apdItems = Object.values(k.apd || {}).flat();
   if (apdItems.length) parts.push(`APD: ${apdItems.join(', ')}`);
+  if (k.hazards?.length) parts.push(`Bahaya: ${k.hazards.join(', ')}`);
   return parts.length ? parts.join(' · ') : null;
 }
 
@@ -165,6 +184,44 @@ export function isKebutuhanEmpty(k: StepKebutuhan | undefined): boolean {
     !k.workers?.length &&
     !k.equipment?.length &&
     !k.materials?.length &&
+    !k.hazards?.length &&
     !Object.values(k.apd || {}).some((list) => list.length > 0)
   );
+}
+
+/**
+ * Membedakan "belum pernah disimpan" dari "disimpan dalam keadaan kosong".
+ * `jsa_steps.kebutuhan` default-nya `{}` (tanpa key), sedangkan hasil simpan
+ * vendor yang melepas semua centangan berupa objek dengan key lengkap tapi
+ * array kosong. JSA memakai ini supaya centangan yang sengaja dilepas TIDAK
+ * disemai ulang dari prosedur tiap kali form dibuka.
+ */
+export function hasStoredKebutuhan(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  return Object.keys(raw as Record<string, unknown>).length > 0;
+}
+
+/** Isi section 3/4/5 dokumen prosedur, diturunkan dari seluruh sub-langkah. */
+export interface ProsedurDocumentSections {
+  tools: string[];
+  apd: string[];
+  perlengkapanLainnya: string[];
+}
+
+/**
+ * Section 3 (ALAT / TOOLS), 4 (APD), dan 5 (PERLENGKAPAN LAINNYA) tidak lagi
+ * diketik manual — nilainya diturunkan dari agregat kebutuhan semua bullet
+ * TAHAPAN PEKERJAAN. Satu-satunya sumber nilai turunan itu: dipakai bersama
+ * oleh kotak ringkasan di form, payload simpan, dan binding preview PDF,
+ * supaya ketiganya mustahil berbeda.
+ */
+export function deriveDocumentSections(sections: TahapanSection[]): ProsedurDocumentSections {
+  const all = aggregateKebutuhan(
+    (sections || []).flatMap((s) => (s?.points || []).map((p) => p?.kebutuhan || emptyKebutuhan()))
+  );
+  return {
+    tools: all.equipment.map((e) => e.label),
+    apd: dedupeStrings(Object.values(all.apd).flat()),
+    perlengkapanLainnya: all.materials.map((m) => m.label),
+  };
 }
