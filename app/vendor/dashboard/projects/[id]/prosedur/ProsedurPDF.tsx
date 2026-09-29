@@ -124,6 +124,12 @@ const styles = StyleSheet.create({
   bulletPoint: { width: 15, fontSize: 10 },
   bulletText: { flex: 1, fontSize: 10, lineHeight: 1.5 },
   subBulletContainer: { flexDirection: 'row', marginBottom: 4, paddingLeft: 25 },
+  // Baris "Kebutuhan:" berdiri sendiri sebagai anak View berarah kolom, BUKAN
+  // di dalam baris bullet. Karena itu style-nya TIDAK boleh memakai `flex: 1`
+  // seperti bulletText: di container kolom, flex:1 berarti flexBasis 0% pada
+  // sumbu tinggi, tingginya dihitung nol, dan teks di bawahnya tergambar
+  // menumpuk di atasnya.
+  kebutuhanText: { fontSize: 9, lineHeight: 1.4, paddingLeft: 25, color: '#444', fontStyle: 'italic' },
 });
 
 interface ProsedurPDFProps {
@@ -352,7 +358,7 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
                         <Text style={styles.bulletText}>{pt.text}</Text>
                       </View>
                       {kebutuhanLine && (
-                        <Text style={[styles.bulletText, { paddingLeft: 25, color: '#444', fontStyle: 'italic' }]}>
+                        <Text style={styles.kebutuhanText}>
                           Kebutuhan: {kebutuhanLine}
                         </Text>
                       )}
