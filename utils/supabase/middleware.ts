@@ -34,15 +34,10 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthPath = request.nextUrl.pathname.startsWith("/auth");
   const isVendorPath = request.nextUrl.pathname.startsWith("/vendor");
-  const isPgsolPath = request.nextUrl.pathname.startsWith("/pgsol");
   const isDashboardPath = request.nextUrl.pathname.startsWith("/dashboard");
-  const isDashboardApprovalPath =
-    request.nextUrl.pathname.startsWith("/dashboard/approval") ||
-    request.nextUrl.pathname.startsWith("/dashboard/projects");
 
   const isAuthLogin = request.nextUrl.pathname === "/auth/login";
   const isVendorLogin = request.nextUrl.pathname === "/vendor/login";
-  const isPgsolLogin = request.nextUrl.pathname === "/pgsol/login";
 
   if (!user) {
     if (isAuthPath && !isAuthLogin) {
@@ -55,22 +50,18 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/vendor/login";
       return NextResponse.redirect(url);
     }
-    if (isPgsolPath && !isPgsolLogin) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/pgsol/login";
-      return NextResponse.redirect(url);
-    }
     if (isDashboardPath) {
       const url = request.nextUrl.clone();
       url.pathname = "/auth/login";
       return NextResponse.redirect(url);
     }
-  } else if (isAuthPath || isVendorPath || isPgsolPath || isDashboardPath) {
+  } else if (isAuthPath || isVendorPath || isDashboardPath) {
     // Tipe portal dibaca dari tabel `profiles`, bukan user_metadata: metadata
     // bisa ditulis sendiri oleh user lewat supabase.auth.updateUser() dari
     // browser, sehingga vendor bisa mengaku 'pgn' dan lolos gate ini.
-    // `profiles` adalah sumber kebenaran yang sama dengan yang dipakai ketiga
-    // login action. Query hanya dijalankan untuk path yang memang di-gate.
+    // `profiles` adalah sumber kebenaran yang sama dengan yang dipakai kedua
+    // login action (/auth/login dan /vendor/login). Query hanya dijalankan
+    // untuk path yang memang di-gate.
     const { data: profile } = await supabase
       .from('profiles')
       .select('type')
@@ -79,7 +70,7 @@ export async function updateSession(request: NextRequest) {
     const type = profile?.type; // 'pgn' | 'pgsol' | 'vendor'
 
     if (isVendor(type)) {
-      if (isDashboardPath || isAuthPath || isPgsolPath) {
+      if (isDashboardPath || isAuthPath) {
         const url = request.nextUrl.clone();
         url.pathname = "/vendor/dashboard";
         return NextResponse.redirect(url);
@@ -89,26 +80,12 @@ export async function updateSession(request: NextRequest) {
         url.pathname = "/vendor/dashboard";
         return NextResponse.redirect(url);
       }
-    } else if (isPgsol(type)) {
-      // Pengecualian: user PGSOL boleh masuk /dashboard/approval (daftar
-      // dokumen menunggu review) dan /dashboard/projects/[id] (halaman detail
-      // tempat tombol Setujui/Tolak PGSOL benar-benar berada — tanpa ini
-      // tombol "Review" di /dashboard/approval memantul balik ke
-      // /pgsol/dashboard dan reviewer PGSOL tidak pernah bisa menindaklanjuti
-      // apa pun). Akses ke aksi approve/reject tetap dibatasi per-tombol oleh
-      // hasPermission di AdminProjectClient, jadi ini aman dibuka.
-      if ((isDashboardPath && !isDashboardApprovalPath) || isVendorPath || isAuthPath) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/pgsol/dashboard";
-        return NextResponse.redirect(url);
-      }
-      if (isPgsolLogin) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/pgsol/dashboard";
-        return NextResponse.redirect(url);
-      }
-    } else if (isPgn(type)) {
-      if (isVendorPath || isPgsolPath) {
+    } else if (isPgn(type) || isPgsol(type)) {
+      // PGN dan PGSOL berbagi realm /dashboard yang sama sejak 2026-09-29
+      // (docs/superpowers/specs/2026-09-29-pgsol-dashboard-merge-design.md)
+      // — dibedakan lewat roles.permissions, bukan lagi path terpisah.
+      // Keduanya diperlakukan identik di sini.
+      if (isVendorPath) {
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard";
         return NextResponse.redirect(url);
@@ -122,7 +99,7 @@ export async function updateSession(request: NextRequest) {
       // Profil tidak ditemukan / tipe tidak dikenal: jangan biarkan lolos ke
       // portal mana pun. Halaman login masing-masing sengaja dibiarkan
       // lewat supaya tidak terjadi redirect loop.
-      if (isDashboardPath || (isAuthPath && !isAuthLogin) || (isVendorPath && !isVendorLogin) || (isPgsolPath && !isPgsolLogin)) {
+      if (isDashboardPath || (isAuthPath && !isAuthLogin) || (isVendorPath && !isVendorLogin)) {
         const url = request.nextUrl.clone();
         url.pathname = "/auth/login";
         return NextResponse.redirect(url);
