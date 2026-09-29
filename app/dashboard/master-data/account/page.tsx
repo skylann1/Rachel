@@ -7,12 +7,21 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AccountManagementPage(props: { searchParams?: Promise<{ page?: string, search?: string, role?: string, status?: string }> }) {
-  // `view_account` (superadmin PGN, lintas organisasi) ATAU
-  // `manage_org_staff` (admin PGSOL/vendor, org sendiri saja) — pola yang
-  // sama dengan requireAccountAccess() di actions.ts. Tanpa opsi kedua,
-  // halaman ini tetap tertutup buat admin PGSOL/vendor walau mutasinya
-  // (addAccount dkk) sudah scope-aware sejak Fase Task 8 (org foundation).
-  const crossOrg = await hasPermission('masterData', 'view_account');
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: actorProfile } = await supabase.from('profiles').select('org_id, type').eq('id', user?.id).single();
+  const actorType = actorProfile?.type ?? null;
+
+  // `crossOrg` butuh KEDUA hal: permission `view_account` ATAU `manage_account`
+  // (lihat di bawah), DAN tipe organisasi aktor sendiri = 'pgn'. Permission
+  // saja tidak cukup — `view_account` sengaja allowedTypes: ['pgn','pgsol'],
+  // jadi kalau hanya dicek lewat permission, sebuah role PGSOL yang diberi
+  // view_account lewat halaman Role & Permission (aksi UI biasa, bukan bypass
+  // SQL) akan melihat akun SEMUA organisasi. Pola ini sama dengan
+  // requireRoleAccess() di role/actions.ts, yang juga menuntut
+  // actor.type === 'pgn' selain permission-nya.
+  const hasViewOrManage = (await hasPermission('masterData', 'view_account')) || (await hasPermission('masterData', 'manage_account'));
+  const crossOrg = hasViewOrManage && actorType === 'pgn';
   const orgScoped = crossOrg || await hasPermission('masterData', 'manage_org_staff');
   if (!orgScoped) {
     redirect('/dashboard');
@@ -27,20 +36,14 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
   const limit = 5;
   const offset = (page - 1) * limit;
 
-  const supabase = await createClient();
-
   // Aktor org-scoped (bukan crossOrg) cuma boleh melihat staff & role dari
   // organisasi/tipe miliknya sendiri — org_id diambil dari profil aktor
   // sendiri, tidak pernah dari input klien. Mirrors assertSameOrg() di
   // actions.ts (dieksekusi lagi di sana pada tiap mutasi; di sini cuma
   // buat query listing).
   let actorOrgId: string | null = null;
-  let actorType: string | null = null;
   if (!crossOrg) {
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: actorProfile } = await supabase.from('profiles').select('org_id, type').eq('id', user?.id).single();
     actorOrgId = actorProfile?.org_id ?? null;
-    actorType = actorProfile?.type ?? null;
 
     // Fail closed: aktor org-scoped tanpa org_id (profil rusak / belum
     // ditautkan) tidak boleh melihat siapa pun, bukan malah lihat semua.

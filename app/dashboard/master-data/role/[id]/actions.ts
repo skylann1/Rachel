@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
-import { assertSameRoleType, type RoleActor } from '../actions';
+import { assertSameRoleType, type RoleActor } from '@/lib/role-access';
 
 export async function updateRolePermissions(
   id: string,
@@ -27,18 +27,21 @@ export async function updateRolePermissions(
 
     const supabase = createAdminClient();
 
-    // Sama seperti requireRoleAccess()/assertSameRoleType() di
-    // ../actions.ts: aktor org-scoped (bukan crossOrg) cuma boleh mengubah
-    // role dengan tipe & is_system yang sama dengan organisasinya sendiri,
-    // dan tidak boleh memindahkan role ke tipe lain.
+    // Sama seperti requireRoleAccess() di ../actions.ts dan
+    // assertSameRoleType() di @/lib/role-access: aktor org-scoped (bukan
+    // crossOrg) cuma boleh mengubah role dengan tipe & is_system yang sama
+    // dengan organisasinya sendiri, dan tidak boleh memindahkan role ke
+    // tipe lain.
     const actor: RoleActor = { userId: user.id, type: actorProfile?.type ?? null, crossOrg };
-    const typeError = await assertSameRoleType(supabase, actor, id);
-    if (typeError) return { error: typeError };
+    const typeResult = await assertSameRoleType(supabase, actor, id);
+    if (typeResult.error) return { error: typeResult.error };
 
-    // Extra check: org-scoped actors cannot move roles between types
+    // Extra check: org-scoped actors cannot move roles between types.
+    // `assertSameRoleType` sudah SELECT baris `roles` yang sama untuk cek
+    // tipe/is_system di atas — pakai `targetType` yang dikembalikannya di
+    // sini, jangan SELECT ulang.
     if (!crossOrg) {
-      const { data: target } = await supabase.from('roles').select('type').eq('id', id).single();
-      if (type !== target?.type) {
+      if (type !== typeResult.targetType) {
         return { error: 'Role ini tidak dapat dipindahkan ke tipe lain.' };
       }
     }

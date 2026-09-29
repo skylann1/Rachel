@@ -4,12 +4,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
-
-export interface RoleActor {
-  userId: string;
-  type: string | null; // tipe organisasi aktor sendiri ('pgn' | 'pgsol' | 'vendor')
-  crossOrg: boolean; // true kalau aktor bertipe 'pgn' — boleh kelola role tipe apa pun
-}
+import { assertSameRoleType, type RoleActor } from '@/lib/role-access';
 
 /**
  * Gate + konteks tunggal untuk semua aksi kelola role di file ini, pola
@@ -39,19 +34,6 @@ async function requireRoleAccess(): Promise<{ error: string | null; actor: RoleA
   const { data: profile } = await supabase.from('profiles').select('type').eq('id', user.id).single();
   const type = profile?.type ?? null;
   return { error: null, actor: { userId: user.id, type, crossOrg: type === 'pgn' } };
-}
-
-/** Menolak mutasi kalau role target bukan tipe aktor sendiri atau role sistem, kecuali aktor crossOrg. */
-export async function assertSameRoleType(adminAuthClient: ReturnType<typeof createAdminClient>, actor: RoleActor, roleId: string): Promise<string | null> {
-  if (actor.crossOrg) return null;
-  const { data: target } = await adminAuthClient.from('roles').select('type, is_system').eq('id', roleId).single();
-  if (!target || target.type !== actor.type) {
-    return 'Role ini bukan bagian dari organisasi Anda.';
-  }
-  if (target.is_system) {
-    return 'Role sistem tidak dapat diubah dari halaman ini.';
-  }
-  return null;
 }
 
 export async function addRole(formData: FormData) {
@@ -104,8 +86,8 @@ export async function updateRole(id: string, formData: FormData) {
     if (permError || !actor) return { error: permError };
 
     const adminClient = createAdminClient();
-    const typeError = await assertSameRoleType(adminClient, actor, id);
-    if (typeError) return { error: typeError };
+    const typeResult = await assertSameRoleType(adminClient, actor, id);
+    if (typeResult.error) return { error: typeResult.error };
 
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
@@ -147,8 +129,8 @@ export async function deleteRole(id: string) {
     if (permError || !actor) return { error: permError };
 
     const adminClient = createAdminClient();
-    const typeError = await assertSameRoleType(adminClient, actor, id);
-    if (typeError) return { error: typeError };
+    const typeResult = await assertSameRoleType(adminClient, actor, id);
+    if (typeResult.error) return { error: typeResult.error };
 
     // Pastikan tidak ada profil yang menggunakan role ini
     const { error } = await adminClient
