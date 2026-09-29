@@ -21,7 +21,27 @@ export async function updateRolePermissions(
     const allowed = await hasPermissionForUser(authClient, user.id, 'masterData', 'manage_role');
     if (!allowed) return { error: 'Anda tidak memiliki izin untuk mengelola role.' };
 
+    const { data: actorProfile } = await authClient.from('profiles').select('type').eq('id', user.id).single();
+    const crossOrg = actorProfile?.type === 'pgn';
+
     const supabase = createAdminClient();
+
+    // Sama seperti requireRoleAccess()/assertSameRoleType() di
+    // ../actions.ts: aktor org-scoped (bukan crossOrg) cuma boleh mengubah
+    // role dengan tipe & is_system yang sama dengan organisasinya sendiri,
+    // dan tidak boleh memindahkan role ke tipe lain.
+    if (!crossOrg) {
+      const { data: target } = await supabase.from('roles').select('type, is_system').eq('id', id).single();
+      if (!target || target.type !== actorProfile?.type) {
+        return { error: 'Role ini bukan bagian dari organisasi Anda.' };
+      }
+      if (target.is_system) {
+        return { error: 'Role sistem tidak dapat diubah dari halaman ini.' };
+      }
+      if (type !== target.type) {
+        return { error: 'Role ini tidak dapat dipindahkan ke tipe lain.' };
+      }
+    }
 
     const { error } = await supabase
       .from('roles')

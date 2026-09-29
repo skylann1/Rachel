@@ -20,9 +20,25 @@ export default function RolePermissionPage() {
 
   const fetchData = async () => {
     setLoading(true);
+
+    // Role & Permission ini cuma boleh diakses lewat permission manage_role
+    // (dicek server-side di role/layout.tsx). Hari ini `manage_role` cuma
+    // pernah dipegang role bertipe 'pgn' (lihat requireRoleAccess() di
+    // ./actions.ts) — filter tipe di sini defense-in-depth kalau itu
+    // berubah nanti: aktor non-PGN cuma lihat role dari tipe organisasinya
+    // sendiri.
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: actorProfile } = await supabase.from('profiles').select('type').eq('id', user?.id).single();
+    const actorType = actorProfile?.type ?? null;
+    const crossOrg = actorType === 'pgn';
+
     // Fetch roles
-    const { data: rolesData } = await supabase.from('roles').select('*').order('created_at');
-    
+    let rolesQuery = supabase.from('roles').select('*').order('created_at');
+    if (!crossOrg) {
+      rolesQuery = rolesQuery.eq('type', actorType ?? '__none__');
+    }
+    const { data: rolesData } = await rolesQuery;
+
     // Fetch profile counts
     const { data: profilesData } = await supabase.from('profiles').select('role');
     

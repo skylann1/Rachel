@@ -5,29 +5,66 @@ import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 
+interface RoleActor {
+  userId: string;
+  type: string | null; // tipe organisasi aktor sendiri ('pgn' | 'pgsol' | 'vendor')
+  crossOrg: boolean; // true kalau aktor bertipe 'pgn' — boleh kelola role tipe apa pun
+}
+
 /**
- * Server Action adalah endpoint POST tersendiri — gate di layout.tsx hanya
- * mencegah halamannya dirender, bukan action-nya dipanggil. Setiap aksi di
- * bawah memakai admin client (bypass RLS), jadi izinnya wajib dicek di sini.
- * Sejalan dengan requireManageAccount() di master-data/account/actions.ts.
+ * Gate + konteks tunggal untuk semua aksi kelola role di file ini, pola
+ * yang sama dengan requireAccountAccess() di
+ * app/dashboard/master-data/account/actions.ts.
+ *
+ * `crossOrg` ditentukan dari TIPE AKTOR SENDIRI (`profiles.type === 'pgn'`),
+ * bukan cuma dari permission `manage_role` yang dipegangnya. Kenapa: item
+ * `manage_role` di allPermissionModules sudah dideklarasikan
+ * `allowedTypes: ['pgn']`, tapi itu cuma menyaring checkbox mana yang
+ * MUNCUL di UI RolePermissionsClient — tidak ada apa pun di level server
+ * yang pernah menegakkan aturan itu. Kalau suatu saat role non-PGN diberi
+ * `manage_role` lewat SQL langsung (di luar jalur UI), pemegangnya bisa
+ * mengedit/menghapus role PGN atau vendor manapun lewat action yang sama
+ * persis. Defense-in-depth ini menutup jalur itu di titik masuknya —
+ * lihat docs/superpowers/specs/2026-09-29-pgsol-dashboard-merge-design.md,
+ * "Gap #3".
  */
-async function requireManageRole() {
+async function requireRoleAccess(): Promise<{ error: string | null; actor: RoleActor | null }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return 'Unauthorized';
+  if (!user) return { error: 'Unauthorized', actor: null };
+
   const allowed = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_role');
-  if (!allowed) return 'Anda tidak memiliki izin untuk mengelola role.';
+  if (!allowed) return { error: 'Anda tidak memiliki izin untuk mengelola role.', actor: null };
+
+  const { data: profile } = await supabase.from('profiles').select('type').eq('id', user.id).single();
+  const type = profile?.type ?? null;
+  return { error: null, actor: { userId: user.id, type, crossOrg: type === 'pgn' } };
+}
+
+/** Menolak mutasi kalau role target bukan tipe aktor sendiri atau role sistem, kecuali aktor crossOrg. */
+async function assertSameRoleType(adminAuthClient: ReturnType<typeof createAdminClient>, actor: RoleActor, roleId: string): Promise<string | null> {
+  if (actor.crossOrg) return null;
+  const { data: target } = await adminAuthClient.from('roles').select('type, is_system').eq('id', roleId).single();
+  if (!target || target.type !== actor.type) {
+    return 'Role ini bukan bagian dari organisasi Anda.';
+  }
+  if (target.is_system) {
+    return 'Role sistem tidak dapat diubah dari halaman ini.';
+  }
   return null;
 }
 
 export async function addRole(formData: FormData) {
   try {
-    const permError = await requireManageRole();
-    if (permError) return { error: permError };
+    const { error: permError, actor } = await requireRoleAccess();
+    if (permError || !actor) return { error: permError };
 
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
-    const type = formData.get('type') as string;
+    // Aktor org-scoped selalu dipaksa membuat role dengan tipe miliknya
+    // sendiri, terlepas dari apa yang dikirim form — sejalan dengan
+    // addAccount() di master-data/account/actions.ts.
+    const type = actor.crossOrg ? (formData.get('type') as string) : (actor.type as string);
 
     if (!name || !type) {
       return { error: 'Nama Role dan Tipe Role wajib diisi.' };
@@ -47,7 +84,6 @@ export async function addRole(formData: FormData) {
       });
 
     if (error) {
-      // Handle unique constraint violation
       if (error.code === '23505') {
         return { error: 'Role dengan nama tersebut sudah ada.' };
       }
@@ -64,23 +100,27 @@ export async function addRole(formData: FormData) {
 
 export async function updateRole(id: string, formData: FormData) {
   try {
-    const permError = await requireManageRole();
-    if (permError) return { error: permError };
+    const { error: permError, actor } = await requireRoleAccess();
+    if (permError || !actor) return { error: permError };
+
+    const adminClient = createAdminClient();
+    const typeError = await assertSameRoleType(adminClient, actor, id);
+    if (typeError) return { error: typeError };
 
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
-    const type = formData.get('type') as string;
+    // Aktor org-scoped tidak boleh memindahkan role ke tipe lain — paksa
+    // tetap tipe miliknya sendiri, sama seperti addRole di atas.
+    const type = actor.crossOrg ? (formData.get('type') as string) : (actor.type as string);
 
     if (!name || !type) {
       return { error: 'Nama Role dan Tipe Role wajib diisi.' };
     }
 
-    const adminClient = createAdminClient();
-
     const { error } = await adminClient
       .from('roles')
       .update({
-        name: name.toLowerCase().replace(/\s+/g, '_'), // Normalize name to lower snake_case
+        name: name.toLowerCase().replace(/\s+/g, '_'),
         description: description,
         type: type,
       })
@@ -103,13 +143,14 @@ export async function updateRole(id: string, formData: FormData) {
 
 export async function deleteRole(id: string) {
   try {
-    const permError = await requireManageRole();
-    if (permError) return { error: permError };
+    const { error: permError, actor } = await requireRoleAccess();
+    if (permError || !actor) return { error: permError };
 
     const adminClient = createAdminClient();
+    const typeError = await assertSameRoleType(adminClient, actor, id);
+    if (typeError) return { error: typeError };
 
     // Pastikan tidak ada profil yang menggunakan role ini
-    // Seharusnya bisa di cek via count, tapi kita asumsikan untuk sekarang bisa dihapus jika tidak restrict di DB
     const { error } = await adminClient
       .from('roles')
       .delete()
