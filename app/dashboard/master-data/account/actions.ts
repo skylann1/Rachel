@@ -195,7 +195,6 @@ export async function addAccount(formData: FormData) {
 
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
-    revalidatePath('/pgsol/dashboard/staff');
     return { success: true };
   } catch (error: any) {
     console.error('Server error creating user:', error);
@@ -281,7 +280,6 @@ export async function updateAccount(id: string, formData: FormData) {
 
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
-    revalidatePath('/pgsol/dashboard/staff');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mengubah akun' };
@@ -310,7 +308,6 @@ export async function suspendAccount(id: string, isSuspended: boolean) {
 
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
-    revalidatePath('/pgsol/dashboard/staff');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mengubah status' };
@@ -363,7 +360,6 @@ export async function resetAccountPassword(id: string) {
 
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
-    revalidatePath('/pgsol/dashboard/staff');
     return { success: true, password: randomPassword, emailSent };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mereset kata sandi' };
@@ -387,7 +383,6 @@ export async function deleteAccount(id: string) {
 
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
-    revalidatePath('/pgsol/dashboard/staff');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat menghapus akun' };

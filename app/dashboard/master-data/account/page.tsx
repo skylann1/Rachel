@@ -7,8 +7,14 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AccountManagementPage(props: { searchParams?: Promise<{ page?: string, search?: string, role?: string, status?: string }> }) {
-  const isAllowed = await hasPermission('masterData', 'view_account');
-  if (!isAllowed) {
+  // `view_account` (superadmin PGN, lintas organisasi) ATAU
+  // `manage_org_staff` (admin PGSOL/vendor, org sendiri saja) — pola yang
+  // sama dengan requireAccountAccess() di actions.ts. Tanpa opsi kedua,
+  // halaman ini tetap tertutup buat admin PGSOL/vendor walau mutasinya
+  // (addAccount dkk) sudah scope-aware sejak Fase Task 8 (org foundation).
+  const crossOrg = await hasPermission('masterData', 'view_account');
+  const orgScoped = crossOrg || await hasPermission('masterData', 'manage_org_staff');
+  if (!orgScoped) {
     redirect('/dashboard');
   }
 
@@ -23,8 +29,52 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
 
   const supabase = await createClient();
 
-  // 4. Fetch Roles
-  const { data: roles, error: rolesError } = await supabase.from('roles').select('name, is_system, type').order('name');
+  // Aktor org-scoped (bukan crossOrg) cuma boleh melihat staff & role dari
+  // organisasi/tipe miliknya sendiri — org_id diambil dari profil aktor
+  // sendiri, tidak pernah dari input klien. Mirrors assertSameOrg() di
+  // actions.ts (dieksekusi lagi di sana pada tiap mutasi; di sini cuma
+  // buat query listing).
+  let actorOrgId: string | null = null;
+  let actorType: string | null = null;
+  if (!crossOrg) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: actorProfile } = await supabase.from('profiles').select('org_id, type').eq('id', user?.id).single();
+    actorOrgId = actorProfile?.org_id ?? null;
+    actorType = actorProfile?.type ?? null;
+
+    // Fail closed: aktor org-scoped tanpa org_id (profil rusak / belum
+    // ditautkan) tidak boleh melihat siapa pun, bukan malah lihat semua.
+    if (!actorOrgId) {
+      return (
+        <AccountTable
+          accounts={[]}
+          roles={[]}
+          page={1}
+          totalPages={0}
+          totalItems={0}
+          offset={0}
+          limit={limit}
+          search={search}
+          role={role}
+          status={status}
+          basePath="/dashboard/master-data/account"
+          title="Staff Organisasi"
+          subtitle="Organisasi Anda belum tertaut. Hubungi administrator."
+        />
+      );
+    }
+  }
+
+  // Fetch Roles — org-scoped aktor cuma lihat role dari tipe organisasinya
+  // sendiri, sama seperti dropdown filter yang sebelumnya di halaman
+  // /pgsol/dashboard/staff. `type` kolom teks (bukan uuid), jadi sentinel
+  // '__none__' aman dipakai kalau actorType entah kenapa kosong — hasilnya
+  // nol baris, bukan error tipe.
+  let rolesQuery = supabase.from('roles').select('name, is_system, type').order('name');
+  if (!crossOrg) {
+    rolesQuery = rolesQuery.eq('type', actorType ?? '__none__');
+  }
+  const { data: roles, error: rolesError } = await rolesQuery;
   if (rolesError) console.error('Gagal memuat daftar role:', rolesError.message);
   const availableRoles = roles || [];
 
@@ -39,6 +89,9 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
     internal_profiles(nip)
   `, { count: 'exact' });
 
+  if (!crossOrg) {
+    query = query.eq('org_id', actorOrgId as string);
+  }
   if (search) {
     query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
   }
@@ -60,15 +113,14 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
   const totalItems = count || 0;
   const totalPages = Math.ceil(totalItems / limit);
 
-  // If no profiles are found, return empty array instead of mock data
   const accounts = profiles ? profiles.map(p => ({
     id: p.id,
     name: p.full_name,
     email: p.email || 'Menunggu Sinkronisasi',
     role: p.role,
-    type: p.type, // 'internal' or 'external'
+    type: p.type,
     verified: !!p.email_confirmed_at,
-    status: p.status || 'Active', // Read from DB now
+    status: p.status || 'Active',
     companyName: (Array.isArray(p.organizations) ? p.organizations[0]?.name : p.organizations?.name) || null,
     nip: Array.isArray(p.internal_profiles) ? p.internal_profiles[0]?.nip : p.internal_profiles?.nip || null,
     lastLogin: p.last_sign_in_at
@@ -90,8 +142,9 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
       role={role}
       status={status}
       basePath="/dashboard/master-data/account"
-      title="Manajemen Akun"
-      subtitle="Kelola data pengguna, peran, dan akses sistem."
+      title={crossOrg ? "Manajemen Akun" : "Staff Organisasi"}
+      subtitle={crossOrg ? "Kelola data pengguna, peran, dan akses sistem." : "Kelola akun staff di organisasi Anda."}
+      lockedType={crossOrg ? undefined : (actorType as 'pgn' | 'pgsol' | 'vendor' | undefined)}
     />
   );
 }
