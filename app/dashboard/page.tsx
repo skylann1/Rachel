@@ -8,6 +8,8 @@ import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, isProcedurePending } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { PeriodSwitcher } from '@/components/internal/period-switcher';
+import { AnnouncementCarousel } from '@/components/announcement-carousel';
+import { getActiveAnnouncements } from '@/app/dashboard/master-data/announcement/actions';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const MONTH_LONG = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -101,6 +103,7 @@ export default async function DashboardOverviewPage({
 }) {
    const supabase = await createClient();
    const now = new Date();
+   const announcements = await getActiveAnnouncements();
 
    const { periode: periodeParam } = await searchParams;
    const period = resolvePeriod(periodeParam, now);
@@ -607,6 +610,7 @@ export default async function DashboardOverviewPage({
 
    return (
       <div className="space-y-6">
+         {announcements.length > 0 && <AnnouncementCarousel announcements={announcements} />}
          <div className="flex flex-col gap-4">
            {/* Welcome Header */}
            <div className="relative overflow-hidden bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-up">

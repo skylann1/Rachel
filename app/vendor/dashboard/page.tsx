@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { getVendorDashboardData, getVendorRecentActivity, getVendorChartsData } from './actions';
 import { VendorDashboardCharts } from '@/components/vendor/vendor-dashboard-charts';
+import { AnnouncementCarousel } from '@/components/announcement-carousel';
+import { getActiveAnnouncements } from '@/app/dashboard/master-data/announcement/actions';
 
 const JSA_BADGE: Record<string, { cls: string; icon: React.ElementType; label: string }> = {
   Approved: { cls: 'bg-emerald-50 text-emerald-600 border-emerald-200/50', icon: CheckCircle2, label: 'Disetujui' },
@@ -41,6 +43,7 @@ export default async function VendorDashboardPage() {
   const { projects, stats } = await getVendorDashboardData();
   const activity = await getVendorRecentActivity();
   const chartsData = await getVendorChartsData();
+  const announcements = await getActiveAnnouncements();
   const userName = user?.email?.split('@')[0].toUpperCase() || 'MITRA';
 
   const statTiles = [
@@ -53,6 +56,8 @@ export default async function VendorDashboardPage() {
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto pb-12">
+
+      {announcements.length > 0 && <AnnouncementCarousel announcements={announcements} />}
 
       {/* ── Hero ────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-blue-800 p-6 sm:p-8 lg:p-10 text-white shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
