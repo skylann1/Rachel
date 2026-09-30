@@ -25,6 +25,7 @@ export default function VendorInspectionPage() {
     const data = await getVendorInspections();
     const formatted = data.map((d: any) => {
       const photos = (d.inspection_photos || []).map((p: any) => p.image_url);
+      const gallery = photos.length > 0 ? photos : (d.image_url ? [d.image_url] : []);
       return {
         id: d.id,
         type: d.finding_type,
@@ -34,7 +35,7 @@ export default function VendorInspectionPage() {
         status: d.status,
         priority: d.priority,
         image: d.image_url || photos[0] || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-        photos,
+        photos: gallery,
         feedbackHSE: d.title,
       };
     });
@@ -107,7 +108,7 @@ export default function VendorInspectionPage() {
             
             {/* Image Placeholder */}
             <div
-              className="h-48 bg-slate-100 relative overflow-hidden cursor-pointer"
+              className={`h-48 bg-slate-100 relative overflow-hidden ${item.photos.length > 0 ? 'cursor-pointer' : ''}`}
               onClick={() => { if (item.photos.length > 0) { setGalleryPhotos(item.photos); setGalleryIndex(0); } }}
             >
                {/* eslint-disable-next-line @next/next/no-img-element */}

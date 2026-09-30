@@ -91,9 +91,12 @@ export async function createInspection(formData: FormData) {
   // Create initial log
   if (data) {
     if (imageUrls.length > 0) {
-      await supabase.from('inspection_photos').insert(
+      const { error: photoError } = await supabase.from('inspection_photos').insert(
         imageUrls.map((url) => ({ inspection_id: data.id, image_url: url }))
       );
+      if (photoError) {
+        console.error('inspection_photos insert error:', photoError.message);
+      }
     }
 
     await supabase.from('inspection_logs').insert({

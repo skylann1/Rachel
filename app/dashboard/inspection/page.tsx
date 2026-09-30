@@ -54,6 +54,7 @@ export default function InspectionPage() {
     
     const formatted = data.map((d: any) => {
       const photos = (d.inspection_photos || []).map((p: any) => p.image_url);
+      const gallery = photos.length > 0 ? photos : (d.image_url ? [d.image_url] : []);
       return {
         id: d.id,
         type: d.finding_type,
@@ -64,7 +65,7 @@ export default function InspectionPage() {
         status: d.status,
         priority: d.priority,
         image: d.image_url || photos[0] || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-        photos,
+        photos: gallery,
         assigned_to: d.internal_profiles?.profiles?.full_name || 'Belum di-assign',
         is_project_activity: d.is_project_activity,
         vendor_response: d.vendor_response,
@@ -263,7 +264,7 @@ export default function InspectionPage() {
             
             {/* Image Placeholder */}
             <div
-              className="h-48 bg-slate-100 relative overflow-hidden cursor-pointer"
+              className={`h-48 bg-slate-100 relative overflow-hidden ${item.photos.length > 0 ? 'cursor-pointer' : ''}`}
               onClick={() => { if (item.photos.length > 0) { setGalleryPhotos(item.photos); setGalleryIndex(0); } }}
             >
                {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -349,7 +350,7 @@ export default function InspectionPage() {
                 <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Camera className="w-5 h-5 text-primary" /> Lapor Hasil Inspeksi Baru</h2>
                 <p className="text-sm text-slate-500 mt-1">Catat temuan inspeksi untuk kegiatan proyek atau non-proyek.</p>
               </div>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+              <button type="button" onClick={() => { setIsModalOpen(false); setImageFiles([]); }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -472,7 +473,7 @@ export default function InspectionPage() {
             </div>
 
             <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
-              <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
+              <button type="button" onClick={() => { setIsModalOpen(false); setImageFiles([]); }} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
               <button 
                 type="submit"
                 disabled={isSubmitting}

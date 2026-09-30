@@ -126,3 +126,13 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
 6. `schema_jsa_step_kebutuhan.sql` — kolom `jsa_steps.kebutuhan` (JSONB,
    default `{}`) untuk kebutuhan sumber daya per langkah JSA (asal prosedur
    kerja, dipakai prefill PTW). Additive — aman dijalankan ulang.
+7. `schema_announcements_and_audit_photos.sql` — membuat tabel
+   `announcements` (konten carousel Pengumuman di halaman utama) dan
+   `inspection_photos` (multi-foto untuk laporan Inspeksi Temuan). **Wajib
+   ada SEBELUM deploy kode aplikasi terbaru** — `getInspections()` dan
+   `getVendorInspections()` sekarang melakukan `.select()` dengan join ke
+   `inspection_photos`; tanpa migrasi ini PostgREST akan menolak seluruh
+   `select` tersebut (relationship belum ada di schema cache) sehingga
+   daftar Inspeksi Temuan tampil kosong di dashboard internal maupun
+   vendor. Aman dijalankan ulang (memakai `CREATE TABLE IF NOT EXISTS` +
+   `DROP POLICY IF EXISTS` di seluruh file).
