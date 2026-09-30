@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2, Download, History, UserPlus } from 'lucide-react';
 import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs, validateInspection } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
+import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
 
 export default function InspectionPage() {
   const [filter, setFilter] = useState('All');
@@ -30,7 +31,9 @@ export default function InspectionPage() {
   // States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [galleryPhotos, setGalleryPhotos] = useState<string[] | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState(0);
   const [selectedInspection, setSelectedInspection] = useState<any>(null);
   
   // Form toggles
@@ -49,21 +52,25 @@ export default function InspectionPage() {
     setProjects(vp.projects);
     setInternalUsers(vp.internalUsers);
     
-    const formatted = data.map((d: any) => ({
-      id: d.id,
-      type: d.finding_type,
-      description: d.title,
-      location: d.location,
-      vendor: d.vendor_profiles?.company_name || 'Non-Vendor / Internal',
-      date: new Date(d.created_at).toLocaleString('id-ID'),
-      status: d.status,
-      priority: d.priority,
-      image: d.image_url || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-      assigned_to: d.internal_profiles?.profiles?.full_name || 'Belum di-assign',
-      is_project_activity: d.is_project_activity,
-      vendor_response: d.vendor_response,
-      vendor_evidence_url: d.vendor_evidence_url
-    }));
+    const formatted = data.map((d: any) => {
+      const photos = (d.inspection_photos || []).map((p: any) => p.image_url);
+      return {
+        id: d.id,
+        type: d.finding_type,
+        description: d.title,
+        location: d.location,
+        vendor: d.vendor_profiles?.company_name || 'Non-Vendor / Internal',
+        date: new Date(d.created_at).toLocaleString('id-ID'),
+        status: d.status,
+        priority: d.priority,
+        image: d.image_url || photos[0] || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
+        photos,
+        assigned_to: d.internal_profiles?.profiles?.full_name || 'Belum di-assign',
+        is_project_activity: d.is_project_activity,
+        vendor_response: d.vendor_response,
+        vendor_evidence_url: d.vendor_evidence_url
+      };
+    });
     setInspections(formatted);
   }
 
@@ -85,15 +92,15 @@ export default function InspectionPage() {
     formData.append('is_project_activity', isProjectActivity.toString());
     
     try {
-      if (imageFile) {
-        const imageUrl = await uploadImage(imageFile, 'inspections');
-        if (imageUrl) formData.append('image_url', imageUrl);
+      for (const file of imageFiles) {
+        const imageUrl = await uploadImage(file, 'inspections');
+        if (imageUrl) formData.append('image_urls', imageUrl);
       }
 
       await createInspection(formData);
       alert("Laporan hasil inspeksi berhasil dikirim!");
       setIsModalOpen(false);
-      setImageFile(null);
+      setImageFiles([]);
       await loadData();
     } catch (err) {
       console.error(err);
@@ -255,9 +262,17 @@ export default function InspectionPage() {
           <div key={item.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group">
             
             {/* Image Placeholder */}
-            <div className="h-48 bg-slate-100 relative overflow-hidden">
+            <div
+              className="h-48 bg-slate-100 relative overflow-hidden cursor-pointer"
+              onClick={() => { if (item.photos.length > 0) { setGalleryPhotos(item.photos); setGalleryIndex(0); } }}
+            >
                {/* eslint-disable-next-line @next/next/no-img-element */}
                <img src={item.image} alt={item.type} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+               {item.photos.length > 1 && (
+                 <span className="absolute bottom-3 right-3 px-2 py-1 text-xs font-bold rounded-lg bg-slate-900/70 text-white backdrop-blur-sm">
+                   +{item.photos.length - 1}
+                 </span>
+               )}
                <div className="absolute top-3 right-3 flex gap-2">
                   <span className={`px-2.5 py-1 text-xs font-black uppercase tracking-wider rounded-lg shadow-sm ${
                      item.priority === 'Critical' ? 'bg-rose-600 text-white' : 
@@ -356,18 +371,37 @@ export default function InspectionPage() {
                {/* Upload Foto */}
                <div>
                   <label className="text-sm font-semibold text-slate-700 block mb-2">Foto Temuan <span className="text-rose-500">*</span></label>
-                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
-                  <div onClick={() => fileInputRef.current?.click()} className="w-full h-32 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
-                     {imageFile ? (
-                       <img src={URL.createObjectURL(imageFile)} alt="Preview" className="w-full h-full object-cover" />
-                     ) : (
-                       <>
-                         <UploadCloud className="w-6 h-6 mb-2" />
-                         <span className="text-sm font-medium">Klik untuk upload foto temuan</span>
-                         <span className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB</span>
-                       </>
-                     )}
-                  </div>
+                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={(e) => setImageFiles((prev) => [...prev, ...Array.from(e.target.files || [])])} />
+                  {imageFiles.length === 0 ? (
+                    <div onClick={() => fileInputRef.current?.click()} className="w-full h-32 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
+                       <UploadCloud className="w-6 h-6 mb-2" />
+                       <span className="text-sm font-medium">Klik untuk upload foto temuan (bisa lebih dari satu)</span>
+                       <span className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB per foto</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-2">
+                      {imageFiles.map((file, i) => (
+                        <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={URL.createObjectURL(file)} alt={`Preview ${i + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                            className="absolute top-1 right-1 p-1 bg-slate-900/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-primary/50 hover:text-primary transition-colors"
+                      >
+                        <UploadCloud className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )}
                </div>
                
                <div className="grid grid-cols-2 gap-4">
@@ -377,6 +411,7 @@ export default function InspectionPage() {
                       <option value="Unsafe Condition">Unsafe Condition (Kondisi Tidak Aman)</option>
                       <option value="Unsafe Act">Unsafe Act (Tindakan Tidak Aman)</option>
                       <option value="Near Miss">Near Miss (Hampir Celaka)</option>
+                      <option value="Audit / Kunjungan">Audit / Kunjungan (Temuan Pasca-Kunjungan)</option>
                     </select>
                  </div>
                  <div>
@@ -613,6 +648,15 @@ export default function InspectionPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Lightbox Galeri Foto */}
+      {galleryPhotos && (
+        <PhotoGalleryLightbox
+          photos={galleryPhotos}
+          initialIndex={galleryIndex}
+          onClose={() => setGalleryPhotos(null)}
+        />
       )}
 
     </div>
