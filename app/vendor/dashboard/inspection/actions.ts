@@ -26,7 +26,8 @@ export async function getVendorInspections() {
       image_url,
       vendor_response,
       vendor_evidence_url,
-      created_at
+      created_at,
+      inspection_photos ( id, image_url )
     `)
     .eq('target_vendor', vendorOrgId)
     .order('created_at', { ascending: false });

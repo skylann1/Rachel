@@ -28,7 +28,8 @@ export async function getInspections() {
       assigned_to,
       internal_profiles:assigned_to (
         profiles:id ( full_name )
-      )
+      ),
+      inspection_photos ( id, image_url )
     `)
     .order('created_at', { ascending: false });
 
@@ -52,7 +53,11 @@ export async function createInspection(formData: FormData) {
   const is_project_activity = formData.get("is_project_activity") !== 'false';
   const assigned_to = formData.get("assigned_to") as string;
   
-  const image_url = formData.get("image_url") as string;
+  // Multi-foto: satu laporan bisa punya banyak foto (inspection_photos),
+  // foto pertama tetap diduplikasi ke inspections.image_url supaya kode
+  // lama yang baca item.image_url sebagai thumbnail tidak perlu berubah.
+  const imageUrls = (formData.getAll("image_urls") as string[]).filter(Boolean);
+  const image_url = imageUrls[0] || null;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
@@ -77,7 +82,7 @@ export async function createInspection(formData: FormData) {
     })
     .select()
     .single();
-    
+
   if (error) {
     console.error(error);
     throw new Error(error.message);
@@ -85,6 +90,12 @@ export async function createInspection(formData: FormData) {
 
   // Create initial log
   if (data) {
+    if (imageUrls.length > 0) {
+      await supabase.from('inspection_photos').insert(
+        imageUrls.map((url) => ({ inspection_id: data.id, image_url: url }))
+      );
+    }
+
     await supabase.from('inspection_logs').insert({
       inspection_id: data.id,
       actor_id: user?.id,
