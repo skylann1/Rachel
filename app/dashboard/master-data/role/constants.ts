@@ -8,6 +8,15 @@ export const allPermissionModules = [
     ]
   },
   {
+    id: 'announcement',
+    title: 'News & Pengumuman',
+    description: 'Konten pengumuman yang tampil sebagai carousel di halaman utama dashboard internal maupun vendor.',
+    items: [
+      { key: 'view', label: 'Melihat Carousel Pengumuman', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
+      { key: 'manage', label: 'Mengelola Pengumuman (tambah/edit/hapus)', allowedTypes: ['pgn'] },
+    ]
+  },
+  {
     id: 'inspection',
     title: 'Modul Inspeksi & Temuan K3',
     description: 'Manajemen inspeksi lapangan dan temuan unsafe act / unsafe condition.',
