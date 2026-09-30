@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Camera, AlertTriangle, CheckCircle, Clock, MapPin, UploadCloud, X, ArrowRight, Loader2, Inbox } from 'lucide-react';
 import { getVendorInspections, submitVendorResponse } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
+import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
 
 export default function VendorInspectionPage() {
   const [filter, setFilter] = useState('All');
@@ -11,6 +12,8 @@ export default function VendorInspectionPage() {
   const [inspections, setInspections] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [galleryPhotos, setGalleryPhotos] = useState<string[] | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -20,17 +23,21 @@ export default function VendorInspectionPage() {
 
   async function loadData() {
     const data = await getVendorInspections();
-    const formatted = data.map((d: any) => ({
-      id: d.id,
-      type: d.finding_type,
-      description: d.title,
-      location: d.location,
-      date: new Date(d.created_at).toLocaleString('id-ID'),
-      status: d.status,
-      priority: d.priority,
-      image: d.image_url || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-      feedbackHSE: d.title,
-    }));
+    const formatted = data.map((d: any) => {
+      const photos = (d.inspection_photos || []).map((p: any) => p.image_url);
+      return {
+        id: d.id,
+        type: d.finding_type,
+        description: d.title,
+        location: d.location,
+        date: new Date(d.created_at).toLocaleString('id-ID'),
+        status: d.status,
+        priority: d.priority,
+        image: d.image_url || photos[0] || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
+        photos,
+        feedbackHSE: d.title,
+      };
+    });
     setInspections(formatted);
   }
 
@@ -99,9 +106,17 @@ export default function VendorInspectionPage() {
           <div key={item.id} className={`bg-white border-2 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group ${item.status === 'Open' ? 'border-rose-200' : 'border-slate-200'}`}>
             
             {/* Image Placeholder */}
-            <div className="h-48 bg-slate-100 relative overflow-hidden">
+            <div
+              className="h-48 bg-slate-100 relative overflow-hidden cursor-pointer"
+              onClick={() => { if (item.photos.length > 0) { setGalleryPhotos(item.photos); setGalleryIndex(0); } }}
+            >
                {/* eslint-disable-next-line @next/next/no-img-element */}
                <img src={item.image} alt={item.type} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+               {item.photos.length > 1 && (
+                 <span className="absolute bottom-3 right-3 px-2 py-1 text-xs font-bold rounded-lg bg-slate-900/70 text-white backdrop-blur-sm">
+                   +{item.photos.length - 1}
+                 </span>
+               )}
                <div className="absolute top-3 right-3 flex gap-2">
                   <span className={`px-2.5 py-1 text-xs font-black uppercase tracking-wider rounded-lg shadow-sm ${
                      item.priority === 'Critical' ? 'bg-rose-600 text-white' : 
@@ -222,6 +237,15 @@ export default function VendorInspectionPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* Lightbox Galeri Foto */}
+      {galleryPhotos && (
+        <PhotoGalleryLightbox
+          photos={galleryPhotos}
+          initialIndex={galleryIndex}
+          onClose={() => setGalleryPhotos(null)}
+        />
       )}
 
     </div>
