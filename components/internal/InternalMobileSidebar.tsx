@@ -6,15 +6,18 @@ import Link from 'next/link';
 import { Menu, X, LogOut } from 'lucide-react';
 import Image from "next/image";
 import { SidebarNav } from "./sidebar-nav";
+import type { SidebarBadges } from "@/app/dashboard/actions/sidebar-badges";
 
 export function InternalMobileSidebar({
   userPermissions,
   userEmail,
-  roleLabel
+  roleLabel,
+  badges
 }: {
   userPermissions: Record<string, string[]>;
   userEmail: string;
   roleLabel?: string;
+  badges?: SidebarBadges;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -39,50 +42,50 @@ export function InternalMobileSidebar({
       )}
 
       {/* Sidebar Panel */}
-      <div className={`fixed inset-y-0 left-0 z-[110] w-72 bg-white border-r shadow-2xl transform transition-transform duration-300 ease-in-out lg:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        
+      <div className={`fixed inset-y-0 left-0 z-[110] w-72 bg-slate-900 border-r border-slate-800 shadow-2xl transform transition-transform duration-300 ease-in-out lg:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+
         {/* Sidebar Header - Logos */}
-        <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 shrink-0">
+        <div className="h-20 flex items-center justify-between px-6 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="relative h-8 w-32">
-              <Image 
-                src="/assets/logo/main-logo.png" 
-                alt="Main Logo" 
+              <Image
+                src="/assets/logo/main-logo.png"
+                alt="Main Logo"
                 fill
-                className="object-contain object-left"
+                className="object-contain object-left brightness-0 invert"
               />
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setIsOpen(false)}
-            className="p-2 text-slate-400 hover:bg-slate-100 rounded-md shrink-0"
+            className="p-2 text-slate-400 hover:bg-white/5 rounded-md shrink-0"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Sidebar User Info */}
-        <Link href="/dashboard/profile" onClick={handleLinkClick} className="px-6 py-5 border-b border-slate-100 shrink-0 hover:bg-slate-50 transition-colors block cursor-pointer">
+        <Link href="/dashboard/profile" onClick={handleLinkClick} className="px-6 py-5 border-b border-slate-800 shrink-0 hover:bg-white/5 transition-colors block cursor-pointer">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold shadow-inner shrink-0">
+            <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shadow-inner shrink-0">
               {userEmail?.charAt(0).toUpperCase() || 'A'}
             </div>
             <div className="overflow-hidden">
-              <p className="text-sm font-bold text-slate-800 truncate">{userEmail || 'admin@pgn.co.id'}</p>
-              <p className="text-xs text-slate-500 font-medium">{roleLabel || 'Pengguna'}</p>
+              <p className="text-sm font-bold text-white truncate">{userEmail || 'admin@pgn.co.id'}</p>
+              <p className="text-xs text-slate-400 font-medium">{roleLabel || 'Pengguna'}</p>
             </div>
           </div>
         </Link>
 
         {/* Navigation - Needs a wrapper that intercepts clicks */}
         <div onClick={handleLinkClick} className="flex-1 overflow-y-auto">
-          <SidebarNav userPermissions={userPermissions} />
+          <SidebarNav userPermissions={userPermissions} badges={badges} />
         </div>
 
         {/* Logout */}
-        <div className="p-4 border-t border-slate-100 shrink-0">
+        <div className="p-4 border-t border-slate-800 shrink-0">
           <form method="POST" action="/api/auth/logout">
-            <button type="submit" className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 transition-colors">
+            <button type="submit" className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
               <LogOut className="h-5 w-5" />
               Keluar Sistem
             </button>

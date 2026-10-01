@@ -10,6 +10,7 @@ import {
   getUnreadCount,
   getNotificationPreferences,
 } from "@/app/dashboard/inbox/actions";
+import { getSidebarBadges } from "@/app/dashboard/actions/sidebar-badges";
 import { InternalNotificationBell } from "@/components/internal/notification-bell";
 import { getRoleLabel } from "@/lib/roles";
 
@@ -25,6 +26,7 @@ export default async function AuthDashboardLayout({
   const permissions = await getUserPermissions();
   const unreadCount = await getUnreadCount();
   const mutedTypes = await getNotificationPreferences();
+  const badges = await getSidebarBadges();
 
   const { data: profile } = user
     ? await supabase.from("profiles").select("role").eq("id", user.id).single()
@@ -33,11 +35,12 @@ export default async function AuthDashboardLayout({
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans text-slate-900">
-      {/* Sidebar - Clean White Theme */}
+      {/* Sidebar - Dark Theme */}
       <DesktopSidebar
         user={user}
         permissions={permissions}
         roleLabel={roleLabel}
+        badges={badges}
       />
 
       {/* Main Content Area */}
@@ -49,6 +52,7 @@ export default async function AuthDashboardLayout({
               userPermissions={permissions || {}}
               userEmail={user?.email || "admin@pgn.co.id"}
               roleLabel={roleLabel}
+              badges={badges}
             />
             <div className="hidden lg:flex items-center gap-2">
               <span className="text-sm font-bold text-slate-800 tracking-tight">
