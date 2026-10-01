@@ -4,7 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { notifyAssignees } from "@/app/dashboard/inbox/actions";
 import { APPROVED_JSA } from "@/lib/project-stage";
 import { PTW_STATUS } from "@/lib/ptw-status";
-import type { PtwFormDetails } from "@/lib/ptw-types";
+import type { PtwFormDetails, PtwType } from "@/lib/ptw-types";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { resetStageAssignments } from "@/lib/stage-assignments";
 import { aggregateStepNeeds, StepKebutuhan } from "@/lib/procedure-kebutuhan";
@@ -74,6 +74,22 @@ export async function getPtwList(projectId: string) {
     .select('*')
     .eq('project_id', projectId);
   return data ?? [];
+}
+
+/**
+ * Jenis PTW yang ditandai wajib oleh vendor saat menyusun Prosedur Kerja
+ * (checklist "Jenis PTW yang Dibutuhkan", content.requiredPtwTypes) —
+ * dipakai halaman list PTW untuk menyorot jenis yang wajib diajukan.
+ * Prosedur lama/yang belum pernah menyentuh field ini balik [].
+ */
+export async function getRequiredPtwTypes(projectId: string): Promise<PtwType[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('procedures')
+    .select('content')
+    .eq('project_id', projectId)
+    .maybeSingle();
+  return (data?.content?.requiredPtwTypes as PtwType[]) || [];
 }
 
 export async function savePtw(

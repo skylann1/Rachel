@@ -4,8 +4,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Stamp, CheckCircle2, Clock, XCircle, FileText, Plus } from 'lucide-react';
-import { getPtwList } from './actions';
-import { PTW_TYPES } from '@/lib/ptw-types';
+import { getPtwList, getRequiredPtwTypes } from './actions';
+import { PTW_TYPES, type PtwType } from '@/lib/ptw-types';
 import { PTW_STATUS, isPtwPending } from '@/lib/ptw-status';
 
 interface PtwRow {
@@ -20,19 +20,32 @@ export default function PtwListPage() {
   const projectId = typeof params.id === 'string' ? decodeURIComponent(params.id) : '';
 
   const [ptws, setPtws] = useState<PtwRow[]>([]);
+  const [requiredTypes, setRequiredTypes] = useState<PtwType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       if (!projectId) return;
-      const data = await getPtwList(projectId);
+      const [data, required] = await Promise.all([
+        getPtwList(projectId),
+        getRequiredPtwTypes(projectId),
+      ]);
       setPtws(data as PtwRow[]);
+      setRequiredTypes(required);
       setIsLoading(false);
     }
     load();
   }, [projectId]);
 
   const rowFor = (typeId: string) => ptws.find(p => p.ptw_type === typeId);
+
+  // Jenis wajib (ditandai di Prosedur) tampil duluan; urutan asli PTW_TYPES
+  // dipertahankan di dalam masing-masing kelompok (Array.sort stabil sejak ES2019).
+  const sortedTypes = [...PTW_TYPES].sort((a, b) => {
+    const aRequired = requiredTypes.includes(a.id) ? 0 : 1;
+    const bRequired = requiredTypes.includes(b.id) ? 0 : 1;
+    return aRequired - bRequired;
+  });
 
   const statusBadge = (row?: PtwRow) => {
     if (!row) {
@@ -85,8 +98,9 @@ export default function PtwListPage() {
         {isLoading ? (
           <p className="text-sm text-slate-400 text-center py-8">Memuat data PTW...</p>
         ) : (
-          PTW_TYPES.map(type => {
+          sortedTypes.map(type => {
             const row = rowFor(type.id);
+            const isRequired = requiredTypes.includes(type.id);
             return (
               <Link
                 key={type.id}
@@ -103,6 +117,14 @@ export default function PtwListPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
+                  {isRequired && (
+                    <span
+                      className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full"
+                      style={{ backgroundColor: `${type.color}20`, color: type.color }}
+                    >
+                      Wajib
+                    </span>
+                  )}
                   {statusBadge(row)}
                   {!row && <Plus className="w-4 h-4 text-slate-400" />}
                 </div>
