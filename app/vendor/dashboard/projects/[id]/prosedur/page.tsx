@@ -13,7 +13,7 @@ import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalR
 import { getWorkers, WorkerItem } from '@/app/vendor/dashboard/pekerja/actions';
 import { getEquipment, EquipmentItem } from '@/app/vendor/dashboard/peralatan/actions';
 import { getMaterials, MaterialItem } from '@/app/vendor/dashboard/material/actions';
-import { APD_ITEMS, APD_CATEGORY_LABELS, HAZARD_COLUMNS } from '@/lib/ptw-types';
+import { APD_ITEMS, APD_CATEGORY_LABELS, HAZARD_COLUMNS, PTW_TYPES, PtwType } from '@/lib/ptw-types';
 import {
   normalizeTahapanPekerjaan, emptyKebutuhan, deriveDocumentSections,
   TahapanSection, StepKebutuhan,
@@ -56,6 +56,17 @@ export default function ProsedurKerjaForm() {
   
   const [docId, setDocId] = useState<string | null>(null);
 
+  // Jenis PTW yang Dibutuhkan — checklist level DOKUMEN (bukan per
+  // sub-langkah seperti panel "Kebutuhan"), dikonsumsi halaman PTW list
+  // untuk menyorot jenis yang wajib diajukan.
+  const [requiredPtwTypes, setRequiredPtwTypes] = useState<PtwType[]>([]);
+
+  const togglePtwType = (type: PtwType) => {
+    setRequiredPtwTypes(prev =>
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    );
+  };
+
   // Fetch initial data
   useEffect(() => {
     async function loadData() {
@@ -73,6 +84,7 @@ export default function ProsedurKerjaForm() {
           setRevisions(content.revisions || []);
           if (content.tahapanPekerjaan) setTahapanPekerjaan(normalizeTahapanPekerjaan(content.tahapanPekerjaan));
           if (content.penyelesaianAkhir) setPenyelesaianAkhir(content.penyelesaianAkhir);
+          if (content.requiredPtwTypes) setRequiredPtwTypes(content.requiredPtwTypes);
         }
       }
     }
@@ -268,6 +280,12 @@ export default function ProsedurKerjaForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (requiredPtwTypes.length === 0) {
+      alert('Pilih minimal satu jenis PTW yang dibutuhkan untuk pekerjaan ini.');
+      return;
+    }
+
     setIsSaving(true);
 
     const payload = {
@@ -282,7 +300,8 @@ export default function ProsedurKerjaForm() {
       tahapanPekerjaan,
       penyelesaianAkhir,
       vendorSignature,
-      revisions
+      revisions,
+      requiredPtwTypes
     };
 
     try {
@@ -395,6 +414,31 @@ export default function ProsedurKerjaForm() {
                 onChange={(e) => setSubmissionDate(e.target.value)}
                 className="w-full md:w-1/2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm font-medium"
               />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-sm font-semibold text-slate-700 block mb-3">
+                Jenis PTW yang Dibutuhkan <span className="text-rose-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {PTW_TYPES.map(type => {
+                  const checked = requiredPtwTypes.includes(type.id);
+                  return (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => togglePtwType(type.id)}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-xs font-bold transition-all ${
+                        checked ? 'border-transparent' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                      style={checked ? { backgroundColor: type.color, color: type.textColor } : undefined}
+                    >
+                      <CheckCircle2 className={`w-4 h-4 shrink-0 ${checked ? 'opacity-100' : 'opacity-30'}`} />
+                      {type.title.split('(')[0].trim()}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-slate-400 mt-2">Pilih semua jenis izin kerja yang relevan dengan pekerjaan ini — menentukan jenis PTW mana yang ditandai wajib di halaman pengajuan PTW.</p>
             </div>
           </div>
         </section>
