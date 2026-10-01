@@ -189,12 +189,23 @@ export async function validateInspection(inspectionId: string, approved: boolean
     .eq('id', inspectionId)
     .single();
 
-  const { error } = await supabase
+  // Guard status: hanya temuan yang masih 'In Progress' yang boleh divalidasi.
+  // Tanpa ini, dua reviewer yang membuka modal validasi bersamaan bisa saling
+  // menimpa — reviewer kedua yang telat submit akan membalik status temuan
+  // yang baru saja ditutup reviewer pertama kembali ke 'Open' tanpa sadar.
+  // .select() dipakai supaya update yang tidak mengenai baris (race / sudah
+  // diproses orang lain) ikut ketahuan, pola sama dengan submitVendorResponse.
+  const { data: updated, error } = await supabase
     .from('inspections')
     .update({ status: approved ? 'Closed' : 'Open' })
-    .eq('id', inspectionId);
+    .eq('id', inspectionId)
+    .eq('status', 'In Progress')
+    .select('id');
 
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error('Temuan ini sudah tidak dalam status menunggu validasi — mungkin sudah diproses reviewer lain. Muat ulang halaman.');
+  }
 
   await supabase.from('inspection_logs').insert({
     inspection_id: inspectionId,

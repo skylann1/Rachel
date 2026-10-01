@@ -5,6 +5,7 @@ import { Camera, AlertTriangle, CheckCircle, Clock, MapPin, UploadCloud, X, Arro
 import { getVendorInspections, submitVendorResponse } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
 import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
+import { resolveInspectionGallery } from '@/lib/inspection-photos';
 
 export default function VendorInspectionPage() {
   const [filter, setFilter] = useState('All');
@@ -24,8 +25,7 @@ export default function VendorInspectionPage() {
   async function loadData() {
     const data = await getVendorInspections();
     const formatted = data.map((d: any) => {
-      const photos = (d.inspection_photos || []).map((p: any) => p.image_url);
-      const gallery = photos.length > 0 ? photos : (d.image_url ? [d.image_url] : []);
+      const { image, photos } = resolveInspectionGallery(d);
       return {
         id: d.id,
         type: d.finding_type,
@@ -34,8 +34,8 @@ export default function VendorInspectionPage() {
         date: new Date(d.created_at).toLocaleString('id-ID'),
         status: d.status,
         priority: d.priority,
-        image: d.image_url || photos[0] || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-        photos: gallery,
+        image,
+        photos,
         feedbackHSE: d.title,
       };
     });
@@ -49,14 +49,17 @@ export default function VendorInspectionPage() {
     e.preventDefault();
     if (!selectedInspection) return;
     
+    if (!imageFile) {
+      alert('Unggah foto bukti perbaikan.');
+      return;
+    }
+
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
-    
+
     try {
-      if (imageFile) {
-        const imageUrl = await uploadImage(imageFile, 'inspections-evidence');
-        if (imageUrl) formData.append('vendor_evidence_url', imageUrl);
-      }
+      const imageUrl = await uploadImage(imageFile, 'inspections-evidence');
+      if (imageUrl) formData.append('vendor_evidence_url', imageUrl);
 
       await submitVendorResponse(selectedInspection.id, formData);
       alert("Bukti perbaikan berhasil dikirim! Menunggu validasi penutupan dari HSE PGN.");
@@ -157,11 +160,15 @@ export default function VendorInspectionPage() {
             
             <div className={`p-4 flex gap-2 ${item.status === 'Open' ? 'bg-rose-50' : 'bg-slate-50 border-t border-slate-100'}`}>
                {item.status === 'Open' ? (
-                  <button 
+                  <button
                     onClick={() => setSelectedInspection(item)}
                     className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm shadow-rose-600/30 transition-colors"
                   >
                      Tindak Lanjuti <ArrowRight className="w-4 h-4" />
+                  </button>
+               ) : item.status === 'In Progress' ? (
+                  <button disabled className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-sm font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded-xl cursor-not-allowed">
+                     <Clock className="w-4 h-4" /> Menunggu Validasi HSE
                   </button>
                ) : (
                   <button disabled className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-sm font-bold text-emerald-600 bg-emerald-100 border border-emerald-200 rounded-xl cursor-not-allowed">

@@ -5,6 +5,7 @@ import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Buildi
 import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs, validateInspection } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
 import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
+import { resolveInspectionGallery } from '@/lib/inspection-photos';
 
 export default function InspectionPage() {
   const [filter, setFilter] = useState('All');
@@ -53,8 +54,7 @@ export default function InspectionPage() {
     setInternalUsers(vp.internalUsers);
     
     const formatted = data.map((d: any) => {
-      const photos = (d.inspection_photos || []).map((p: any) => p.image_url);
-      const gallery = photos.length > 0 ? photos : (d.image_url ? [d.image_url] : []);
+      const { image, photos } = resolveInspectionGallery(d);
       return {
         id: d.id,
         type: d.finding_type,
@@ -64,8 +64,8 @@ export default function InspectionPage() {
         date: new Date(d.created_at).toLocaleString('id-ID'),
         status: d.status,
         priority: d.priority,
-        image: d.image_url || photos[0] || 'https://images.unsplash.com/photo-1541888086425-d81bb19240f5?w=500&q=80',
-        photos: gallery,
+        image,
+        photos,
         assigned_to: d.internal_profiles?.profiles?.full_name || 'Belum di-assign',
         is_project_activity: d.is_project_activity,
         vendor_response: d.vendor_response,
@@ -88,15 +88,19 @@ export default function InspectionPage() {
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (imageFiles.length === 0) {
+      alert('Unggah minimal satu foto temuan.');
+      return;
+    }
+
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
     formData.append('is_project_activity', isProjectActivity.toString());
-    
+
     try {
-      for (const file of imageFiles) {
-        const imageUrl = await uploadImage(file, 'inspections');
-        if (imageUrl) formData.append('image_urls', imageUrl);
-      }
+      const uploadedUrls = await Promise.all(imageFiles.map((file) => uploadImage(file, 'inspections')));
+      uploadedUrls.forEach((url) => { if (url) formData.append('image_urls', url); });
 
       await createInspection(formData);
       alert("Laporan hasil inspeksi berhasil dikirim!");
@@ -165,11 +169,12 @@ export default function InspectionPage() {
   };
 
   const exportToCSV = () => {
+    const esc = (val: unknown) => String(val ?? '').replace(/"/g, '""');
     const headers = ['ID', 'Type', 'Description', 'Location', 'Vendor', 'Date', 'Status', 'Priority', 'Assigned To'];
     const csvContent = [
       headers.join(','),
-      ...filteredInspections.map(item => 
-        `"${item.id}","${item.type}","${item.description.replace(/"/g, '""')}","${item.location}","${item.vendor}","${item.date}","${item.status}","${item.priority}","${item.assigned_to}"`
+      ...filteredInspections.map(item =>
+        `"${esc(item.id)}","${esc(item.type)}","${esc(item.description)}","${esc(item.location)}","${esc(item.vendor)}","${esc(item.date)}","${esc(item.status)}","${esc(item.priority)}","${esc(item.assigned_to)}"`
       )
     ].join('\n');
     
