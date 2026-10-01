@@ -119,8 +119,8 @@ export default function PtwListPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   {isRequired && (
                     <span
-                      className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full"
-                      style={{ backgroundColor: `${type.color}20`, color: type.color }}
+                      className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full text-slate-700"
+                      style={{ backgroundColor: `${type.color}20` }}
                     >
                       Wajib
                     </span>

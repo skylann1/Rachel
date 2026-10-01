@@ -427,6 +427,7 @@ export default function ProsedurKerjaForm() {
                       key={type.id}
                       type="button"
                       onClick={() => togglePtwType(type.id)}
+                      aria-pressed={checked}
                       className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-xs font-bold transition-all ${
                         checked ? 'border-transparent' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                       }`}

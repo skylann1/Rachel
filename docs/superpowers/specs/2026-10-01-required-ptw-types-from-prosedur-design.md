@@ -127,8 +127,12 @@ Dipanggil sejajar `getPtwList(projectId)` di `useEffect` halaman.
 jenis yang ada di `requiredPtwTypes` muncul duluan (`.sort()` stabil
 berdasarkan keanggotaan di set tersebut, urutan asli `PTW_TYPES`
 dipertahankan di dalam masing-masing kelompok wajib/tidak-wajib),
-dan kartu yang wajib dapat badge kecil "Wajib" (warna `type.color`,
-konsisten dengan badge status yang sudah ada di kartu yang sama).
+dan kartu yang wajib dapat badge kecil "Wajib" (latar `${type.color}20`,
+teks `text-slate-700` tetap — bukan `type.color` sebagai teks, karena
+beberapa jenis PTW punya warna terang/pucat yang bikin teks nyaris tak
+kebaca di atas tint-nya sendiri; pola ini konsisten dengan badge status
+yang sudah ada di kartu yang sama, yang juga pakai teks gelap tetap di
+atas tint lembut).
 Jenis yang sudah punya baris PTW (`rowFor(type.id)`) tetap tampil
 status badge-nya seperti sekarang — badge "Wajib" dan status PTW
 baris itu tampil berdampingan, tidak saling menggantikan.
