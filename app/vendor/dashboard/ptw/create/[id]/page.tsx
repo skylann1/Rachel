@@ -26,13 +26,18 @@ export default function PtwListPage() {
   useEffect(() => {
     async function load() {
       if (!projectId) return;
-      const [data, required] = await Promise.all([
-        getPtwList(projectId),
-        getRequiredPtwTypes(projectId),
-      ]);
-      setPtws(data as PtwRow[]);
-      setRequiredTypes(required);
-      setIsLoading(false);
+      try {
+        const [data, required] = await Promise.all([
+          getPtwList(projectId),
+          getRequiredPtwTypes(projectId),
+        ]);
+        setPtws(data as PtwRow[]);
+        setRequiredTypes(required);
+      } catch (err) {
+        console.error('Gagal memuat data PTW:', err);
+      } finally {
+        setIsLoading(false);
+      }
     }
     load();
   }, [projectId]);

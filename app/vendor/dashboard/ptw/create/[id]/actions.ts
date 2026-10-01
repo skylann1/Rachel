@@ -84,11 +84,15 @@ export async function getPtwList(projectId: string) {
  */
 export async function getRequiredPtwTypes(projectId: string): Promise<PtwType[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('procedures')
     .select('content')
     .eq('project_id', projectId)
     .maybeSingle();
+  if (error) {
+    console.error('getRequiredPtwTypes error:', error.message);
+    return [];
+  }
   return (data?.content?.requiredPtwTypes as PtwType[]) || [];
 }
 
