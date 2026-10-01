@@ -27,11 +27,20 @@ async function requireAccountAccess(): Promise<{ error: string | null; actor: Ac
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Unauthorized', actor: null };
 
-  const crossOrg = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_account');
-  const orgScoped = crossOrg || await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_org_staff');
+  const hasManageAccount = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_account');
+  const orgScoped = hasManageAccount || await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_org_staff');
   if (!orgScoped) return { error: 'Anda tidak memiliki izin untuk mengelola akun pengguna.', actor: null };
 
   const { data: profile } = await supabase.from('profiles').select('org_id, type').eq('id', user.id).single();
+  // manage_account dideklarasikan allowedTypes: ['pgn'] di constants.ts, tapi
+  // itu cuma menyaring checkbox di UI Role & Permission — tidak ada apa pun
+  // yang mencegah permission ini diberikan ke role pgsol/vendor lewat jalur
+  // lain. crossOrg (akses lintas organisasi) HARUS ikut mensyaratkan tipe
+  // organisasi aktor sendiri 'pgn', sama seperti pola yang sudah dipakai
+  // account/page.tsx dan role/actions.ts — tanpa ini, pemegang manage_account
+  // non-pgn lolos assertSameOrg sepenuhnya dan bisa mengubah akun organisasi
+  // mana pun.
+  const crossOrg = hasManageAccount && profile?.type === 'pgn';
   return {
     error: null,
     actor: {

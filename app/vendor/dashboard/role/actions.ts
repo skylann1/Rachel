@@ -3,34 +3,49 @@
 import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
-import { revalidatePath } from 'next/cache';
+import { assertSameRoleType, type RoleActor } from '@/lib/role-access';
+
+const VALID_ROLE_TYPES = ['pgn', 'pgsol', 'vendor'];
 
 /**
- * Server Action adalah endpoint POST tersendiri — gate di layout.tsx hanya
- * mencegah halamannya dirender, bukan action-nya dipanggil. Setiap aksi di
- * bawah memakai admin client (bypass RLS), jadi izinnya wajib dicek di sini.
- * Sejalan dengan requireManageAccount() di master-data/account/actions.ts.
+ * Gate + konteks tunggal untuk semua aksi kelola role di file ini, pola
+ * yang sama dengan requireRoleAccess() di
+ * app/dashboard/master-data/role/actions.ts. Sebelumnya file ini cuma
+ * mengecek permission manage_role tanpa scoping tipe/organisasi sama
+ * sekali — siapa pun pemegang manage_role bisa mengedit/menghapus role
+ * PGN, PGSOL, atau sistem lewat halaman vendor ini (Gap #3 yang disebut
+ * docs/superpowers/specs/2026-09-29-pgsol-dashboard-merge-design.md,
+ * sengaja ditunda saat itu karena di luar scope plan tersebut).
  */
-async function requireManageRole() {
+async function requireRoleAccess(): Promise<{ error: string | null; actor: RoleActor | null }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return 'Unauthorized';
+  if (!user) return { error: 'Unauthorized', actor: null };
+
   const allowed = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_role');
-  if (!allowed) return 'Anda tidak memiliki izin untuk mengelola role.';
-  return null;
+  if (!allowed) return { error: 'Anda tidak memiliki izin untuk mengelola role.', actor: null };
+
+  const { data: profile } = await supabase.from('profiles').select('type').eq('id', user.id).single();
+  const type = profile?.type ?? null;
+  return { error: null, actor: { userId: user.id, type, crossOrg: type === 'pgn' } };
 }
 
 export async function addRole(formData: FormData) {
   try {
-    const permError = await requireManageRole();
-    if (permError) return { error: permError };
+    const { error: permError, actor } = await requireRoleAccess();
+    if (permError || !actor) return { error: permError };
 
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
-    const type = formData.get('type') as string;
+    // Aktor org-scoped selalu dipaksa membuat role dengan tipe miliknya
+    // sendiri, terlepas dari apa yang dikirim form.
+    const type = actor.crossOrg ? (formData.get('type') as string) : (actor.type as string);
 
     if (!name || !type) {
       return { error: 'Nama Role dan Tipe Role wajib diisi.' };
+    }
+    if (!VALID_ROLE_TYPES.includes(type)) {
+      return { error: 'Tipe Role tidak valid.' };
     }
 
     const adminClient = createAdminClient();
@@ -54,8 +69,6 @@ export async function addRole(formData: FormData) {
       return { error: error.message || 'Gagal menambahkan role.' };
     }
 
-    revalidatePath('/dashboard/master-data/role');
-    revalidatePath('/dashboard/master-data/account');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat menambahkan role.' };
@@ -64,18 +77,25 @@ export async function addRole(formData: FormData) {
 
 export async function updateRole(id: string, formData: FormData) {
   try {
-    const permError = await requireManageRole();
-    if (permError) return { error: permError };
+    const { error: permError, actor } = await requireRoleAccess();
+    if (permError || !actor) return { error: permError };
+
+    const adminClient = createAdminClient();
+    const typeResult = await assertSameRoleType(adminClient, actor, id);
+    if (typeResult.error) return { error: typeResult.error };
 
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
-    const type = formData.get('type') as string;
+    // Aktor org-scoped tidak boleh memindahkan role ke tipe lain — paksa
+    // tetap tipe miliknya sendiri, sama seperti addRole di atas.
+    const type = actor.crossOrg ? (formData.get('type') as string) : (actor.type as string);
 
     if (!name || !type) {
       return { error: 'Nama Role dan Tipe Role wajib diisi.' };
     }
-
-    const adminClient = createAdminClient();
+    if (!VALID_ROLE_TYPES.includes(type)) {
+      return { error: 'Tipe Role tidak valid.' };
+    }
 
     const { error } = await adminClient
       .from('roles')
@@ -93,8 +113,6 @@ export async function updateRole(id: string, formData: FormData) {
       return { error: error.message || 'Gagal mengubah role.' };
     }
 
-    revalidatePath('/dashboard/master-data/role');
-    revalidatePath('/dashboard/master-data/account');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat mengubah role.' };
@@ -103,13 +121,14 @@ export async function updateRole(id: string, formData: FormData) {
 
 export async function deleteRole(id: string) {
   try {
-    const permError = await requireManageRole();
-    if (permError) return { error: permError };
+    const { error: permError, actor } = await requireRoleAccess();
+    if (permError || !actor) return { error: permError };
 
     const adminClient = createAdminClient();
+    const typeResult = await assertSameRoleType(adminClient, actor, id);
+    if (typeResult.error) return { error: typeResult.error };
 
     // Pastikan tidak ada profil yang menggunakan role ini
-    // Seharusnya bisa di cek via count, tapi kita asumsikan untuk sekarang bisa dihapus jika tidak restrict di DB
     const { error } = await adminClient
       .from('roles')
       .delete()
@@ -123,8 +142,6 @@ export async function deleteRole(id: string) {
       return { error: error.message || 'Gagal menghapus role.' };
     }
 
-    revalidatePath('/dashboard/master-data/role');
-    revalidatePath('/dashboard/master-data/account');
     return { success: true };
   } catch (error: any) {
     return { error: 'Terjadi kesalahan pada server saat menghapus role.' };

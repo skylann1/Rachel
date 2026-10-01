@@ -96,7 +96,12 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
     query = query.eq('org_id', actorOrgId as string);
   }
   if (search) {
-    query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+    // PostgREST pakai koma untuk memisahkan kondisi & kurung untuk grouping
+    // di dalam string .or() — tanpa di-escape, input pencarian yang
+    // mengandung karakter itu bisa menyisipkan kondisi filter tambahan di
+    // luar yang dimaksud (lihat dokumentasi PostgREST: escape dengan \).
+    const escapedSearch = search.replace(/[,()]/g, '\\$&');
+    query = query.or(`full_name.ilike.%${escapedSearch}%,email.ilike.%${escapedSearch}%`);
   }
   if (role) {
     query = query.eq('role', role);

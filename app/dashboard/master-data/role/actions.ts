@@ -6,6 +6,8 @@ import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 import { assertSameRoleType, type RoleActor } from '@/lib/role-access';
 
+const VALID_ROLE_TYPES = ['pgn', 'pgsol', 'vendor'];
+
 /**
  * Gate + konteks tunggal untuk semua aksi kelola role di file ini, pola
  * yang sama dengan requireAccountAccess() di
@@ -50,6 +52,9 @@ export async function addRole(formData: FormData) {
 
     if (!name || !type) {
       return { error: 'Nama Role dan Tipe Role wajib diisi.' };
+    }
+    if (!VALID_ROLE_TYPES.includes(type)) {
+      return { error: 'Tipe Role tidak valid.' };
     }
 
     const adminClient = createAdminClient();
@@ -97,6 +102,9 @@ export async function updateRole(id: string, formData: FormData) {
 
     if (!name || !type) {
       return { error: 'Nama Role dan Tipe Role wajib diisi.' };
+    }
+    if (!VALID_ROLE_TYPES.includes(type)) {
+      return { error: 'Tipe Role tidak valid.' };
     }
 
     const { error } = await adminClient

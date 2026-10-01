@@ -31,7 +31,10 @@ export default async function VendorStaffPage(props: { searchParams?: Promise<{ 
   // relasi profiles <-> vendor_profiles sudah tidak ada lagi sejak FK
   // vendor_profiles.id dipindah ke organizations (schema_org_backfill_vendor.sql).
   let query = supabase.from('profiles').select(`*, organizations(name), internal_profiles(nip)`, { count: 'exact' }).eq('org_id', orgId);
-  if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+  // PostgREST pakai koma/kurung sebagai sintaks grouping di dalam string
+  // .or() — escape dulu supaya input pencarian tidak bisa menyisipkan
+  // kondisi filter tambahan (lihat catatan sama di master-data/account/page.tsx).
+  if (search) query = query.or(`full_name.ilike.%${search.replace(/[,()]/g, '\\$&')}%,email.ilike.%${search.replace(/[,()]/g, '\\$&')}%`);
   if (role) query = query.eq('role', role);
   if (status === 'active') query = query.eq('status', 'Active');
   if (status === 'inactive') query = query.eq('status', 'Inactive');
