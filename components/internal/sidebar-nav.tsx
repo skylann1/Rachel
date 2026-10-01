@@ -75,7 +75,7 @@ export function SidebarNav({
     .filter((item, idx, arr) => arr.findIndex(i => i.href === item.href) === idx);
 
   return (
-    <nav className="flex-1 overflow-y-auto py-6 px-4 overflow-x-hidden">
+    <nav className="flex-1 overflow-y-auto py-6 px-4 overflow-x-hidden hide-scrollbar">
       {!isCollapsed && <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-500 uppercase whitespace-nowrap">Menu Utama</div>}
       <ul className="space-y-1 mb-6">
         {filteredMenuUtama.map((item) => {

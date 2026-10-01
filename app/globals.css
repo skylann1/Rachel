@@ -173,4 +173,12 @@
     animation: wiggle 2.2s ease-in-out infinite;
     transform-origin: 70% 70%;
   }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
