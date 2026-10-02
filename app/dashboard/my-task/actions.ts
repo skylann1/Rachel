@@ -41,13 +41,6 @@ export async function getMyTasks(): Promise<TaskItem[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  const role = profile?.role || 'vendor';
   const tasks: TaskItem[] = [];
 
   // 1. Fetch Procedures — dua tahap: Review PGSOL, lalu Menunggu Review PM.
@@ -236,7 +229,14 @@ export async function getMyTasks(): Promise<TaskItem[]> {
   }
 
   // 4. Fetch Incidents
-  if (role === 'admin' || role === 'hse') {
+  //
+  // Sebelumnya dicek lewat hardcode role === 'admin' || role === 'hse' —
+  // menyimpang dari pola permission-driven yang dipakai modul lain di app
+  // ini. Akibatnya role custom mana pun yang diberi incident.investigate
+  // (lihat allPermissionModules) tapi namanya bukan persis 'hse' tidak
+  // pernah melihat task investigasi insiden di sini, walau dia punya
+  // haknya. Dicek lewat permission, bukan nama role literal.
+  if (await hasPermissionForUser(supabase, user.id, 'incident', 'investigate')) {
     const { data: incidents } = await supabase
       .from('incidents')
       .select(`
