@@ -3,7 +3,8 @@
 import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
-import { assertSameRoleType, type RoleActor } from '@/lib/role-access';
+import { assertSameRoleType, sanitizePermissionsForType, type RoleActor } from '@/lib/role-access';
+import { allPermissionModules } from '../constants';
 
 export async function updateRolePermissions(
   id: string,
@@ -52,7 +53,7 @@ export async function updateRolePermissions(
         name,
         description,
         type,
-        permissions
+        permissions: sanitizePermissionsForType(permissions, type, allPermissionModules)
       })
       .eq('id', id);
 

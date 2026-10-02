@@ -7,6 +7,14 @@ import { logDocumentEvent } from "@/lib/document-logs";
 import { resetStageAssignments } from "@/lib/stage-assignments";
 
 export async function saveProsedur(projectId: string, payload: any) {
+  // "Jenis PTW yang Dibutuhkan" wajib minimal 1 — sebelumnya cuma dicek di
+  // client (form page.tsx), jadi bisa dilewati lewat panggilan langsung ke
+  // Server Action ini (atau bundle lama yang belum punya field ini sama
+  // sekali). Ditegakkan di sini juga supaya invariant-nya beneran berlaku.
+  if (!Array.isArray(payload?.requiredPtwTypes) || payload.requiredPtwTypes.length === 0) {
+    throw new Error('Pilih minimal satu jenis PTW yang dibutuhkan untuk pekerjaan ini.');
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

@@ -43,3 +43,36 @@ export async function assertSameRoleType(adminAuthClient: ReturnType<typeof crea
   }
   return { error: null, targetType: target.type };
 }
+
+/**
+ * `allowedTypes` per item di allPermissionModules (constants.ts) cuma
+ * menyaring checkbox mana yang MUNCUL di UI RolePermissionsClient — tidak
+ * ada apa pun di level server yang pernah menegakkan aturan itu sebelum
+ * ini. Tanpa fungsi ini, permintaan updateRolePermissions yang di-craft
+ * langsung (bukan lewat checkbox UI) bisa menyimpan role bertipe 'vendor'
+ * dengan permission pgn-only seperti masterData.manage_role, dan
+ * hasPermissionForUser akan tetap mengabulkannya karena ia cuma mengecek
+ * keanggotaan JSONB, tidak pernah membandingkan ke allowedTypes.
+ *
+ * Membuang (bukan menolak) key yang tidak sesuai `roleType` — permintaan
+ * sah lewat UI tidak pernah mengirim key di luar allowedTypes-nya sendiri,
+ * jadi ini no-op untuk pemakaian normal dan cuma menutup jalur yang
+ * di-craft manual.
+ */
+export function sanitizePermissionsForType(
+  permissions: Record<string, string[]>,
+  roleType: string,
+  allPermissionModules: { id: string; items: { key: string; allowedTypes: string[] }[] }[]
+): Record<string, string[]> {
+  const sanitized: Record<string, string[]> = {};
+  for (const mod of allPermissionModules) {
+    const keys = permissions?.[mod.id];
+    if (!Array.isArray(keys)) continue;
+    const allowedKeys = new Set(
+      mod.items.filter((item) => item.allowedTypes.includes(roleType)).map((item) => item.key)
+    );
+    const filtered = keys.filter((k) => allowedKeys.has(k));
+    if (filtered.length > 0) sanitized[mod.id] = filtered;
+  }
+  return sanitized;
+}
