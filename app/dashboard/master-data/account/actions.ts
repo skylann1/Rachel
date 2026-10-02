@@ -221,9 +221,20 @@ export async function updateAccount(id: string, formData: FormData) {
 
     const fullName = formData.get('fullName') as string;
     const role = formData.get('role') as string;
-    const type = actor.crossOrg ? (formData.get('type') as string) : (actor.orgKind as string);
     const nip = formData.get('nip') as string;
     const companyName = formData.get('companyName') as string;
+
+    // Tipe akun tidak bisa diubah lewat edit, untuk aktor mana pun —
+    // termasuk crossOrg. Ganti tipe berarti akun harus pindah organisasi
+    // juga (profiles.org_id), yang tidak pernah dilakukan di jalur ini;
+    // kalau type diterima mentah dari form, crossOrg bisa mengubah akun
+    // PGN jadi 'vendor' tanpa org_id ikut pindah — vendor_profiles.upsert
+    // di bawah lalu ter-upsert pada id organisasi (PGN) yang salah.
+    // EditAccountModal sudah mengunci field ini di UI; dikunci lagi di
+    // sini supaya bukan cuma UI yang menegakkannya.
+    const { data: targetProfile } = await adminAuthClient.from('profiles').select('type, org_id').eq('id', id).single();
+    if (!targetProfile) return { error: 'Akun tidak ditemukan.' };
+    const type = targetProfile.type as string;
 
     if (!id || !fullName || !role || !type) {
       return { error: 'Field utama wajib diisi' };
@@ -272,12 +283,6 @@ export async function updateAccount(id: string, formData: FormData) {
     // semua turunannya) milik satu perusahaan hanya karena tipe satu user
     // diubah. Menghapus perusahaan adalah operasi tingkat organisasi,
     // di luar cakupan "edit satu akun".
-    const { data: targetProfile } = await adminAuthClient
-      .from('profiles')
-      .select('org_id')
-      .eq('id', id)
-      .single();
-
     if (type === 'vendor') {
       if (targetProfile?.org_id && companyName) {
         await adminAuthClient.from('vendor_profiles').upsert({ id: targetProfile.org_id, company_name: companyName });

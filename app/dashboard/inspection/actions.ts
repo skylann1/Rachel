@@ -175,6 +175,55 @@ export async function delegateInspection(inspectionId: string, assigneeId: strin
   });
 }
 
+/**
+ * Jalur penutupan buat temuan TANPA target_vendor (non-proyek/internal) —
+ * temuan ini tidak pernah bisa sampai ke status 'In Progress' karena
+ * cuma submitVendorResponse (vendor-only) yang mengubah status ke situ,
+ * jadi tanpa jalur ini temuan semacam ini macet di 'Open' selamanya.
+ * Petugas internal menutup langsung dengan catatannya sendiri, tanpa
+ * tahap bukti-perbaikan-vendor.
+ */
+export async function closeInspectionDirectly(inspectionId: string, notes: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!(await hasPermissionForUser(supabase, user.id, 'inspection', 'manage'))) {
+    throw new Error("Anda tidak memiliki izin untuk menutup temuan.");
+  }
+
+  const { data: inspection } = await supabase
+    .from('inspections')
+    .select('title, location, target_vendor')
+    .eq('id', inspectionId)
+    .single();
+
+  if (!inspection) throw new Error('Temuan tidak ditemukan.');
+  if (inspection.target_vendor) {
+    throw new Error('Temuan ini ditujukan ke vendor — tutup lewat Validasi Perbaikan setelah vendor mengirim bukti.');
+  }
+
+  // Guard status: sama seperti validateInspection, mencegah dua petugas
+  // yang membuka temuan 'Open' yang sama bersamaan saling menimpa.
+  const { data: updated, error } = await supabase
+    .from('inspections')
+    .update({ status: 'Closed' })
+    .eq('id', inspectionId)
+    .eq('status', 'Open')
+    .select('id');
+
+  if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error('Temuan ini sudah tidak berstatus Open — mungkin sudah diproses. Muat ulang halaman.');
+  }
+
+  await supabase.from('inspection_logs').insert({
+    inspection_id: inspectionId,
+    actor_id: user.id,
+    action: 'Ditutup Langsung (Tanpa Vendor)',
+    notes: notes || `Temuan non-proyek/internal di lokasi "${inspection.location}" ditutup langsung oleh petugas.`
+  });
+}
+
 export async function validateInspection(inspectionId: string, approved: boolean, notes: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

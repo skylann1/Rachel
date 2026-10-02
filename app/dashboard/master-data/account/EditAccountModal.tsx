@@ -18,7 +18,7 @@ interface EditAccountModalProps {
   lockedType?: 'pgn' | 'pgsol' | 'vendor';
 }
 
-export default function EditAccountModal({ isOpen, onClose, account, roles, lockedType }: EditAccountModalProps) {
+export default function EditAccountModal({ isOpen, onClose, account, roles }: EditAccountModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [type, setType] = useState(account.type);
@@ -99,33 +99,16 @@ export default function EditAccountModal({ isOpen, onClose, account, roles, lock
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Tipe Akun</label>
-                {lockedType ? (
-                  <>
-                    <input type="hidden" name="type" value={type} />
-                    <p className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm cursor-not-allowed">
-                      {TYPE_LABELS[lockedType]}
-                    </p>
-                  </>
-                ) : (
-                  <select
-                    name="type"
-                    value={type}
-                    onChange={(e) => {
-                      const newType = e.target.value;
-                      setType(newType);
-                      const newRoles = roles.filter(r => r.type === newType);
-                      if (!newRoles.find(r => r.name === role)) {
-                         setRole(newRoles.length > 0 ? newRoles[0].name : '');
-                      }
-                    }}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm bg-white"
-                  >
-                    <option value="pgn">PGN</option>
-                    <option value="pgsol">PGSOL</option>
-                    <option value="vendor">Vendor</option>
-                  </select>
-                )}
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Tipe Akun (Tidak bisa diubah)</label>
+                {/* Tipe akun SELALU dikunci saat edit, terlepas dari lockedType —
+                    mengizinkan ganti tipe di sini (tanpa ikut memindahkan
+                    profiles.org_id ke organisasi baru) bisa membuat
+                    vendor_profiles ter-upsert pada id organisasi yang salah.
+                    Tipe cuma ditentukan sekali, saat akun dibuat (AddAccountModal). */}
+                <input type="hidden" name="type" value={type} />
+                <p className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm cursor-not-allowed">
+                  {TYPE_LABELS[type as 'pgn' | 'pgsol' | 'vendor']}
+                </p>
               </div>
               
               <div>

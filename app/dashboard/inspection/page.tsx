@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2, Download, History, UserPlus } from 'lucide-react';
-import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs, validateInspection } from './actions';
+import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs, validateInspection, closeInspectionDirectly } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
 import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
 import { resolveInspectionGallery } from '@/lib/inspection-photos';
@@ -20,6 +20,7 @@ export default function InspectionPage() {
   const [isDisposisiModalOpen, setIsDisposisiModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isValidasiModalOpen, setIsValidasiModalOpen] = useState(false);
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   
   // Data
   const [inspections, setInspections] = useState<any[]>([]);
@@ -28,6 +29,7 @@ export default function InspectionPage() {
   const [internalUsers, setInternalUsers] = useState<any[]>([]);
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
   const [validasiNotes, setValidasiNotes] = useState('');
+  const [closeNotes, setCloseNotes] = useState('');
   
   // States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +63,7 @@ export default function InspectionPage() {
         description: d.title,
         location: d.location,
         vendor: d.vendor_profiles?.company_name || 'Non-Vendor / Internal',
+        hasVendor: !!d.target_vendor,
         date: new Date(d.created_at).toLocaleString('id-ID'),
         status: d.status,
         priority: d.priority,
@@ -149,6 +152,23 @@ export default function InspectionPage() {
     } catch (err) {
       console.error(err);
       alert('Gagal memproses validasi.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCloseDirectly = async () => {
+    if (!selectedInspection) return;
+    setIsSubmitting(true);
+    try {
+      await closeInspectionDirectly(selectedInspection.id, closeNotes);
+      alert('Temuan berhasil ditutup!');
+      setIsCloseModalOpen(false);
+      setCloseNotes('');
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Gagal menutup temuan.');
     } finally {
       setIsSubmitting(false);
     }
@@ -329,9 +349,15 @@ export default function InspectionPage() {
                </button>
                
                {item.status === 'Open' ? (
-                  <button onClick={() => { setSelectedInspection(item); setIsDisposisiModalOpen(true); }} className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg shadow-sm transition-colors">
-                     <UserPlus className="w-4 h-4" /> Disposisi Tugas
-                  </button>
+                  item.hasVendor ? (
+                    <button onClick={() => { setSelectedInspection(item); setIsDisposisiModalOpen(true); }} className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg shadow-sm transition-colors">
+                       <UserPlus className="w-4 h-4" /> Disposisi Tugas
+                    </button>
+                  ) : (
+                    <button onClick={() => { setSelectedInspection(item); setIsCloseModalOpen(true); }} className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors">
+                       <CheckCircle className="w-4 h-4" /> Tutup Langsung
+                    </button>
+                  )
                ) : item.status === 'In Progress' ? (
                   <button onClick={() => { setSelectedInspection(item); setIsValidasiModalOpen(true); }} className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-lg shadow-sm transition-colors">
                      <CheckCircle className="w-4 h-4" /> Validasi Perbaikan
@@ -541,6 +567,53 @@ export default function InspectionPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal Tutup Langsung (temuan tanpa vendor) */}
+      {isCloseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-md flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-600" /> Tutup Langsung</h2>
+              <button type="button" onClick={() => { setIsCloseModalOpen(false); setCloseNotes(''); }} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                <span className="text-xs font-bold text-primary block mb-1">ID: {selectedInspection?.id}</span>
+                <p className="text-sm font-medium text-slate-700 line-clamp-2">"{selectedInspection?.description}"</p>
+              </div>
+              <p className="text-xs text-slate-500">
+                Temuan non-proyek/internal ini tidak ditujukan ke vendor — tutup langsung dengan catatan perbaikan yang sudah dilakukan.
+              </p>
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Catatan Penutupan</label>
+                <textarea
+                   value={closeNotes}
+                   onChange={(e) => setCloseNotes(e.target.value)}
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm resize-none"
+                   rows={3}
+                   placeholder="Misal: Area sudah dirapikan dan APD tambahan sudah disediakan."
+                ></textarea>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
+              <button type="button" onClick={() => { setIsCloseModalOpen(false); setCloseNotes(''); }} className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleCloseDirectly}
+                className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition-colors flex items-center gap-2"
+              >
+                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                 {isSubmitting ? 'Menutup...' : 'Tutup Temuan'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
