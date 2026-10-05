@@ -58,6 +58,7 @@ export async function getStageAssignments(
 
 export interface StageAssignmentRowWithName extends StageAssignmentRow {
   assignee_name: string | null;
+  assignee_jabatan: string | null;
 }
 
 /**
@@ -74,9 +75,10 @@ export async function getStageAssignmentsWithNames(
   const rows = await getStageAssignments(supabase, projectId, docType, stageKey);
   if (rows.length === 0) return [];
   const assigneeIds = Array.from(new Set(rows.map(r => r.assignee_id)));
-  const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', assigneeIds);
+  const { data: profiles } = await supabase.from('profiles').select('id, full_name, jabatan').in('id', assigneeIds);
   const nameById = new Map<string, string | null>((profiles || []).map((p: any) => [p.id as string, (p.full_name ?? null) as string | null]));
-  return rows.map(r => ({ ...r, assignee_name: nameById.get(r.assignee_id) ?? null }));
+  const jabatanById = new Map<string, string | null>((profiles || []).map((p: any) => [p.id as string, (p.jabatan ?? null) as string | null]));
+  return rows.map(r => ({ ...r, assignee_name: nameById.get(r.assignee_id) ?? null, assignee_jabatan: jabatanById.get(r.assignee_id) ?? null }));
 }
 
 /**

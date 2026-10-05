@@ -48,6 +48,7 @@ export default async function VendorStaffPage(props: { searchParams?: Promise<{ 
     verified: !!p.email_confirmed_at, status: p.status || 'Active',
     companyName: (Array.isArray(p.organizations) ? p.organizations[0]?.name : p.organizations?.name) || null,
     nip: Array.isArray(p.internal_profiles) ? p.internal_profiles[0]?.nip : p.internal_profiles?.nip || null,
+    jabatan: p.jabatan || null,
     lastLogin: p.last_sign_in_at ? new Date(p.last_sign_in_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Belum Pernah Login',
     registeredAt: new Date(p.created_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' }),
   }));

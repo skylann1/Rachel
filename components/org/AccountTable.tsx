@@ -7,6 +7,7 @@ import AccountActions from '@/app/dashboard/master-data/account/AccountActions';
 interface Account {
   id: string; name: string; email: string; role: string; type: string;
   verified: boolean; status: string; companyName: string | null; nip: string | null;
+  jabatan: string | null;
   lastLogin: string; registeredAt: string;
 }
 
@@ -64,6 +65,7 @@ export function AccountTable({
                         {account.role}
                       </span>
                       <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">{account.type}</span>
+                      {account.jabatan && <span className="text-xs text-slate-500">{account.jabatan}</span>}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

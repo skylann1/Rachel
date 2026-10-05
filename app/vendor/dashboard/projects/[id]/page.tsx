@@ -5,6 +5,7 @@ import { getJsaSignatories } from '@/lib/jsa-signatories';
 import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { hasPermission } from '@/utils/permissions';
 import { getStageAssignments, getEligibleAssignees, VENDOR_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
+import { getDocumentLogs } from '@/app/dashboard/approval/actions';
 
 export default async function ProjectDetailTrackerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -57,6 +58,8 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
 
   if (error || !project) return notFound();
 
+  const documentLogs = await getDocumentLogs(projectId);
+
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
 
   // Nama & jabatan penandatangan JSA untuk blok "Direview Oleh" / "Disetujui Oleh" pada form
@@ -96,6 +99,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       canManageAssignments={canManageAssignments}
       canEditSafetyChecklist={canEditSafetyChecklist}
       assignmentSlots={assignmentSlots}
+      documentLogs={documentLogs}
     />
   );
 }

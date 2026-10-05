@@ -146,7 +146,7 @@ export async function getDocumentLogs(projectId: string) {
     .from('document_logs')
     .select(`
       id, doc_type, doc_id, action, notes, created_at,
-      profiles ( full_name, role )
+      profiles ( full_name, role, jabatan )
     `)
     .eq('project_id', projectId)
     .order('created_at', { ascending: false });

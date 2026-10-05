@@ -105,6 +105,7 @@ export async function addAccount(formData: FormData) {
     const role = formData.get('role') as string;
     const nip = formData.get('nip') as string;
     const companyName = formData.get('companyName') as string;
+    const jabatan = (formData.get('jabatan') as string) || null;
 
     // type/org: superadmin lintas org boleh memilih lewat form; admin org
     // ter-scope SELALU dipaksa ke org & tipe miliknya sendiri, terlepas
@@ -177,7 +178,7 @@ export async function addAccount(formData: FormData) {
       // menghasilkan akun yang tidak bisa melihat apa pun tanpa pesan error.
       // Akun auth yang baru dibuat dihapus lagi supaya email-nya tidak
       // "terkunci" oleh akun setengah jadi.
-      const { error: orgLinkError } = await adminAuthClient.from('profiles').update({ org_id: orgId }).eq('id', data.user.id);
+      const { error: orgLinkError } = await adminAuthClient.from('profiles').update({ org_id: orgId, jabatan }).eq('id', data.user.id);
       if (orgLinkError) {
         console.error('Error linking profile to org:', orgLinkError);
         await adminAuthClient.auth.admin.deleteUser(data.user.id);
@@ -223,6 +224,7 @@ export async function updateAccount(id: string, formData: FormData) {
     const role = formData.get('role') as string;
     const nip = formData.get('nip') as string;
     const companyName = formData.get('companyName') as string;
+    const jabatan = (formData.get('jabatan') as string) || null;
 
     // Tipe akun tidak bisa diubah lewat edit, untuk aktor mana pun —
     // termasuk crossOrg. Ganti tipe berarti akun harus pindah organisasi
@@ -264,7 +266,8 @@ export async function updateAccount(id: string, formData: FormData) {
       .update({
         full_name: fullName,
         role: role,
-        type: type
+        type: type,
+        jabatan,
       })
       .eq('id', id);
 

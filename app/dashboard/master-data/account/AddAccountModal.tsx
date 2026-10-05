@@ -141,6 +141,16 @@ export default function AddAccountModal({ isOpen, onClose, roles, lockedType }: 
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Jabatan</label>
+              <input
+                type="text"
+                name="jabatan"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
+                placeholder="Contoh: HSE Supervisor Lapangan"
+              />
+            </div>
+
             {type !== 'vendor' ? (
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Nomor Induk Pegawai (NIP)</label>

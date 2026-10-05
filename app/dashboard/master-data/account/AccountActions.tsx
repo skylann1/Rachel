@@ -13,6 +13,7 @@ interface Account {
   type: string;
   companyName: string | null;
   nip: string | null;
+  jabatan: string | null;
   status: string;
 }
 

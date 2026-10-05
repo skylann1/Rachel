@@ -5,8 +5,8 @@ import Link from 'next/link';
 import {
   Briefcase, MapPin, Calendar, AlertTriangle,
   FileSignature, ShieldAlert, Stamp, ArrowRight, ArrowLeft,
-  FileText, MessageSquare, CheckCircle2, ChevronDown, ChevronUp, Loader2, QrCode, Siren,
-  ClipboardList, LogIn, Clock, Users
+  FileText, MessageSquare, CheckCircle2, XCircle, ChevronDown, ChevronUp, Loader2, QrCode, Siren,
+  ClipboardList, LogIn, Clock, Users, History
 } from 'lucide-react';
 import { ProjectDiscussion } from '@/components/project-discussion';
 import dynamic from 'next/dynamic';
@@ -20,7 +20,21 @@ import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, isProcedurePending } from '@/lib/procedure-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { buildCheckinUrl } from '@/lib/site-ops';
+import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
 import VendorAssignmentPanel from './VendorAssignmentPanel';
+
+function docLogIcon(docType: DocLogType) {
+  if (docType === 'procedure') return FileText;
+  if (docType === 'jsa') return ShieldAlert;
+  return Stamp;
+}
+
+/** Colours a log entry by what happened, read off the action text set in lib/document-logs.ts callers. */
+function docLogTone(action: string) {
+  if (/ditolak/i.test(action)) return { text: 'text-rose-600', bg: 'bg-rose-50 border-rose-100', icon: XCircle };
+  if (/disetujui|direview|diterbitkan/i.test(action)) return { text: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', icon: CheckCircle2 };
+  return { text: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', icon: FileSignature };
+}
 
 const BlobProvider = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.BlobProvider),
@@ -57,7 +71,7 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
   );
 }
 
-export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots }: {
+export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs }: {
   project: any; currentUserId: string; jsaSignatories?: any; ptwSignatories?: Record<string, any>;
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
   siteCheckins?: any[];
@@ -68,6 +82,8 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   /** true kalau caller punya ptw.edit_safety_checklist — mengontrol mode edit form Safety Checklist PTW. */
   canEditSafetyChecklist: boolean;
   assignmentSlots: any[];
+  /** Jejak audit Prosedur/JSA/PTW proyek ini, terbaru dulu — sama persis yang dilihat PGN/PGSOL di tab Riwayat internal (lihat document_logs). */
+  documentLogs?: any[];
 }) {
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [qrModalToken, setQrModalToken] = useState<string | null>(null);
@@ -131,6 +147,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
     { id: 'dokumen', label: 'Dokumen K3', icon: <FileText className="w-4 h-4" /> },
     { id: 'lapangan', label: 'Status Lapangan', icon: <Siren className="w-4 h-4" /> },
     { id: 'diskusi', label: 'Diskusi & Notes', icon: <MessageSquare className="w-4 h-4" /> },
+    { id: 'riwayat', label: 'Riwayat', icon: <History className="w-4 h-4" /> },
     ...(canManageAssignments ? [{ id: 'assignment', label: 'Assignment Reviewer', icon: <Users className="w-4 h-4" /> }] : []),
   ];
 
@@ -647,6 +664,57 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
       {activeTab === 'diskusi' && (
          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 p-8 min-h-[600px]">
             <ProjectDiscussion projectId={project.id} currentUserId={currentUserId} />
+         </div>
+      )}
+
+      {/* --- TAB CONTENT: RIWAYAT --- */}
+      {activeTab === 'riwayat' && (
+         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 p-4 sm:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                <History className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">Riwayat Dokumen</h3>
+                <p className="text-xs text-slate-500">Jejak audit pengajuan, review, dan persetujuan Prosedur, JSA, dan PTW</p>
+              </div>
+            </div>
+
+            {!documentLogs || documentLogs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center py-16 gap-2 text-slate-400">
+                <History className="w-10 h-10 opacity-20" />
+                <p className="text-sm">Belum ada riwayat tercatat untuk proyek ini.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {documentLogs.map((log: any) => {
+                  const docType = log.doc_type as DocLogType;
+                  const DocIcon = docLogIcon(docType);
+                  const tone = docLogTone(log.action || '');
+                  const ToneIcon = tone.icon;
+                  const actor = Array.isArray(log.profiles) ? log.profiles[0] : log.profiles;
+                  return (
+                    <div key={log.id} className={`flex gap-3 p-4 rounded-xl border ${tone.bg}`}>
+                      <div className={`shrink-0 w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center ${tone.text}`}>
+                        <DocIcon className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{DOC_TYPE_LABEL[docType] ?? docType}</span>
+                          <span className={`inline-flex items-center gap-1 text-xs font-bold ${tone.text}`}>
+                            <ToneIcon className="w-3.5 h-3.5" /> {log.action}
+                          </span>
+                        </div>
+                        {log.notes && <p className="text-sm text-slate-600 mt-1">{log.notes}</p>}
+                        <p className="text-[11px] text-slate-400 mt-1.5">
+                          {actor?.full_name || 'Sistem'}{actor?.jabatan ? ` · ${actor.jabatan}` : actor?.role ? ` · ${actor.role}` : ''} · {new Date(log.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
          </div>
       )}
 

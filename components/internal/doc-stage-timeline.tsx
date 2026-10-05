@@ -15,7 +15,10 @@ function formatDate(iso: string | null) {
 }
 
 function names(rows: StageAssignmentRowWithName[]) {
-  return rows.map(r => r.assignee_name || 'Tidak diketahui').join(', ');
+  return rows.map(r => {
+    const name = r.assignee_name || 'Tidak diketahui';
+    return r.assignee_jabatan ? `${name} (${r.assignee_jabatan})` : name;
+  }).join(', ');
 }
 
 /**

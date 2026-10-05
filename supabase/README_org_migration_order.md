@@ -136,3 +136,8 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
    daftar Inspeksi Temuan tampil kosong di dashboard internal maupun
    vendor. Aman dijalankan ulang (memakai `CREATE TABLE IF NOT EXISTS` +
    `DROP POLICY IF EXISTS` di seluruh file).
+8. `schema_profile_jabatan.sql` — kolom `profiles.jabatan` (TEXT, nullable)
+   untuk jabatan/posisi bebas isian per akun, ditampilkan berdampingan
+   dengan nama di Riwayat Dokumen dan timeline approval. Additive, aman
+   dijalankan ulang (`ADD COLUMN IF NOT EXISTS`). Sudah diterapkan di
+   project Supabase live lewat MCP pada 2026-10-05.

@@ -1589,7 +1589,7 @@ export default function AdminProjectClient({
                         </div>
                         {log.notes && <p className="text-sm text-slate-600 mt-1">{log.notes}</p>}
                         <p className="text-[11px] text-slate-400 mt-1.5">
-                          {actor?.full_name || 'Sistem'}{actor?.role ? ` · ${actor.role}` : ''} · {new Date(log.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {actor?.full_name || 'Sistem'}{actor?.jabatan ? ` · ${actor.jabatan}` : actor?.role ? ` · ${actor.role}` : ''} · {new Date(log.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                     </div>
