@@ -52,3 +52,20 @@ export const JSA_STAGE_PERMISSION: Record<string, { module: string; action: stri
   [JSA_STATUS.reviewHsePgsol]: { module: 'jsa', action: 'hse_pgsol' },
   [JSA_STATUS.approvalPgn]: { module: 'jsa', action: 'approve_pgn' },
 };
+
+/**
+ * Urutan lengkap tahap JSA (termasuk review internal vendor) — satu-satunya
+ * sumber kebenaran urutan tahap untuk timeline approval (lihat DocStageTimeline).
+ */
+export const JSA_STAGE_SEQUENCE = [
+  { key: 'jsa.review_vendor', label: 'Review Internal Vendor', status: JSA_STATUS.reviewInternalVendor },
+  { key: 'jsa.review_pgsol', label: 'Review PGSOL', status: JSA_STATUS.reviewPgsol },
+  { key: 'jsa.hse_pgsol', label: 'Review HSE PGSOL', status: JSA_STATUS.reviewHsePgsol },
+  { key: 'jsa.approve_pgn', label: 'Persetujuan PGN', status: JSA_STATUS.approvalPgn },
+] as const;
+
+/** Index tahap saat ini di JSA_STAGE_SEQUENCE; -1 = belum mulai (Draft), sequence.length = semua tahap selesai (Approved). */
+export function jsaStageIndex(status: string | null | undefined): number {
+  if (status === JSA_STATUS.approved) return JSA_STAGE_SEQUENCE.length;
+  return JSA_STAGE_SEQUENCE.findIndex(s => s.status === status);
+}

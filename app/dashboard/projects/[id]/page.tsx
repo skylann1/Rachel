@@ -7,10 +7,10 @@ import { getJsaSignatories } from '@/lib/jsa-signatories';
 import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { worstExpiry } from '@/lib/document-expiry';
 import { getDocumentLogs } from '@/app/dashboard/approval/actions';
-import { getStageAssignments, StageAssignmentRow } from '@/lib/stage-assignments';
-import { PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
-import { JSA_STAGE_PERMISSION } from '@/lib/jsa-status';
-import { PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
+import { getStageAssignmentsWithNames, StageAssignmentRowWithName } from '@/lib/stage-assignments';
+import { PROCEDURE_STAGE_SEQUENCE } from '@/lib/procedure-status';
+import { JSA_STAGE_SEQUENCE } from '@/lib/jsa-status';
+import { PTW_STAGE_SEQUENCE } from '@/lib/ptw-status';
 
 export default async function AdminProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -101,34 +101,27 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
 
   const documentLogs = await getDocumentLogs(projectId);
 
-  // Baris stage_assignments untuk SETIAP tahap aktif dokumen proyek ini —
-  // dipakai AdminProjectClient untuk menggerbangi tombol Setujui/Tolak ke
-  // orang yang benar ditugaskan (bukan cuma permission), dan untuk
-  // indikator progress "N dari M sudah menyetujui". Key-nya persis
-  // stage_key (mis. "procedure.review_pgsol", "ptw.approve_pm") karena
-  // stage_key sendiri sudah unik lintas doc_type (diawali nama modulnya).
-  // Reuse jsaRow/ptws yang sudah dihitung di atas untuk signatories — cuma
-  // procedures yang belum punya variabel sendiri di file ini.
-  const procRowForStages = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
-
-  const activeStageKeys = new Set<string>();
-  const procStagePerm = PROCEDURE_STAGE_PERMISSION[procRowForStages?.status];
-  if (procStagePerm) activeStageKeys.add(`${procStagePerm.module}.${procStagePerm.action}`);
-  const jsaStagePerm = JSA_STAGE_PERMISSION[jsaRow?.status];
-  if (jsaStagePerm) activeStageKeys.add(`${jsaStagePerm.module}.${jsaStagePerm.action}`);
-  for (const row of ptws) {
-    const ptwStagePerm = PTW_STAGE_PERMISSION[row.status];
-    if (ptwStagePerm) activeStageKeys.add(`${ptwStagePerm.module}.${ptwStagePerm.action}`);
-  }
+  // Baris stage_assignments untuk SELURUH tahap pipeline dokumen proyek ini
+  // (bukan cuma tahap yang sedang aktif) — dipakai AdminProjectClient untuk
+  // (1) menggerbangi tombol Setujui/Tolak ke orang yang benar ditugaskan,
+  // (2) indikator progress "N dari M sudah menyetujui", dan (3) timeline
+  // detail per tahap (DocStageTimeline) yang perlu nama approver tahap yang
+  // SUDAH lewat sekaligus siapa yang DITUNGGU di tahap sekarang. Key-nya
+  // persis stage_key (mis. "procedure.review_pgsol", "ptw.approve_pm")
+  // karena stage_key sendiri sudah unik lintas doc_type.
+  const allStageSlots = [
+    ...PROCEDURE_STAGE_SEQUENCE.map(s => ({ key: s.key, docType: 'procedure' })),
+    ...JSA_STAGE_SEQUENCE.map(s => ({ key: s.key, docType: 'jsa' })),
+    ...PTW_STAGE_SEQUENCE.map(s => ({ key: s.key, docType: 'ptw' })),
+  ];
 
   const stageAssignmentEntries = await Promise.all(
-    Array.from(activeStageKeys).map(async (stageKey) => {
-      const [docType] = stageKey.split('.');
-      const rows = await getStageAssignments(supabase, projectId, docType, stageKey);
-      return [stageKey, rows] as const;
+    allStageSlots.map(async ({ key, docType }) => {
+      const rows = await getStageAssignmentsWithNames(supabase, projectId, docType, key);
+      return [key, rows] as const;
     })
   );
-  const stageAssignments: Record<string, StageAssignmentRow[]> = Object.fromEntries(stageAssignmentEntries);
+  const stageAssignments: Record<string, StageAssignmentRowWithName[]> = Object.fromEntries(stageAssignmentEntries);
 
   // Tab "Status Lapangan": check-in dan toolbox meeting lintas semua tipe PTW proyek ini.
   const ptwIds = ptws.map((p: any) => p.id);

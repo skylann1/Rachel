@@ -56,6 +56,29 @@ export async function getStageAssignments(
   return data || [];
 }
 
+export interface StageAssignmentRowWithName extends StageAssignmentRow {
+  assignee_name: string | null;
+}
+
+/**
+ * Sama seperti getStageAssignments, plus nama penugas (profiles.full_name) —
+ * dipakai timeline approval (DocStageTimeline) yang perlu menampilkan siapa
+ * yang approve/sedang ditunggu, bukan cuma ID. Query nama dipisah dari
+ * stage_assignments (bukan di-embed lewat relasi) karena tabel ini punya DUA
+ * FK ke profiles (assignee_id dan assigned_by) — embed `profiles(...)` tanpa
+ * nama relasi eksplisit akan ambigu di PostgREST.
+ */
+export async function getStageAssignmentsWithNames(
+  supabase: any, projectId: string, docType: string, stageKey: string
+): Promise<StageAssignmentRowWithName[]> {
+  const rows = await getStageAssignments(supabase, projectId, docType, stageKey);
+  if (rows.length === 0) return [];
+  const assigneeIds = Array.from(new Set(rows.map(r => r.assignee_id)));
+  const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', assigneeIds);
+  const nameById = new Map<string, string | null>((profiles || []).map((p: any) => [p.id as string, (p.full_name ?? null) as string | null]));
+  return rows.map(r => ({ ...r, assignee_name: nameById.get(r.assignee_id) ?? null }));
+}
+
 /**
  * Kandidat yang boleh ditunjuk ke satu stage_key: role-nya harus punya
  * permission {module}.{action} yang bersangkutan DAN dia harus satu organisasi

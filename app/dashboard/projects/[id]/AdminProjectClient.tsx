@@ -17,10 +17,11 @@ import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/Prose
 import PtwPDF from '@/components/ptw/PtwPDF';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import PtwSafetyChecklistForm from '@/components/ptw/PtwSafetyChecklistForm';
-import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
-import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending } from '@/lib/jsa-status';
-import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, isProcedurePending } from '@/lib/procedure-status';
-import { StageAssignmentRow } from '@/lib/stage-assignments';
+import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION, PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
+import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, isProcedurePending, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
+import { StageAssignmentRowWithName } from '@/lib/stage-assignments';
+import { DocStageTimeline } from '@/components/internal/doc-stage-timeline';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { EXPIRY_TONE } from '@/lib/document-expiry';
 import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
@@ -249,8 +250,8 @@ export default function AdminProjectClient({
   siteCheckins?: any[],
   /** Riwayat toolbox meeting (toolbox_meetings) lintas semua PTW proyek ini, terbaru dulu. */
   toolboxMeetings?: any[],
-  /** stage_assignments untuk tiap tahap AKTIF dokumen proyek ini, key = stage_key persis (mis. "procedure.review_pgsol"). Sumber kebenaran gerbang tombol Setujui/Tolak dan indikator progress. */
-  stageAssignments?: Record<string, StageAssignmentRow[]>,
+  /** stage_assignments untuk SELURUH tahap pipeline dokumen proyek ini (plus nama), key = stage_key persis (mis. "procedure.review_pgsol"). Sumber kebenaran gerbang tombol Setujui/Tolak, indikator progress, dan timeline detail (DocStageTimeline). */
+  stageAssignments?: Record<string, StageAssignmentRowWithName[]>,
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -296,6 +297,12 @@ export default function AdminProjectClient({
   const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : isProcedurePending(prosedur?.status) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
   const jsaStatus = jsa?.status === JSA_STATUS.approved ? 'Approved' : isJsaPending(jsa?.status) ? 'Pending' : jsa?.rejection_note ? 'Rejected' : jsa ? 'Draft' : 'Draft';
 
+  // Index tahap LIVE (bukan dari stage_assignments — baris bisa 'pending' untuk
+  // tahap yang jauh di depan kalau admin PGN sudah menugaskan semuanya di muka)
+  // untuk timeline detail (DocStageTimeline) tiap dokumen.
+  const prosedurTimelineIndex = procedureStageIndex(prosedur?.status);
+  const jsaTimelineIndex = jsaStageIndex(jsa?.status);
+
   // PTW tahap proyek: hijau hanya kalau SEMUA tipe PTW yang diajukan sudah Aktif.
   const ptwEffectiveStatuses = ptws.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date));
   const ptwAnyExpired = ptwEffectiveStatuses.some(s => s === PTW_STATUS.expired);
@@ -338,7 +345,7 @@ export default function AdminProjectClient({
   // untuk tahap ini di PROYEK INI, menentukan apakah TOMBOL-nya tampil.
   // Pemegang permission yang tidak ditugaskan tetap melihat kartunya
   // (transparansi) tapi tidak melihat tombolnya.
-  const getStageRows = (stageKey: string): StageAssignmentRow[] => stageAssignments?.[stageKey] ?? [];
+  const getStageRows = (stageKey: string): StageAssignmentRowWithName[] => stageAssignments?.[stageKey] ?? [];
   const isAssignedPending = (stageKey: string) =>
     getStageRows(stageKey).some(r => r.assignee_id === currentUserId && r.status === 'pending');
   const stageProgress = (stageKey: string) => {
@@ -769,6 +776,14 @@ export default function AdminProjectClient({
                                : 'Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.'}
                          </p>
                          <StageProgress {...prosedurProgress} />
+                         <details className="mt-3 group">
+                           <summary className="text-xs font-bold text-amber-700 cursor-pointer hover:text-amber-900 list-none flex items-center gap-1">
+                             <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
+                           </summary>
+                           <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
+                             <DocStageTimeline steps={PROCEDURE_STAGE_SEQUENCE} currentIndex={prosedurTimelineIndex} rows={stageAssignments ?? {}} />
+                           </div>
+                         </details>
                        </div>
                        {canApproveProsedur && (
                          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -839,6 +854,14 @@ export default function AdminProjectClient({
                                : 'Otorisasi akhir: JSA sudah direview PGSOL. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
                          </p>
                          <StageProgress {...jsaProgress} />
+                         <details className="mt-3 group">
+                           <summary className="text-xs font-bold text-amber-700 cursor-pointer hover:text-amber-900 list-none flex items-center gap-1">
+                             <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
+                           </summary>
+                           <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
+                             <DocStageTimeline steps={JSA_STAGE_SEQUENCE} currentIndex={jsaTimelineIndex} rows={stageAssignments ?? {}} />
+                           </div>
+                         </details>
                        </div>
                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                          <button
@@ -926,6 +949,7 @@ export default function AdminProjectClient({
                  const safety = getPtwSafetyIssues(row);
                  const rowCanApprove = canApprovePtwRow(row);
                  const rowProgress = stageProgress(ptwStageKeyForRow(row));
+                 const rowTimelineIndex = ptwStageIndex(row.status);
                  return (
                    <div key={row.id} className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50 mb-6">
                       <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -936,6 +960,14 @@ export default function AdminProjectClient({
                            </div>
                            <p className="text-amber-700 text-sm">Vendor telah melengkapi PTW. Silakan review pekerja & peralatan.</p>
                            <StageProgress {...rowProgress} />
+                           <details className="mt-3 group">
+                             <summary className="text-xs font-bold text-amber-700 cursor-pointer hover:text-amber-900 list-none flex items-center gap-1">
+                               <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
+                             </summary>
+                             <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
+                               <DocStageTimeline steps={PTW_STAGE_SEQUENCE} currentIndex={rowTimelineIndex} rows={stageAssignments ?? {}} />
+                             </div>
+                           </details>
                          </div>
                          {rowCanApprove && (
                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">

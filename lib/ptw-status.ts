@@ -60,6 +60,31 @@ export const PTW_STAGE_PERMISSION: Record<string, { module: string; action: stri
 };
 
 /**
+ * Urutan lengkap tahap PTW (termasuk review internal vendor) — satu-satunya
+ * sumber kebenaran urutan tahap untuk timeline approval (lihat DocStageTimeline).
+ */
+export const PTW_STAGE_SEQUENCE = [
+  { key: 'ptw.review_vendor', label: 'Review Internal Vendor', status: PTW_STATUS.reviewInternalVendor },
+  { key: 'ptw.review_pgsol', label: 'Review PGSOL', status: PTW_STATUS.reviewPgsol },
+  { key: 'ptw.hse_pgsol', label: 'Review HSE PGSOL', status: PTW_STATUS.reviewHsePgsol },
+  { key: 'ptw.approve_pm', label: 'Approval PM', status: PTW_STATUS.menungguApprovalPM },
+  { key: 'ptw.review_issuer', label: 'Review PTW Issuer', status: PTW_STATUS.reviewPtwIssuer },
+  { key: 'ptw.numbering_hsse', label: 'Penomoran HSSE', status: PTW_STATUS.menungguPenomoranHSSE },
+] as const;
+
+/**
+ * Index tahap saat ini di PTW_STAGE_SEQUENCE; -1 = belum mulai (Draft),
+ * sequence.length = semua tahap selesai (Aktif/Expired/Dihentikan — ketiganya
+ * cuma dicapai setelah penomoran HSSE, jadi diperlakukan sama untuk timeline).
+ */
+export function ptwStageIndex(status: string | null | undefined): number {
+  if (status === PTW_STATUS.aktif || status === PTW_STATUS.expired || status === PTW_STATUS.stoppedSwa) {
+    return PTW_STAGE_SEQUENCE.length;
+  }
+  return PTW_STAGE_SEQUENCE.findIndex(s => s.status === status);
+}
+
+/**
  * Single source of truth for whether an issued PTW has lapsed.
  *
  * The `ptw` table has no expiry job — `status` only flips to 'Expired'
