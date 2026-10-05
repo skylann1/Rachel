@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle2, Clock, Circle, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Clock, Circle, AlertTriangle, Undo2 } from 'lucide-react';
 import type { StageAssignmentRowWithName } from '@/lib/stage-assignments';
 
 export interface StageTimelineStep {
@@ -27,12 +27,20 @@ function names(rows: StageAssignmentRowWithName[]) {
  * menugaskan semua tahap sekaligus di muka lewat halaman Kelola Proyek).
  */
 export function DocStageTimeline({
-  steps, currentIndex, rows,
+  steps, currentIndex, rows, onRollback,
 }: {
   steps: readonly StageTimelineStep[];
   /** -1 = belum mulai (Draft), steps.length = semua tahap selesai. */
   currentIndex: number;
   rows: Record<string, StageAssignmentRowWithName[]>;
+  /**
+   * Kalau diisi, tiap tahap yang sudah lewat atau sedang berjalan (bukan
+   * upcoming) menampilkan tombol rollback ke tahap itu. Caller yang
+   * memutuskan apakah tombol ini boleh ditampilkan sama sekali — harus
+   * sudah memfilter izin (`approval.rollback`) DAN dokumen belum final
+   * (currentIndex < steps.length) sebelum mengisi prop ini.
+   */
+  onRollback?: (step: StageTimelineStep) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -76,8 +84,18 @@ export function DocStageTimeline({
             <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${iconTone}`}>
               <Icon className="w-4 h-4" />
             </div>
-            <div className="min-w-0 pt-0.5">
-              <div className={`text-sm font-bold ${labelTone}`}>{step.label}</div>
+            <div className="min-w-0 pt-0.5 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-sm font-bold ${labelTone}`}>{step.label}</span>
+                {onRollback && state !== 'upcoming' && (
+                  <button
+                    onClick={() => onRollback(step)}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-amber-700 bg-slate-100 hover:bg-amber-50 border border-slate-200 hover:border-amber-200 rounded-lg px-2 py-0.5 transition-colors"
+                  >
+                    <Undo2 className="w-3 h-3" /> {state === 'current' ? 'Ulang tahap ini' : 'Rollback ke sini'}
+                  </button>
+                )}
+              </div>
               <div className="text-xs mt-0.5">{detail}</div>
             </div>
           </div>

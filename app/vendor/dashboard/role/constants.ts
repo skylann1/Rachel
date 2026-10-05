@@ -42,6 +42,7 @@ export const allPermissionModules = [
     description: 'Akses ke halaman daftar proyek yang butuh tindakan K3 (Kelola Proyek / Proyek Berjalan / Arsip Proyek). Approve/reject sebenarnya dikontrol per-tahap lewat modul Prosedur Kerja, JSA, dan PTW di bawah.',
     items: [
       { key: 'view', label: 'Melihat Dokumen Masuk', allowedTypes: ['pgn', 'pgsol'] },
+      { key: 'rollback', label: 'Mundurkan / Batalkan Tahap Approval (Rollback)', allowedTypes: ['pgn'] },
     ]
   },
   {

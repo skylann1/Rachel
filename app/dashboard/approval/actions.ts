@@ -3,9 +3,9 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createNotification, notifyOrgMembers } from "@/app/dashboard/inbox/actions";
-import { JSA_STATUS } from "@/lib/jsa-status";
-import { PROCEDURE_STATUS } from "@/lib/procedure-status";
-import { PTW_STATUS } from "@/lib/ptw-status";
+import { JSA_STATUS, JSA_STAGE_SEQUENCE, jsaStageIndex } from "@/lib/jsa-status";
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from "@/lib/procedure-status";
+import { PTW_STATUS, PTW_STAGE_SEQUENCE, ptwStageIndex } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { hasPermissionForUser } from "@/utils/permissions";
 import { getStageAssignments, isStageFullyApproved, resetStageAssignments } from '@/lib/stage-assignments';
@@ -842,4 +842,87 @@ export async function resumePtw(ptwId: string) {
   }
   revalidatePath('/dashboard/approval');
   revalidatePath(`/dashboard/projects/${ptw?.project_id}`);
+}
+
+type RollbackDocType = 'procedure' | 'jsa' | 'ptw';
+
+const ROLLBACK_TABLE: Record<RollbackDocType, string> = {
+  procedure: 'procedures',
+  jsa: 'jsa',
+  ptw: 'ptw',
+};
+
+/**
+ * Koreksi administratif oleh Admin PGN: mundurkan (atau "ulang") sebuah
+ * dokumen Prosedur/JSA/PTW ke tahap manapun yang sudah dilalui, termasuk
+ * tahap yang sedang berjalan sekarang (target = tahap sekarang berarti
+ * "ulang tahap ini", bukan mundur). Beda dari reject* di atas: tidak perlu
+ * jadi assignee tahap tersebut, dan bisa melompat lebih dari satu tahap ke
+ * belakang sekaligus — ini jalur override admin, bukan bagian alur normal
+ * approve/reject vendor-reviewer.
+ *
+ * SENGAJA tidak diizinkan untuk dokumen yang sudah final (Prosedur
+ * Disetujui, JSA Disetujui, PTW Aktif/Expired/Dihentikan) — PTW yang sudah
+ * Aktif harus lewat Stop Work Authority (resumePtw di atas / stop di
+ * halaman checkin lapangan), bukan rollback administratif diam-diam.
+ */
+export async function rollbackStage(params: {
+  docType: RollbackDocType; docId: string; targetStageKey: string; reason: string;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  await requirePermission(supabase, user.id, { module: 'approval', action: 'rollback' }, "Anda tidak memiliki izin untuk melakukan rollback tahap approval.");
+
+  const reason = params.reason?.trim();
+  if (!reason) throw new Error("Alasan rollback wajib diisi.");
+
+  const { docType, docId, targetStageKey } = params;
+  const table = ROLLBACK_TABLE[docType];
+
+  const { data: doc } = await supabase.from(table).select('status, project_id').eq('id', docId).single();
+  if (!doc?.project_id) throw new Error("Dokumen ini tidak terhubung ke proyek.");
+
+  const sequence = docType === 'procedure' ? PROCEDURE_STAGE_SEQUENCE : docType === 'jsa' ? JSA_STAGE_SEQUENCE : PTW_STAGE_SEQUENCE;
+  const currentIndex = docType === 'procedure' ? procedureStageIndex(doc.status) : docType === 'jsa' ? jsaStageIndex(doc.status) : ptwStageIndex(doc.status);
+
+  if (currentIndex < 0 || currentIndex >= sequence.length) {
+    throw new Error("Dokumen ini tidak dalam tahap yang bisa di-rollback (belum diajukan, atau sudah final).");
+  }
+
+  const targetIndex = sequence.findIndex(s => s.key === targetStageKey);
+  if (targetIndex < 0 || targetIndex > currentIndex) {
+    throw new Error("Tahap target rollback tidak valid.");
+  }
+
+  const targetStage = sequence[targetIndex];
+
+  // Optimistic lock sama seperti approve/reject di atas: kalau dokumennya
+  // baru saja berubah status sejak dibaca, update ini cocok nol baris dan
+  // dianggap gagal, bukan diam-diam menimpa perubahan yang balapan.
+  const { data: updated, error } = await supabase
+    .from(table)
+    .update({ status: targetStage.status })
+    .eq('id', docId)
+    .eq('status', doc.status)
+    .select('id');
+  if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error("Dokumen ini baru saja diproses oleh pengguna lain. Muat ulang halaman untuk melihat status terbaru.");
+  }
+
+  // Reset assignment setiap tahap dari target sampai tahap sekarang (inklusif)
+  // balik ke 'pending' — tahap-tahap itu kini harus diulang.
+  for (let i = targetIndex; i <= currentIndex; i++) {
+    await resetStageAssignments(supabase, doc.project_id, docType, sequence[i].key);
+  }
+
+  await logDocumentEvent(supabase, {
+    docType, docId, projectId: doc.project_id, actorId: user.id,
+    action: `Rollback — dikembalikan ke tahap "${targetStage.label}"`,
+    notes: reason,
+  });
+
+  revalidatePath(`/dashboard/projects/${doc.project_id}`);
 }

@@ -7,10 +7,10 @@ import {
   Briefcase, MapPin, Calendar, AlertTriangle, Building2,
   FileSignature, ShieldAlert, Stamp, ArrowLeft, CheckCircle2, XCircle, X, Loader2, Check,
   Users, Activity, FileText, MessageSquare, ChevronDown, ChevronUp, History, Sparkles, QrCode, Siren,
-  ClipboardList, LogIn, Clock
+  ClipboardList, LogIn, Clock, Undo2
 } from 'lucide-react';
 import { ProjectDiscussion } from '@/components/project-discussion';
-import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, rejectPtw, resumePtw } from '@/app/dashboard/approval/actions';
+import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, rejectPtw, resumePtw, rollbackStage } from '@/app/dashboard/approval/actions';
 import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
@@ -160,6 +160,62 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
   );
 }
 
+function RollbackModal({ stageLabel, onConfirm, onCancel, isLoading }: {
+  stageLabel: string;
+  onConfirm: (reason: string) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+}) {
+  const [reason, setReason] = useState('');
+  const [showError, setShowError] = useState(false);
+
+  const handleSubmit = () => {
+    if (!reason.trim()) {
+      setShowError(true);
+      return;
+    }
+    onConfirm(reason);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+            <Undo2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-800">Rollback ke &ldquo;{stageLabel}&rdquo;</h3>
+            <p className="text-xs text-slate-500">Tahap ini dan setelahnya akan diulang dari nol. Wajib berikan alasan.</p>
+          </div>
+        </div>
+        <textarea
+          value={reason}
+          onChange={e => { setReason(e.target.value); if (showError) setShowError(false); }}
+          className={`w-full h-28 p-3 border rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 resize-none ${showError ? 'border-rose-400 focus:ring-rose-300' : 'border-slate-200 focus:ring-amber-300'}`}
+          placeholder="Contoh: Approval tahap ini keliru, perlu direview ulang oleh orang yang tepat..."
+        />
+        {showError && (
+          <p className="text-xs font-semibold text-rose-600 mt-1.5">Alasan rollback wajib diisi.</p>
+        )}
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-xl transition-colors">
+            Batal
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-xl transition-colors"
+          >
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+            Konfirmasi Rollback
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
   'prosedur-review': {
     title: 'Selesaikan Review PGSOL?',
@@ -257,6 +313,7 @@ export default function AdminProjectClient({
   const [isLoading, setIsLoading] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<{ type: 'prosedur' | 'jsa' | 'ptw'; id: string } | null>(null);
   const [approveTarget, setApproveTarget] = useState<{ type: 'prosedur' | 'jsa' | 'ptw'; id: string } | null>(null);
+  const [rollbackTarget, setRollbackTarget] = useState<{ docType: 'procedure' | 'jsa' | 'ptw'; docId: string; stageKey: string; stageLabel: string } | null>(null);
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [fullScreenPreview, setFullScreenPreview] = useState<'prosedur' | 'jsa' | 'ptw' | null>(null);
   const [hseLoading, setHseLoading] = useState(false);
@@ -267,6 +324,24 @@ export default function AdminProjectClient({
 
   const canResumeWork = !!permissions?.['ptw']?.includes('resume_work');
   const canEditSafetyChecklist = !!permissions?.['ptw']?.includes('edit_safety_checklist');
+  const canRollback = !!permissions?.['approval']?.includes('rollback');
+
+  const openRollback = (docType: 'procedure' | 'jsa' | 'ptw', docId: string, step: { key: string; label: string }) =>
+    setRollbackTarget({ docType, docId, stageKey: step.key, stageLabel: step.label });
+
+  const handleConfirmRollback = async (reason: string) => {
+    if (!rollbackTarget) return;
+    setIsLoading(true);
+    try {
+      await rollbackStage({ docType: rollbackTarget.docType, docId: rollbackTarget.docId, targetStageKey: rollbackTarget.stageKey, reason });
+      setRollbackTarget(null);
+      router.refresh();
+    } catch (e) {
+      alert('Error: ' + (e as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleResumePtw = async (ptwId: string) => {
     setResumingId(ptwId);
@@ -544,6 +619,15 @@ export default function AdminProjectClient({
         />
       )}
 
+      {rollbackTarget && (
+        <RollbackModal
+          stageLabel={rollbackTarget.stageLabel}
+          onConfirm={handleConfirmRollback}
+          onCancel={() => setRollbackTarget(null)}
+          isLoading={isLoading}
+        />
+      )}
+
       {qrModalToken && (
         <CheckinQrModal
           url={buildCheckinUrl(qrModalToken, typeof window !== 'undefined' ? window.location.origin : undefined)}
@@ -781,7 +865,12 @@ export default function AdminProjectClient({
                              <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
                            </summary>
                            <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
-                             <DocStageTimeline steps={PROCEDURE_STAGE_SEQUENCE} currentIndex={prosedurTimelineIndex} rows={stageAssignments ?? {}} />
+                             <DocStageTimeline
+                               steps={PROCEDURE_STAGE_SEQUENCE}
+                               currentIndex={prosedurTimelineIndex}
+                               rows={stageAssignments ?? {}}
+                               onRollback={canRollback && prosedurTimelineIndex < PROCEDURE_STAGE_SEQUENCE.length ? (step) => openRollback('procedure', prosedur.id, step) : undefined}
+                             />
                            </div>
                          </details>
                        </div>
@@ -859,7 +948,12 @@ export default function AdminProjectClient({
                              <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
                            </summary>
                            <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
-                             <DocStageTimeline steps={JSA_STAGE_SEQUENCE} currentIndex={jsaTimelineIndex} rows={stageAssignments ?? {}} />
+                             <DocStageTimeline
+                               steps={JSA_STAGE_SEQUENCE}
+                               currentIndex={jsaTimelineIndex}
+                               rows={stageAssignments ?? {}}
+                               onRollback={canRollback && jsaTimelineIndex < JSA_STAGE_SEQUENCE.length ? (step) => openRollback('jsa', jsa.id, step) : undefined}
+                             />
                            </div>
                          </details>
                        </div>
@@ -965,7 +1059,12 @@ export default function AdminProjectClient({
                                <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
                              </summary>
                              <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
-                               <DocStageTimeline steps={PTW_STAGE_SEQUENCE} currentIndex={rowTimelineIndex} rows={stageAssignments ?? {}} />
+                               <DocStageTimeline
+                                 steps={PTW_STAGE_SEQUENCE}
+                                 currentIndex={rowTimelineIndex}
+                                 rows={stageAssignments ?? {}}
+                                 onRollback={canRollback && rowTimelineIndex < PTW_STAGE_SEQUENCE.length ? (step) => openRollback('ptw', row.id, step) : undefined}
+                               />
                              </div>
                            </details>
                          </div>
