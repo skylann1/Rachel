@@ -29,9 +29,10 @@ export default async function AuthDashboardLayout({
   const badges = await getSidebarBadges();
 
   const { data: profile } = user
-    ? await supabase.from("profiles").select("role").eq("id", user.id).single()
+    ? await supabase.from("profiles").select("role, type").eq("id", user.id).single()
     : { data: null };
   const roleLabel = getRoleLabel(profile?.role);
+  const orgType = profile?.type as 'pgn' | 'pgsol' | 'vendor' | undefined;
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans text-slate-900">
@@ -41,6 +42,7 @@ export default async function AuthDashboardLayout({
         permissions={permissions}
         roleLabel={roleLabel}
         badges={badges}
+        orgType={orgType}
       />
 
       {/* Main Content Area */}
@@ -53,6 +55,7 @@ export default async function AuthDashboardLayout({
               userEmail={user?.email || "admin@pgn.co.id"}
               roleLabel={roleLabel}
               badges={badges}
+              orgType={orgType}
             />
             <div className="hidden lg:flex items-center gap-2">
               <span className="text-sm font-bold text-slate-800 tracking-tight">

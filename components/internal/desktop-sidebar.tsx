@@ -8,7 +8,7 @@ import { logout } from "@/app/auth/login/actions";
 import { LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 import type { SidebarBadges } from "@/app/dashboard/actions/sidebar-badges";
 
-export function DesktopSidebar({ user, permissions, roleLabel, badges }: { user: any, permissions: any, roleLabel?: string, badges?: SidebarBadges }) {
+export function DesktopSidebar({ user, permissions, roleLabel, badges, orgType }: { user: any, permissions: any, roleLabel?: string, badges?: SidebarBadges, orgType?: 'pgn' | 'pgsol' | 'vendor' }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
@@ -54,7 +54,7 @@ export function DesktopSidebar({ user, permissions, roleLabel, badges }: { user:
       </Link>
 
       {/* Navigation */}
-      <SidebarNav userPermissions={permissions || {}} isCollapsed={isCollapsed} badges={badges} />
+      <SidebarNav userPermissions={permissions || {}} isCollapsed={isCollapsed} badges={badges} orgType={orgType} />
 
       {/* Logout */}
       <div className="p-4 border-t border-slate-800 mt-auto overflow-hidden">

@@ -12,12 +12,14 @@ export function InternalMobileSidebar({
   userPermissions,
   userEmail,
   roleLabel,
-  badges
+  badges,
+  orgType,
 }: {
   userPermissions: Record<string, string[]>;
   userEmail: string;
   roleLabel?: string;
   badges?: SidebarBadges;
+  orgType?: 'pgn' | 'pgsol' | 'vendor';
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -79,7 +81,7 @@ export function InternalMobileSidebar({
 
         {/* Navigation - Needs a wrapper that intercepts clicks */}
         <div onClick={handleLinkClick} className="flex-1 overflow-y-auto">
-          <SidebarNav userPermissions={userPermissions} badges={badges} />
+          <SidebarNav userPermissions={userPermissions} badges={badges} orgType={orgType} />
         </div>
 
         {/* Logout */}

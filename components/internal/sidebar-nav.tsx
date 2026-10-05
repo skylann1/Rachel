@@ -27,7 +27,12 @@ const masterData = [
   // bawah mencegah dua entri identik kalau satu aktor kebetulan punya
   // kedua permission.
   { name: 'Staff Organisasi', href: '/dashboard/master-data/account', icon: Users, permission: { module: 'masterData', action: 'manage_org_staff' } },
-  { name: 'Kelola Reviewer PGSOL', href: '/dashboard/master-data/project-pgsol-assign', icon: Users, permission: { module: 'jsa', action: 'manage_assignment_pgsol' } },
+  // requiresOrgType: permission saja tidak cukup di sini — role `admin` (PGN)
+  // punya SELURUH permission (fullAccessPermissions(), lihat
+  // utils/permissions.ts), jadi tanpa ini menu ini ikut muncul buat admin PGN
+  // walau halamannya sendiri (layout.tsx di bawah route itu) menolak akses
+  // untuk siapa pun yang tipe organisasinya bukan 'pgsol'.
+  { name: 'Kelola Reviewer PGSOL', href: '/dashboard/master-data/project-pgsol-assign', icon: Users, permission: { module: 'jsa', action: 'manage_assignment_pgsol' }, requiresOrgType: 'pgsol' as const },
   { name: 'Role & Permission', href: '/dashboard/master-data/role', icon: Shield, permission: { module: 'masterData', action: 'manage_role' } },
   { name: 'News & Pengumuman', href: '/dashboard/master-data/announcement', icon: Megaphone, permission: { module: 'announcement', action: 'manage' } },
   { name: 'Data Vendor', href: '/dashboard/master-data/vendor', icon: Building2, permission: { module: 'masterData', action: 'view_vendor' } },
@@ -38,10 +43,12 @@ export function SidebarNav({
   userPermissions,
   isCollapsed,
   badges,
+  orgType,
 }: {
   userPermissions: Record<string, string[]>;
   isCollapsed?: boolean;
   badges?: SidebarBadges;
+  orgType?: 'pgn' | 'pgsol' | 'vendor';
 }) {
   const pathname = usePathname();
 
@@ -69,6 +76,7 @@ export function SidebarNav({
   const filteredMenuUtama = menuUtama.filter(item => hasAccess(item.permission.module, item.permission.action));
   const filteredMasterData = masterData
     .filter(item => hasAccess(item.permission.module, item.permission.action))
+    .filter(item => !('requiresOrgType' in item) || item.requiresOrgType === orgType)
     // Manajemen Akun dan Staff Organisasi mengarah ke href yang sama —
     // hindari dua entri nav identik kalau satu aktor kebetulan punya
     // kedua permission (keeps the first match, i.e. "Manajemen Akun").
