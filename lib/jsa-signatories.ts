@@ -1,4 +1,5 @@
 import { getRoleLabel } from './roles';
+import { getStageAssignmentsWithNames, type StageAssignmentRowWithName } from './stage-assignments';
 
 /**
  * Data tanda tangan pada formulir JSA.
@@ -7,6 +8,12 @@ import { getRoleLabel } from './roles';
  *   Disiapkan Oleh  -> vendor yang menyusun JSA
  *   Direview Oleh   -> Reviewer PGSOL  (Satker Pemberi Kerja)
  *   Disetujui Oleh  -> Approver PGN    (Satker Penanggung Jawab)
+ *
+ * `nama`/`jabatan` bisa berisi lebih dari satu orang (dipisah ", ") kalau
+ * tahap itu ditugaskan ke beberapa assignee sekaligus — lihat
+ * namaJabatanGabungan() di bawah. jsa.reviewer_id/approver_id (kolom
+ * single-ID lama) TIDAK dipakai lagi di sini karena cuma mencatat satu
+ * orang (siapa yang menutup tahap itu), bukan semua orang yang approve.
  */
 export interface JsaSignatory {
   nama: string;
@@ -29,49 +36,39 @@ function formatTanggal(iso: string | null | undefined): string {
   return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+/** Gabungkan nama/jabatan SEMUA assignee yang approved di satu tahap, urut berdasarkan waktu approve. */
+function gabunganSignatory(rows: StageAssignmentRowWithName[], satker: string): JsaSignatory | null {
+  const approved = rows.filter(r => r.status === 'approved').sort((a, b) => (a.decided_at ?? '').localeCompare(b.decided_at ?? ''));
+  if (approved.length === 0) return null;
+  return {
+    nama: approved.map(r => r.assignee_name || 'Tidak diketahui').join(', '),
+    jabatan: approved.map(r => r.assignee_jabatan || getRoleLabel(r.assignee_role)).join(', '),
+    satker,
+    tanggal: formatTanggal(approved[approved.length - 1].decided_at),
+  };
+}
+
 /**
- * Mengambil nama & jabatan penandatangan JSA dari tabel profiles.
- *
- * jsa.reviewer_id / approver_id menunjuk ke internal_profiles, yang id-nya
- * sama dengan profiles.id — jadi nama diambil langsung dari profiles.
- * Mengembalikan null untuk tahap yang belum ditandatangani.
+ * Mengambil nama & jabatan SEMUA penandatangan JSA per tahap, dari
+ * stage_assignments — bukan lagi dari kolom single-ID jsa.reviewer_id/
+ * approver_id, yang cuma mencatat satu orang (yang menutup tahap) walau
+ * tahap itu bisa ditugaskan ke beberapa assignee sekaligus (semua harus
+ * approve). Mengembalikan null untuk tahap yang belum ada yang approve.
  */
 export async function getJsaSignatories(
   supabase: any,
-  jsa: { reviewer_id?: string | null; reviewed_at?: string | null; approver_id?: string | null; approved_at?: string | null } | null | undefined,
+  projectId: string,
+  jsa: { id?: string } | null | undefined,
 ): Promise<JsaSignatories> {
-  if (!jsa) return JSA_SIGNATORIES_KOSONG;
+  if (!jsa?.id) return JSA_SIGNATORIES_KOSONG;
 
-  const ids = [jsa.reviewer_id, jsa.approver_id].filter(Boolean) as string[];
-  if (ids.length === 0) return JSA_SIGNATORIES_KOSONG;
-
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, full_name, role')
-    .in('id', ids);
-
-  const cari = (id: string | null | undefined) =>
-    id ? (profiles || []).find((p: any) => p.id === id) : undefined;
-
-  const reviewerProfile = cari(jsa.reviewer_id);
-  const approverProfile = cari(jsa.approver_id);
+  const [hseRows, pgnRows] = await Promise.all([
+    getStageAssignmentsWithNames(supabase, projectId, 'jsa', 'jsa.hse_pgsol'),
+    getStageAssignmentsWithNames(supabase, projectId, 'jsa', 'jsa.approve_pgn'),
+  ]);
 
   return {
-    reviewer: reviewerProfile
-      ? {
-          nama: reviewerProfile.full_name || '',
-          jabatan: getRoleLabel(reviewerProfile.role),
-          satker: 'PGSOL',
-          tanggal: formatTanggal(jsa.reviewed_at),
-        }
-      : null,
-    approver: approverProfile
-      ? {
-          nama: approverProfile.full_name || '',
-          jabatan: getRoleLabel(approverProfile.role),
-          satker: 'PGN',
-          tanggal: formatTanggal(jsa.approved_at),
-        }
-      : null,
+    reviewer: gabunganSignatory(hseRows, 'PGSOL'),
+    approver: gabunganSignatory(pgnRows, 'PGN'),
   };
 }

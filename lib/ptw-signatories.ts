@@ -1,4 +1,5 @@
 import { getRoleLabel } from './roles';
+import { getStageAssignmentsWithNames, type StageAssignmentRowWithName } from './stage-assignments';
 
 /**
  * Data tanda tangan pada formulir PTW.
@@ -11,6 +12,12 @@ import { getRoleLabel } from './roles';
  *
  * Tahap ketiga (HSE) tidak punya blok tanda tangan: keluarannya adalah
  * NOMOR PTW pada bagian A, bukan tanda tangan — sesuai form aslinya.
+ *
+ * `nama`/`jabatan` bisa berisi lebih dari satu orang (dipisah ", ") kalau
+ * tahap itu ditugaskan ke beberapa assignee sekaligus — diambil dari
+ * stage_assignments (semua baris 'approved'), bukan lagi dari kolom
+ * single-ID lama (ptw.authority_id/issuer_id) yang cuma mencatat satu
+ * orang (siapa yang menutup tahap itu).
  */
 export interface PtwSignatory {
   nama: string;
@@ -41,11 +48,8 @@ function formatTanggal(iso: string | null | undefined): string {
 }
 
 interface PtwApprovalFields {
+  id?: string;
   created_at?: string | null;
-  authority_id?: string | null;
-  authority_approved_at?: string | null;
-  issuer_id?: string | null;
-  issuer_approved_at?: string | null;
 }
 
 interface VendorPic {
@@ -55,12 +59,24 @@ interface VendorPic {
   perusahaan?: string | null;
 }
 
+/** Gabungkan nama/jabatan SEMUA assignee yang approved di satu tahap, urut berdasarkan waktu approve. */
+function gabunganSignatory(rows: StageAssignmentRowWithName[], satker: string): PtwSignatory | null {
+  const approved = rows.filter(r => r.status === 'approved').sort((a, b) => (a.decided_at ?? '').localeCompare(b.decided_at ?? ''));
+  if (approved.length === 0) return null;
+  return {
+    nama: approved.map(r => r.assignee_name || 'Tidak diketahui').join(', '),
+    jabatan: approved.map(r => r.assignee_jabatan || getRoleLabel(r.assignee_role)).join(', '),
+    satker,
+    tanggal: formatTanggal(approved[approved.length - 1].decided_at),
+  };
+}
+
 /**
- * Mengambil nama & jabatan penandatangan PTW.
- *
- * authority_id / issuer_id menunjuk ke internal_profiles, yang id-nya sama
- * dengan profiles.id — jadi nama diambil langsung dari profiles (pola sama
- * seperti getJsaSignatories).
+ * Mengambil nama & jabatan SEMUA penandatangan PTW per tahap, dari
+ * stage_assignments — bukan lagi dari kolom single-ID lama
+ * (ptw.authority_id/issuer_id), yang cuma mencatat satu orang (yang
+ * menutup tahap) walau tahap itu bisa ditugaskan ke beberapa assignee
+ * sekaligus (semua harus approve).
  *
  * Blok Pemohon dan Pemegang keduanya diisi PIC vendor: yang mengajukan izin
  * dan yang memegangnya di lapangan pada praktiknya orang yang sama.
@@ -68,10 +84,11 @@ interface VendorPic {
  */
 export async function getPtwSignatories(
   supabase: any,
+  projectId: string,
   ptw: PtwApprovalFields | null | undefined,
   vendorPic?: VendorPic | null,
 ): Promise<PtwSignatories> {
-  if (!ptw) return PTW_SIGNATORIES_KOSONG;
+  if (!ptw?.id) return PTW_SIGNATORIES_KOSONG;
 
   const vendor: PtwSignatory | null = vendorPic?.nama
     ? {
@@ -82,41 +99,15 @@ export async function getPtwSignatories(
       }
     : null;
 
-  const ids = [ptw.authority_id, ptw.issuer_id].filter(Boolean) as string[];
-
-  let profiles: any[] = [];
-  if (ids.length > 0) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, role')
-      .in('id', ids);
-    profiles = data || [];
-  }
-
-  const cari = (id: string | null | undefined) =>
-    id ? profiles.find((p: any) => p.id === id) : undefined;
-
-  const authorityProfile = cari(ptw.authority_id);
-  const issuerProfile = cari(ptw.issuer_id);
+  const [authorityRows, issuerRows] = await Promise.all([
+    getStageAssignmentsWithNames(supabase, projectId, 'ptw', 'ptw.approve_pm'),
+    getStageAssignmentsWithNames(supabase, projectId, 'ptw', 'ptw.review_issuer'),
+  ]);
 
   return {
     pemohon: vendor,
     pemegang: vendor,
-    pemberi: authorityProfile
-      ? {
-          nama: authorityProfile.full_name || '',
-          jabatan: getRoleLabel(authorityProfile.role),
-          satker: 'PGN',
-          tanggal: formatTanggal(ptw.authority_approved_at),
-        }
-      : null,
-    penerbit: issuerProfile
-      ? {
-          nama: issuerProfile.full_name || '',
-          jabatan: getRoleLabel(issuerProfile.role),
-          satker: 'PGN',
-          tanggal: formatTanggal(ptw.issuer_approved_at),
-        }
-      : null,
+    pemberi: gabunganSignatory(authorityRows, 'PGN'),
+    penerbit: gabunganSignatory(issuerRows, 'PGN'),
   };
 }

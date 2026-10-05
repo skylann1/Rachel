@@ -55,7 +55,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
 
   // Nama & jabatan penandatangan JSA untuk blok "Direview Oleh" / "Disetujui Oleh" pada form
   const jsaRow = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
-  const jsaSignatories = await getJsaSignatories(supabase, jsaRow);
+  const jsaSignatories = await getJsaSignatories(supabase, projectId, jsaRow);
 
   // Blok tanda tangan PTW — satu set per PTW karena tiap tipe punya alur
   // approval sendiri.
@@ -66,7 +66,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
   };
   const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
   const ptwSignatories = Object.fromEntries(
-    await Promise.all(ptws.map(async (p) => [p.id, await getPtwSignatories(supabase, p, vendorPic)] as const))
+    await Promise.all(ptws.map(async (p) => [p.id, await getPtwSignatories(supabase, projectId, p, vendorPic)] as const))
   );
 
   // Safety gate: cross-check the workers/equipment snapshotted onto each PTW

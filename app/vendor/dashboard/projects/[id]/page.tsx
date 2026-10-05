@@ -63,7 +63,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
 
   // Nama & jabatan penandatangan JSA untuk blok "Direview Oleh" / "Disetujui Oleh" pada form
-  const jsaSignatories = await getJsaSignatories(supabase, jsa);
+  const jsaSignatories = await getJsaSignatories(supabase, projectId, jsa);
 
   // Blok tanda tangan PTW — satu set per PTW karena tiap tipe punya alur
   // approval sendiri.
@@ -74,7 +74,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   };
   const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
   const ptwSignatories = Object.fromEntries(
-    await Promise.all(ptws.map(async (p) => [p.id, await getPtwSignatories(supabase, p, vendorPic)] as const))
+    await Promise.all(ptws.map(async (p) => [p.id, await getPtwSignatories(supabase, projectId, p, vendorPic)] as const))
   );
 
   // Tab "Status Lapangan": check-in dan toolbox meeting lintas semua tipe PTW proyek ini.
