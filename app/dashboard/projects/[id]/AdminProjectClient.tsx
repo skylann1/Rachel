@@ -223,7 +223,11 @@ const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
   },
   'prosedur-hse': {
     title: 'Selesaikan Review HSE PGSOL?',
-    desc: 'Anda menyatakan aspek HSE Prosedur Kerja sudah memadai. Dokumen akan diteruskan ke PM untuk persetujuan akhir.',
+    desc: 'Anda menyatakan aspek HSE Prosedur Kerja sudah memadai. Dokumen akan diteruskan ke HSSE PGN untuk verifikasi lanjutan.',
+  },
+  'prosedur-hsse-pgn': {
+    title: 'Selesaikan Review HSSE PGN?',
+    desc: 'Anda menyatakan aspek keselamatan Prosedur Kerja sudah memadai dari sisi PGN. Dokumen akan diteruskan ke PM Zona untuk persetujuan akhir.',
   },
   prosedur: { title: 'Setujui Prosedur Kerja?', desc: 'Dokumen SOP akan ditandai disetujui dan vendor dapat melanjutkan ke tahap JSA.' },
   jsa: { title: 'Setujui Job Safety Analysis?', desc: 'JSA akan ditandai disetujui pada tahap ini dan lanjut ke tahap berikutnya.' },
@@ -233,10 +237,14 @@ const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
   },
   'jsa-hse': {
     title: 'Selesaikan Review HSE PGSOL?',
-    desc: 'Anda menyatakan aspek HSE JSA sudah memadai. JSA akan diteruskan ke PGN untuk persetujuan akhir oleh orang yang berbeda.',
+    desc: 'Anda menyatakan aspek HSE JSA sudah memadai. JSA akan diteruskan ke HSSE PGN untuk verifikasi lanjutan.',
+  },
+  'jsa-hsse-pgn': {
+    title: 'Selesaikan Review HSSE PGN?',
+    desc: 'Anda menyatakan aspek keselamatan JSA sudah memadai dari sisi PGN. JSA akan diteruskan ke PM Zona untuk persetujuan akhir oleh orang yang berbeda.',
   },
   'jsa-approve': {
-    title: 'Setujui JSA sebagai PGN?',
+    title: 'Setujui JSA sebagai PM Zona PGN?',
     desc: 'Persetujuan akhir: Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan. Vendor dapat lanjut ke pengajuan PTW.',
   },
   ptw: { title: 'Setujui Permit to Work?', desc: 'PTW akan ditandai disetujui pada tahap ini dan lanjut ke tahap berikutnya.' },
@@ -430,6 +438,7 @@ export default function AdminProjectClient({
 
   const isProsedurTahapReviewPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPgsol;
   const isProsedurTahapHsePgsol = prosedur?.status === PROCEDURE_STATUS.reviewHsePgsol;
+  const isProsedurTahapHssePgn = prosedur?.status === PROCEDURE_STATUS.reviewHssePgn;
   const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur?.status];
   const procStageKey = procPerm ? `${procPerm.module}.${procPerm.action}` : '';
   const hasProsedurPermission = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
@@ -442,6 +451,7 @@ export default function AdminProjectClient({
   //   Persetujuan PGN -> permission jsa.approve_pgn, DAN bukan orang yang mereview
   const isTahapReviewPgsol = jsa?.status === JSA_STATUS.reviewPgsol;
   const isTahapHsePgsol = jsa?.status === JSA_STATUS.reviewHsePgsol;
+  const isTahapHssePgn = jsa?.status === JSA_STATUS.reviewHssePgn;
   const jsaPerm = JSA_STAGE_PERMISSION[jsa?.status];
   const jsaStageKey = jsaPerm ? `${jsaPerm.module}.${jsaPerm.action}` : '';
   const jsaSudahDireviewOlehSaya = jsa?.status === JSA_STATUS.approvalPgn && jsa?.reviewer_id === currentUserId;
@@ -607,9 +617,9 @@ export default function AdminProjectClient({
         <ApproveModal
           labelKey={
             approveTarget.type === 'jsa'
-              ? (isTahapReviewPgsol ? 'jsa-review' : isTahapHsePgsol ? 'jsa-hse' : 'jsa-approve')
+              ? (isTahapReviewPgsol ? 'jsa-review' : isTahapHsePgsol ? 'jsa-hse' : isTahapHssePgn ? 'jsa-hsse-pgn' : 'jsa-approve')
               : approveTarget.type === 'prosedur'
-                ? (isProsedurTahapReviewPgsol ? 'prosedur-review' : isProsedurTahapHsePgsol ? 'prosedur-hse' : 'prosedur')
+                ? (isProsedurTahapReviewPgsol ? 'prosedur-review' : isProsedurTahapHsePgsol ? 'prosedur-hse' : isProsedurTahapHssePgn ? 'prosedur-hsse-pgn' : 'prosedur')
                 : approveTarget.type
           }
           warning={approveTargetPtwWarning}
@@ -849,15 +859,17 @@ export default function AdminProjectClient({
                            <FileSignature className="w-5 h-5 text-amber-600" />
                            <h3 className="text-lg font-bold text-amber-900">Prosedur Kerja (SOP)</h3>
                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
-                             {isProsedurTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : isProsedurTahapHsePgsol ? 'Tahap 2 — Review HSE PGSOL' : 'Tahap 3 — Menunggu Review PM'}
+                             {isProsedurTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : isProsedurTahapHsePgsol ? 'Tahap 2 — Review HSE PGSOL' : isProsedurTahapHssePgn ? 'Tahap 3 — Review HSSE PGN' : 'Tahap 4 — Menunggu Review PM Zona'}
                            </span>
                          </div>
                          <p className="text-amber-700 text-sm">
                            {isProsedurTahapReviewPgsol
                              ? 'Verifikasi teknis: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke HSE PGSOL.'
                              : isProsedurTahapHsePgsol
-                               ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada SOP sudah memadai sebelum diteruskan ke PM.'
-                               : 'Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.'}
+                               ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada SOP sudah memadai sebelum diteruskan ke HSSE PGN.'
+                               : isProsedurTahapHssePgn
+                                 ? 'Verifikasi HSSE PGN: pastikan aspek keselamatan kerja pada SOP sudah memadai dari sisi PGN sebelum diteruskan ke PM Zona.'
+                                 : 'Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.'}
                          </p>
                          <StageProgress {...prosedurProgress} />
                          <details className="mt-3 group">
@@ -878,7 +890,7 @@ export default function AdminProjectClient({
                          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                            <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
                            <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                             {isProsedurTahapReviewPgsol ? 'Review & Teruskan ke HSE PGSOL' : isProsedurTahapHsePgsol ? 'Review & Teruskan ke PM' : 'Setujui SOP'}
+                             {isProsedurTahapReviewPgsol ? 'Review & Teruskan ke HSE PGSOL' : isProsedurTahapHsePgsol ? 'Review & Teruskan ke HSSE PGN' : isProsedurTahapHssePgn ? 'Review & Teruskan ke PM Zona' : 'Setujui SOP'}
                            </button>
                          </div>
                        )}
@@ -932,15 +944,17 @@ export default function AdminProjectClient({
                            <ShieldAlert className="w-5 h-5 text-amber-600" />
                            <h3 className="text-lg font-bold text-amber-900">Job Safety Analysis (JSA)</h3>
                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
-                             {isTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : isTahapHsePgsol ? 'Tahap 2 — Review HSE PGSOL' : 'Tahap 3 — Persetujuan PGN'}
+                             {isTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : isTahapHsePgsol ? 'Tahap 2 — Review HSE PGSOL' : isTahapHssePgn ? 'Tahap 3 — Review HSSE PGN' : 'Tahap 4 — Persetujuan PM Zona'}
                            </span>
                          </div>
                          <p className="text-amber-700 text-sm">
                            {isTahapReviewPgsol
                              ? 'Verifikasi teknis: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar.'
                              : isTahapHsePgsol
-                               ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada JSA ini sudah memadai sebelum diteruskan ke PGN.'
-                               : 'Otorisasi akhir: JSA sudah direview PGSOL. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
+                               ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada JSA ini sudah memadai sebelum diteruskan ke HSSE PGN.'
+                               : isTahapHssePgn
+                                 ? 'Verifikasi HSSE PGN: pastikan aspek keselamatan kerja pada JSA ini sudah memadai dari sisi PGN sebelum diteruskan ke PM Zona.'
+                                 : 'Otorisasi akhir: JSA sudah direview HSSE PGN. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
                          </p>
                          <StageProgress {...jsaProgress} />
                          <details className="mt-3 group">
@@ -971,7 +985,7 @@ export default function AdminProjectClient({
                            <>
                              <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
                              <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                               {isTahapReviewPgsol ? 'Review & Teruskan ke HSE PGSOL' : isTahapHsePgsol ? 'Review & Teruskan ke PGN' : 'Setujui JSA'}
+                               {isTahapReviewPgsol ? 'Review & Teruskan ke HSE PGSOL' : isTahapHsePgsol ? 'Review & Teruskan ke HSSE PGN' : isTahapHssePgn ? 'Review & Teruskan ke PM Zona' : 'Setujui JSA'}
                              </button>
                            </>
                          )}

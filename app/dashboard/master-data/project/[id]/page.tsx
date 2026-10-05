@@ -7,8 +7,10 @@ import AssignmentPanel from './AssignmentPanel';
 import { getStageAssignments, getEligibleAssignees, PGN_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
 
 const STAGE_LABELS: Record<string, string> = {
-  'procedure.review': 'Review Prosedur Kerja (PM)',
-  'jsa.approve_pgn': 'Persetujuan JSA (PGN)',
+  'procedure.hsse_pgn': 'Review Prosedur Kerja — HSSE PGN',
+  'procedure.review': 'Review Prosedur Kerja — PM Zona (Akhir)',
+  'jsa.hsse_pgn': 'Review JSA — HSSE PGN',
+  'jsa.approve_pgn': 'Persetujuan JSA — PM Zona (Akhir)',
   'ptw.approve_pm': 'Approval PTW — PTW Authority (PM)',
   'ptw.review_issuer': 'Review PTW — PTW Issuer',
   'ptw.numbering_hsse': 'Penomoran PTW (HSSE)',

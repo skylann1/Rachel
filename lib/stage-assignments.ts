@@ -20,9 +20,11 @@ export interface StageAssignmentRow {
   note: string | null;
 }
 
-/** Kelima stage_key yang ditugaskan admin PGN — dipakai untuk membatasi apa yang boleh disimpan lewat saveStageAssignment (masterData.manage_project). */
+/** Ketujuh stage_key yang ditugaskan admin PGN — dipakai untuk membatasi apa yang boleh disimpan lewat saveStageAssignment (masterData.manage_project). */
 export const PGN_STAGE_KEYS = [
+  'procedure.hsse_pgn',
   'procedure.review',
+  'jsa.hsse_pgn',
   'jsa.approve_pgn',
   'ptw.approve_pm',
   'ptw.review_issuer',
@@ -123,10 +125,12 @@ export const STAGE_KEY_PERMISSION: Record<string, { module: string; action: stri
   'procedure.review_vendor': { module: 'procedure', action: 'review_vendor' },
   'procedure.review_pgsol': { module: 'procedure', action: 'review_pgsol' },
   'procedure.hse_pgsol': { module: 'procedure', action: 'hse_pgsol' },
+  'procedure.hsse_pgn': { module: 'procedure', action: 'hsse_pgn' },
   'procedure.review': { module: 'procedure', action: 'review' },
   'jsa.review_vendor': { module: 'jsa', action: 'review_vendor' },
   'jsa.review_pgsol': { module: 'jsa', action: 'review_pgsol' },
   'jsa.hse_pgsol': { module: 'jsa', action: 'hse_pgsol' },
+  'jsa.hsse_pgn': { module: 'jsa', action: 'hsse_pgn' },
   'jsa.approve_pgn': { module: 'jsa', action: 'approve_pgn' },
   'ptw.review_vendor': { module: 'ptw', action: 'review_vendor' },
   'ptw.review_pgsol': { module: 'ptw', action: 'review_pgsol' },

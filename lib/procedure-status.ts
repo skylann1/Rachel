@@ -1,15 +1,18 @@
-﻿/**
+/**
  * Alur persetujuan Prosedur Kerja — vendor -> PGSOL (Reviewer, lalu HSE) ->
- * PGN, sama polanya dengan JSA dan PTW.
+ * PGN (HSSE, lalu PM Zona), sama polanya dengan JSA dan PTW.
  *
  *   Draft -> Review Internal Vendor -> Review PGSOL -> Review HSE PGSOL ->
- *   Menunggu Review PM -> Prosedur Disetujui
+ *   Review HSSE PGN -> Menunggu Review PM -> Prosedur Disetujui
  *
  * Review Internal Vendor tidak pernah nyampe pihak PGN/PGSOL — staff vendor
  * sendiri (ditugaskan admin vendor per proyek, lihat Fase 3) harus
  * menyetujui dulu sebelum PGSOL melihatnya. Review PGSOL -> Review HSE
  * PGSOL: dua orang PGSOL berbeda, berurutan — verifikasi teknis lalu
- * verifikasi HSE — sebelum diteruskan ke PM (PGN) untuk persetujuan akhir.
+ * verifikasi HSE — sebelum diteruskan ke PGN. Di sisi PGN sendiri juga dua
+ * tahap berurutan: Review HSSE PGN (verifikasi keselamatan oleh HSSE PGN)
+ * lalu Menunggu Review PM (persetujuan akhir oleh PM Zona) — menyamakan
+ * pola dua-tahap PGSOL (Reviewer -> HSE) di sisi PGN.
  * Reject di tahap manapun mengembalikan status ke Draft; vendor merevisi
  * lalu mengajukan ulang (balik ke Review Internal Vendor).
  */
@@ -19,6 +22,7 @@ export const PROCEDURE_STATUS = {
   reviewInternalVendor: 'Review Internal Vendor',
   reviewPgsol: 'Review PGSOL',
   reviewHsePgsol: 'Review HSE PGSOL',
+  reviewHssePgn: 'Review HSSE PGN',
   menungguReviewPM: 'Menunggu Review PM',
   approved: 'Prosedur Disetujui',
 } as const;
@@ -32,6 +36,7 @@ export const PROCEDURE_STATUS = {
 export const PROCEDURE_PENDING_STATUSES: string[] = [
   PROCEDURE_STATUS.reviewPgsol,
   PROCEDURE_STATUS.reviewHsePgsol,
+  PROCEDURE_STATUS.reviewHssePgn,
   PROCEDURE_STATUS.menungguReviewPM,
 ];
 
@@ -48,6 +53,7 @@ export function isProcedurePending(status: string | null | undefined): boolean {
 export const PROCEDURE_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
   [PROCEDURE_STATUS.reviewPgsol]: { module: 'procedure', action: 'review_pgsol' },
   [PROCEDURE_STATUS.reviewHsePgsol]: { module: 'procedure', action: 'hse_pgsol' },
+  [PROCEDURE_STATUS.reviewHssePgn]: { module: 'procedure', action: 'hsse_pgn' },
   [PROCEDURE_STATUS.menungguReviewPM]: { module: 'procedure', action: 'review' },
 };
 
@@ -61,7 +67,8 @@ export const PROCEDURE_STAGE_SEQUENCE = [
   { key: 'procedure.review_vendor', label: 'Review Internal Vendor', status: PROCEDURE_STATUS.reviewInternalVendor },
   { key: 'procedure.review_pgsol', label: 'Review PGSOL', status: PROCEDURE_STATUS.reviewPgsol },
   { key: 'procedure.hse_pgsol', label: 'Review HSE PGSOL', status: PROCEDURE_STATUS.reviewHsePgsol },
-  { key: 'procedure.review', label: 'Review PM (PGN)', status: PROCEDURE_STATUS.menungguReviewPM },
+  { key: 'procedure.hsse_pgn', label: 'Review HSSE PGN', status: PROCEDURE_STATUS.reviewHssePgn },
+  { key: 'procedure.review', label: 'Review PM Zona (PGN)', status: PROCEDURE_STATUS.menungguReviewPM },
 ] as const;
 
 /** Index tahap saat ini di PROCEDURE_STAGE_SEQUENCE; -1 = belum mulai (Draft), sequence.length = semua tahap selesai (Approved). */

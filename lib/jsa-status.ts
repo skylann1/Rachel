@@ -1,8 +1,8 @@
-﻿/**
- * Alur persetujuan JSA — review internal vendor, lalu PGSOL (Reviewer, lalu HSE), lalu PGN.
+/**
+ * Alur persetujuan JSA — review internal vendor, lalu PGSOL (Reviewer, lalu HSE), lalu PGN (HSSE, lalu PM Zona).
  *
  *   Draft -> Review Internal Vendor -> Review PGSOL -> Review HSE PGSOL ->
- *   Persetujuan PGN -> JSA Disetujui
+ *   Review HSSE PGN -> Persetujuan PGN -> JSA Disetujui
  *
  * Review Internal Vendor : staff vendor sendiri (ditugaskan admin vendor
  *                   per proyek, lihat Fase 3) harus menyetujui dulu
@@ -11,8 +11,11 @@
  *                   Mengecek bahaya sudah teridentifikasi, mitigasi memadai,
  *                   dan nilai risiko wajar. Blok "Direview Oleh" pada form.
  * Review HSE PGSOL : verifikasi aspek keselamatan kerja oleh orang PGSOL yang berbeda dari Reviewer, sebelum diteruskan ke PGN.
+ * Review HSSE PGN : verifikasi keselamatan oleh HSSE PGN — menyamakan pola
+ *                   dua-tahap PGSOL (Reviewer -> HSE) di sisi PGN, sebelum
+ *                   diteruskan ke PM Zona untuk persetujuan akhir.
  *
- * Persetujuan PGN : otorisasi formal oleh Satker Penanggung Jawab (PGN).
+ * Persetujuan PGN : otorisasi formal oleh PM Zona (Satker Penanggung Jawab, PGN).
  *                   Menerima risiko sisa dan mengizinkan pekerjaan berjalan.
  *                   Blok "Disetujui Oleh" pada form.
  */
@@ -22,6 +25,7 @@ export const JSA_STATUS = {
   reviewInternalVendor: 'Review Internal Vendor',
   reviewPgsol: 'Review PGSOL',
   reviewHsePgsol: 'Review HSE PGSOL',
+  reviewHssePgn: 'Review HSSE PGN',
   approvalPgn: 'Persetujuan PGN',
   approved: 'JSA Disetujui',
 } as const;
@@ -34,6 +38,7 @@ export const JSA_STATUS = {
 export const JSA_PENDING_STATUSES: string[] = [
   JSA_STATUS.reviewPgsol,
   JSA_STATUS.reviewHsePgsol,
+  JSA_STATUS.reviewHssePgn,
   JSA_STATUS.approvalPgn,
 ];
 
@@ -50,6 +55,7 @@ export function isJsaPending(status: string | null | undefined): boolean {
 export const JSA_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
   [JSA_STATUS.reviewPgsol]: { module: 'jsa', action: 'review_pgsol' },
   [JSA_STATUS.reviewHsePgsol]: { module: 'jsa', action: 'hse_pgsol' },
+  [JSA_STATUS.reviewHssePgn]: { module: 'jsa', action: 'hsse_pgn' },
   [JSA_STATUS.approvalPgn]: { module: 'jsa', action: 'approve_pgn' },
 };
 
@@ -61,7 +67,8 @@ export const JSA_STAGE_SEQUENCE = [
   { key: 'jsa.review_vendor', label: 'Review Internal Vendor', status: JSA_STATUS.reviewInternalVendor },
   { key: 'jsa.review_pgsol', label: 'Review PGSOL', status: JSA_STATUS.reviewPgsol },
   { key: 'jsa.hse_pgsol', label: 'Review HSE PGSOL', status: JSA_STATUS.reviewHsePgsol },
-  { key: 'jsa.approve_pgn', label: 'Persetujuan PGN', status: JSA_STATUS.approvalPgn },
+  { key: 'jsa.hsse_pgn', label: 'Review HSSE PGN', status: JSA_STATUS.reviewHssePgn },
+  { key: 'jsa.approve_pgn', label: 'Persetujuan PM Zona (PGN)', status: JSA_STATUS.approvalPgn },
 ] as const;
 
 /** Index tahap saat ini di JSA_STAGE_SEQUENCE; -1 = belum mulai (Draft), sequence.length = semua tahap selesai (Approved). */

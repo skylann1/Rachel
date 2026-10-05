@@ -54,7 +54,8 @@ export const allPermissionModules = [
       { key: 'review_vendor', label: 'Review Internal Vendor — Prosedur Kerja', allowedTypes: ['vendor'] },
       { key: 'review_pgsol', label: 'Review Prosedur Kerja — Tahap Reviewer PGSOL', allowedTypes: ['pgsol'] },
       { key: 'hse_pgsol', label: 'Review Prosedur Kerja — Tahap HSE PGSOL', allowedTypes: ['pgsol'] },
-      { key: 'review', label: 'Review & Approve Prosedur Kerja', allowedTypes: ['pgn', 'pgsol'] },
+      { key: 'hsse_pgn', label: 'Review Prosedur Kerja — Tahap HSSE PGN', allowedTypes: ['pgn'] },
+      { key: 'review', label: 'Review & Approve Prosedur Kerja — Tahap PM Zona PGN (Akhir)', allowedTypes: ['pgn', 'pgsol'] },
     ]
   },
   {
@@ -68,7 +69,8 @@ export const allPermissionModules = [
       { key: 'review_pgsol', label: 'Review JSA — Tahap Reviewer PGSOL', allowedTypes: ['pgsol'] },
       { key: 'hse_pgsol', label: 'Review JSA — Tahap HSE PGSOL', allowedTypes: ['pgsol'] },
       { key: 'manage_assignment_pgsol', label: 'Menunjuk Reviewer/HSE PGSOL per Proyek', allowedTypes: ['pgsol'] },
-      { key: 'approve_pgn', label: 'Approve JSA — Tahap PGN', allowedTypes: ['pgn'] },
+      { key: 'hsse_pgn', label: 'Review JSA — Tahap HSSE PGN', allowedTypes: ['pgn'] },
+      { key: 'approve_pgn', label: 'Approve JSA — Tahap PM Zona PGN (Akhir)', allowedTypes: ['pgn'] },
       { key: 'delete', label: 'Menghapus Data JSA', allowedTypes: ['pgn'] },
     ]
   },
