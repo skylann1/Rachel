@@ -15,9 +15,10 @@ import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/Prose
 import PtwPDF from '@/components/ptw/PtwPDF';
 import PtwSafetyChecklistForm from '@/components/ptw/PtwSafetyChecklistForm';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
-import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
-import { isJsaPending, JSA_STATUS } from '@/lib/jsa-status';
-import { PROCEDURE_STATUS, isProcedurePending } from '@/lib/procedure-status';
+import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
+import { isJsaPending, JSA_STATUS, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
+import { PROCEDURE_STATUS, isProcedurePending, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
+import { StageRail, type RailTone } from '@/components/internal/stage-rail';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { buildCheckinUrl } from '@/lib/site-ops';
 import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
@@ -34,6 +35,17 @@ function docLogTone(action: string) {
   if (/ditolak/i.test(action)) return { text: 'text-rose-600', bg: 'bg-rose-50 border-rose-100', icon: XCircle };
   if (/disetujui|direview|diterbitkan/i.test(action)) return { text: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', icon: CheckCircle2 };
   return { text: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', icon: FileSignature };
+}
+
+/**
+ * Dari sisi vendor tidak ada tahap "milikmu" — vendor mengajukan lalu
+ * menunggu, jadi tone 'action' tidak pernah dipakai di layar ini.
+ */
+function vendorRailTone(status: string): RailTone {
+  if (status === 'Approved') return 'done';
+  if (status === 'Rejected') return 'returned';
+  if (status === 'Pending') return 'waiting';
+  return 'idle';
 }
 
 const BlobProvider = dynamic(
@@ -151,6 +163,28 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
     ...(canManageAssignments ? [{ id: 'assignment', label: 'Assignment Reviewer', icon: <Users className="w-4 h-4" /> }] : []),
   ];
 
+  /**
+   * Satu kalimat "apa yang harus saya lakukan sekarang" — pertanyaan utama
+   * vendor saat membuka proyek. `href` hanya diisi kalau bolanya memang ada di
+   * tangan vendor; kalau sedang direview PGSOL/PGN, vendor cuma menunggu.
+   */
+  const nextStep: { label: string; detail: string; href?: string; waiting: boolean } = (() => {
+    if (prosedurStatus === 'Rejected') return { label: 'Revisi Prosedur Kerja', detail: 'Prosedur Kerja dikembalikan dengan catatan revisi. Perbaiki lalu ajukan ulang.', href: `/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`, waiting: false };
+    if (prosedurStatus === 'Draft') return { label: prosedur ? 'Lanjutkan Prosedur Kerja' : 'Buat Prosedur Kerja', detail: 'Prosedur Kerja adalah dokumen pertama yang harus disetujui sebelum JSA bisa diajukan.', href: `/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`, waiting: false };
+    if (prosedurStatus === 'Pending') return { label: 'Menunggu review Prosedur Kerja', detail: 'Dokumen sedang berjalan di rantai persetujuan. Lihat posisinya di tab Dokumen K3.', waiting: true };
+
+    if (jsaStatus === 'Rejected') return { label: 'Revisi JSA', detail: 'JSA dikembalikan dengan catatan revisi. Perbaiki lalu ajukan ulang.', href: `/vendor/dashboard/jsa/create/${encodeURIComponent(project.id)}`, waiting: false };
+    if (jsaStatus === 'Draft') return { label: jsa ? 'Lanjutkan JSA' : 'Buat JSA', detail: 'Prosedur Kerja sudah disetujui. Lanjut identifikasi bahaya dan mitigasi lewat JSA.', href: `/vendor/dashboard/jsa/create/${encodeURIComponent(project.id)}`, waiting: false };
+    if (jsaStatus === 'Pending') return { label: 'Menunggu review JSA', detail: 'JSA sedang berjalan di rantai persetujuan. Lihat posisinya di tab Dokumen K3.', waiting: true };
+
+    if (ptws.length === 0) return { label: 'Ajukan PTW', detail: 'JSA sudah disetujui. Ajukan izin kerja sesuai jenis pekerjaan di lapangan.', href: `/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}`, waiting: false };
+    if (ptwStatus === 'Rejected') return { label: 'Revisi PTW', detail: 'Ada PTW yang dikembalikan dengan catatan revisi. Cek tab Dokumen K3.', waiting: false };
+    if (ptwStatus === 'Stopped') return { label: 'Pekerjaan dihentikan (Stop Work Authority)', detail: 'Hubungi PM/HSSE untuk mengaktifkan kembali izin kerja.', waiting: true };
+    if (ptwStatus === 'Expired') return { label: 'PTW sudah kedaluwarsa', detail: 'Ajukan ulang izin kerja kalau pekerjaan masih berjalan.', waiting: false };
+    if (ptwStatus === 'Pending') return { label: 'Menunggu penerbitan PTW', detail: 'PTW sedang berjalan di rantai persetujuan. Lihat posisinya di tab Dokumen K3.', waiting: true };
+    return { label: 'Semua izin kerja aktif', detail: 'Dokumen K3 lengkap. Jangan lupa catat toolbox meeting sebelum pekerja check-in.', waiting: true };
+  })();
+
   // Tab "Status Lapangan" — check-in/toolbox meeting lintas semua tipe PTW proyek ini.
   const ptwTitleById = Object.fromEntries(ptws.map((p: any) => [p.id, PTW_TYPES.find(t => t.id === p.ptw_type)?.title.split('(')[0].trim() || p.ptw_type]));
   const openSiteCheckins = (siteCheckins || []).filter((c: any) => !c.checked_out_at);
@@ -204,18 +238,20 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
       </div>
 
       {/* TABS NAVIGATION */}
-      <div className="flex space-x-2 bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200">
+      <div className="flex gap-1 sm:gap-2 bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200 overflow-x-auto hide-scrollbar">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all duration-300 ${
-              activeTab === tab.id 
-                ? 'bg-white text-primary shadow-sm ring-1 ring-slate-200/50' 
+            title={tab.label}
+            className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-3 px-2 sm:px-4 rounded-xl text-sm font-bold transition-all duration-300 ${
+              activeTab === tab.id
+                ? 'bg-white text-primary shadow-sm ring-1 ring-slate-200/50'
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
             }`}
           >
-            {tab.icon} {tab.label}
+            <span className="shrink-0">{tab.icon}</span>
+            <span className="hidden sm:inline">{tab.label}</span>
           </button>
         ))}
       </div>
@@ -223,9 +259,33 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
       {/* --- TAB: RINGKASAN PROYEK --- */}
       {activeTab === 'ringkasan' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+          {/* Langkah berikutnya — pertanyaan pertama vendor tiap kali membuka proyek */}
+          <div className={`relative overflow-hidden rounded-2xl border p-6 ${
+            nextStep.waiting ? 'bg-sky-50/60 border-sky-200' : 'bg-amber-50/60 border-amber-300 ring-4 ring-amber-50'
+          }`}>
+            <span aria-hidden className={`absolute left-0 top-0 bottom-0 w-1.5 ${nextStep.waiting ? 'bg-sky-300' : 'bg-amber-400'}`} />
+            <div className="pl-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className={`text-[10px] font-black uppercase tracking-[0.12em] ${nextStep.waiting ? 'text-sky-700' : 'text-amber-800'}`}>
+                  {nextStep.waiting ? 'Sedang menunggu pihak lain' : 'Langkah Anda berikutnya'}
+                </div>
+                <h2 className="text-lg font-bold text-slate-900 mt-1">{nextStep.label}</h2>
+                <p className="text-sm text-slate-600 mt-1.5 max-w-prose">{nextStep.detail}</p>
+              </div>
+              {nextStep.href && (
+                <Link
+                  href={nextStep.href}
+                  className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm transition-colors shadow-sm shadow-primary/30"
+                >
+                  {nextStep.label} <ArrowRight className="w-4 h-4" />
+                </Link>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
             <h2 className="text-lg font-bold text-slate-800 mb-8">Status Pengajuan PTW</h2>
-            
+
             <div className="relative flex justify-between items-start max-w-3xl mx-auto">
               <div className="absolute top-6 left-0 right-0 h-1 bg-slate-100 -z-0"></div>
               <div className={`absolute top-6 left-0 w-1/2 h-1 -z-0 transition-all ${getStepLineStyle(prosedurStatus)}`}></div>
@@ -288,13 +348,21 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
               badge={getStatusBadge(prosedurStatus)}
             >
               <div className="space-y-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <StageRail
+                    steps={PROCEDURE_STAGE_SEQUENCE}
+                    currentIndex={procedureStageIndex(prosedur?.status)}
+                    tone={vendorRailTone(prosedurStatus)}
+                  />
+                </div>
+
                 {prosedurStatus === 'Rejected' && prosedurLastNote && (
                   <div className="p-4 bg-rose-50 rounded-xl text-sm text-rose-700 font-medium border border-rose-100">
                     <AlertTriangle className="w-4 h-4 inline mr-2 -mt-0.5" />
                     <span className="font-bold">Catatan Revisi:</span> {prosedurLastNote}
                   </div>
                 )}
-                
+
                 <div className="flex gap-4">
                   {(prosedurStatus === 'Pending' || prosedurStatus === 'Approved' || prosedurStatus === 'Rejected') && (
                     <div className="flex-1">
@@ -362,6 +430,14 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
               badge={getStatusBadge(jsaStatus, jsa?.status)}
             >
               <div className="space-y-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <StageRail
+                    steps={JSA_STAGE_SEQUENCE}
+                    currentIndex={jsaStageIndex(jsa?.status)}
+                    tone={vendorRailTone(jsaStatus)}
+                  />
+                </div>
+
                 {jsa?.rejection_note && (
                   <div className="p-4 bg-rose-50 rounded-xl text-sm text-rose-700 font-medium border border-rose-100">
                     <AlertTriangle className="w-4 h-4 inline mr-2 -mt-0.5" />
@@ -453,6 +529,14 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-bold text-sm text-slate-800">{rowTitle}</span>
                             {getStatusBadge(rowStatus, row.status)}
+                          </div>
+
+                          <div className="bg-white border border-slate-200 rounded-xl p-4">
+                            <StageRail
+                              steps={PTW_STAGE_SEQUENCE}
+                              currentIndex={ptwStageIndex(row.status)}
+                              tone={vendorRailTone(rowStatus)}
+                            />
                           </div>
 
                           {row.rejection_note && (

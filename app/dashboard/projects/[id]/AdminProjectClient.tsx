@@ -21,7 +21,7 @@ import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION, PTW_STAGE_SEQU
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, isProcedurePending, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
 import { StageAssignmentRowWithName } from '@/lib/stage-assignments';
-import { DocStageTimeline } from '@/components/internal/doc-stage-timeline';
+import { StageRail } from '@/components/internal/stage-rail';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { EXPIRY_TONE } from '@/lib/document-expiry';
 import { DOC_TYPE_LABEL, type DocLogType } from '@/lib/document-logs';
@@ -52,21 +52,91 @@ function docLogTone(action: string) {
   return { text: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', icon: FileSignature };
 }
 
-function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+/**
+ * Chrome kartu review dibedakan oleh SIAPA yang ditunggu, bukan oleh jenis
+ * dokumennya: kartu yang menunggu kamu tampil menonjol (amber + ring), kartu
+ * yang cuma kamu pantau tampil tenang (netral + rail biru). Sebelumnya semua
+ * kartu pending tampil amber identik, jadi tidak kelihatan mana yang benar-
+ * benar butuh keputusanmu.
+ */
+const REVIEW_TONE = {
+  action: {
+    shell: 'border-amber-300 shadow-xl ring-4 ring-amber-50',
+    rail: 'bg-amber-400',
+    head: 'bg-amber-50/60 border-amber-100',
+    chip: 'bg-amber-200/80 text-amber-900',
+    chipText: 'Perlu tindakan Anda',
+    icon: 'bg-amber-100 text-amber-700',
+  },
+  waiting: {
+    shell: 'border-slate-200 shadow-sm',
+    rail: 'bg-sky-300',
+    head: 'bg-slate-50 border-slate-100',
+    chip: 'bg-sky-100 text-sky-800',
+    chipText: 'Berjalan — bukan tahap Anda',
+    icon: 'bg-sky-50 text-sky-600',
+  },
+} as const;
+
+function ReviewCard({ tone, icon, title, blurb, rail, actions, children }: {
+  tone: 'action' | 'waiting';
+  icon: React.ReactNode;
+  title: string;
+  blurb: string;
+  rail: React.ReactNode;
+  actions?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  const t = REVIEW_TONE[tone];
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
-       <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-6 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-          <div className="flex items-center gap-3">
-             {icon}
-             <h2 className="text-lg font-bold text-slate-800">{title}</h2>
-             {badge}
+    <div className={`relative bg-white rounded-3xl border overflow-hidden mb-6 ${t.shell}`}>
+      <span aria-hidden className={`absolute left-0 top-0 bottom-0 w-1.5 ${t.rail}`} />
+      <div className={`border-b p-4 pl-6 sm:p-6 sm:pl-8 ${t.head}`}>
+        <span className={`inline-flex text-[10px] font-black uppercase tracking-[0.12em] px-2 py-0.5 rounded ${t.chip}`}>
+          {t.chipText}
+        </span>
+        <div className="mt-3 flex flex-col md:flex-row md:items-start justify-between gap-5">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${t.icon}`}>{icon}</div>
+              <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+            </div>
+            <p className="text-sm text-slate-600 mt-2.5 max-w-prose">{blurb}</p>
+            <div className="mt-4">{rail}</div>
           </div>
-          {isOpen ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
-       </button>
-       {isOpen && <div className="p-6 border-t border-slate-200 bg-white">{children}</div>}
+          {actions && <div className="shrink-0 w-full md:w-auto">{actions}</div>}
+        </div>
+      </div>
+      {children}
     </div>
-  )
+  );
+}
+
+/**
+ * Pratinjau dokumen dipasang di balik toggle — tiap PDFViewer itu iframe 700px
+ * yang berat, dan satu proyek bisa punya Prosedur + JSA + beberapa PTW
+ * sekaligus. Default terbuka hanya untuk kartu yang menunggu keputusanmu.
+ */
+function DocPreview({ label, defaultOpen, children }: {
+  label: string;
+  defaultOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 px-4 sm:px-6 py-3.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+      >
+        <span className="flex items-center gap-2"><FileText className="w-4 h-4" /> {label}</span>
+        {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+      {open && <div className="bg-slate-100 p-2 border-t border-slate-100">{children}</div>}
+    </div>
+  );
 }
 
 function DocumentModal({ isOpen, onClose, title, children }: any) {
@@ -84,22 +154,6 @@ function DocumentModal({ isOpen, onClose, title, children }: any) {
            {children}
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Indikator progress multi-signature satu tahap — "N dari M sudah menyetujui", atau peringatan kalau belum ada yang ditugaskan sama sekali. */
-function StageProgress({ approved, total }: { approved: number; total: number }) {
-  if (total === 0) {
-    return (
-      <div className="flex items-center gap-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5 w-fit mt-2">
-        <AlertTriangle className="w-3.5 h-3.5" /> Belum ada reviewer yang ditugaskan
-      </div>
-    );
-  }
-  return (
-    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5 w-fit mt-2">
-      <Users className="w-3.5 h-3.5" /> {approved} dari {total} sudah menyetujui
     </div>
   );
 }
@@ -431,10 +485,6 @@ export default function AdminProjectClient({
   const getStageRows = (stageKey: string): StageAssignmentRowWithName[] => stageAssignments?.[stageKey] ?? [];
   const isAssignedPending = (stageKey: string) =>
     getStageRows(stageKey).some(r => r.assignee_id === currentUserId && r.status === 'pending');
-  const stageProgress = (stageKey: string) => {
-    const rows = getStageRows(stageKey);
-    return { approved: rows.filter(r => r.status === 'approved').length, total: rows.length };
-  };
 
   const isProsedurTahapReviewPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPgsol;
   const isProsedurTahapHsePgsol = prosedur?.status === PROCEDURE_STATUS.reviewHsePgsol;
@@ -444,7 +494,6 @@ export default function AdminProjectClient({
   const hasProsedurPermission = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
   const canApproveProsedur = hasProsedurPermission && isAssignedPending(procStageKey);
   const showProsedurCard = hasProsedurPermission;
-  const prosedurProgress = stageProgress(procStageKey);
 
   // JSA: dua tahap, dua orang berbeda.
   //   Review PGSOL    -> permission jsa.review_pgsol
@@ -461,7 +510,6 @@ export default function AdminProjectClient({
     !jsaSudahDireviewOlehSaya;
   const canApproveJsa = hasJsaPermission && isAssignedPending(jsaStageKey);
   const showJsaCard = hasJsaPermission;
-  const jsaProgress = stageProgress(jsaStageKey);
 
   // PTW: permission & assignment dicek per baris karena bisa ada beberapa PTW tipe berbeda sekaligus.
   const ptwStageKeyForRow = (row: any) => {
@@ -475,6 +523,12 @@ export default function AdminProjectClient({
   const canApprovePtwRow = (row: any) => hasPtwPermissionForRow(row) && isAssignedPending(ptwStageKeyForRow(row));
   const ptwVisibleRows = ptws.filter(hasPtwPermissionForRow);
   const canApprovePtw = ptwVisibleRows.some(canApprovePtwRow);
+
+  /** Berapa kartu yang benar-benar menunggu keputusan user ini — dipakai sebagai hitungan di judul tab Approval K3. */
+  const actionCount =
+    (canApproveProsedur ? 1 : 0) +
+    (canApproveJsa ? 1 : 0) +
+    ptwVisibleRows.filter(canApprovePtwRow).length;
 
   /**
    * Safety gate: workers/equipment on this PTW whose competency or
@@ -843,78 +897,75 @@ export default function AdminProjectClient({
             
             {/* --- BAGIAN 1: MENUNGGU PERSETUJUAN --- */}
             <div>
-               <div className="flex items-center gap-2 mb-6">
+               <div className="flex flex-wrap items-center gap-3 mb-6">
                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
                    <AlertTriangle className="w-4 h-4 text-amber-600" />
                  </div>
-                 <h2 className="text-xl font-bold text-slate-800">Menunggu Persetujuan Anda</h2>
+                 <h2 className="text-xl font-bold text-slate-800">Dokumen Dalam Proses</h2>
+                 {actionCount > 0 ? (
+                   <span className="text-xs font-black uppercase tracking-wider bg-amber-200/80 text-amber-900 px-2.5 py-1 rounded-lg">
+                     {actionCount} menunggu Anda
+                   </span>
+                 ) : (
+                   <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+                     Tidak ada yang menunggu Anda
+                   </span>
+                 )}
                </div>
 
                {/* JIKA PROSEDUR PENDING */}
                {showProsedurCard && (
-                 <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
-                    <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                       <div>
-                         <div className="flex items-center gap-2 mb-1 flex-wrap">
-                           <FileSignature className="w-5 h-5 text-amber-600" />
-                           <h3 className="text-lg font-bold text-amber-900">Prosedur Kerja (SOP)</h3>
-                           <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
-                             {isProsedurTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : isProsedurTahapHsePgsol ? 'Tahap 2 — Review HSE PGSOL' : isProsedurTahapHssePgn ? 'Tahap 3 — Review HSSE PGN' : 'Tahap 4 — Menunggu Review PM Zona'}
-                           </span>
-                         </div>
-                         <p className="text-amber-700 text-sm">
-                           {isProsedurTahapReviewPgsol
-                             ? 'Verifikasi teknis: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke HSE PGSOL.'
-                             : isProsedurTahapHsePgsol
-                               ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada SOP sudah memadai sebelum diteruskan ke HSSE PGN.'
-                               : isProsedurTahapHssePgn
-                                 ? 'Verifikasi HSSE PGN: pastikan aspek keselamatan kerja pada SOP sudah memadai dari sisi PGN sebelum diteruskan ke PM Zona.'
-                                 : 'Vendor telah mengajukan Prosedur Kerja. Silakan review dokumen di bawah ini.'}
-                         </p>
-                         <StageProgress {...prosedurProgress} />
-                         <details className="mt-3 group">
-                           <summary className="text-xs font-bold text-amber-700 cursor-pointer hover:text-amber-900 list-none flex items-center gap-1">
-                             <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
-                           </summary>
-                           <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
-                             <DocStageTimeline
-                               steps={PROCEDURE_STAGE_SEQUENCE}
-                               currentIndex={prosedurTimelineIndex}
-                               rows={stageAssignments ?? {}}
-                               onRollback={canRollback && prosedurTimelineIndex < PROCEDURE_STAGE_SEQUENCE.length ? (step) => openRollback('procedure', prosedur.id, step) : undefined}
-                             />
-                           </div>
-                         </details>
-                       </div>
-                       {canApproveProsedur && (
-                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                           <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
-                           <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                             {isProsedurTahapReviewPgsol ? 'Review & Teruskan ke HSE PGSOL' : isProsedurTahapHsePgsol ? 'Review & Teruskan ke HSSE PGN' : isProsedurTahapHssePgn ? 'Review & Teruskan ke PM Zona' : 'Setujui SOP'}
-                           </button>
-                         </div>
-                       )}
-                    </div>
-                    <div className="bg-slate-100 p-2">
-                      {prosedur?.content?.prosedur_html ? (
-                         <div className="prose prose-slate max-w-none p-6 border border-slate-200 rounded-xl bg-white shadow-sm" dangerouslySetInnerHTML={{ __html: prosedur.content.prosedur_html }} />
-                      ) : prosedur?.content ? (
-                        <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
-                           <ProsedurPDF data={{ 
-                             ...prosedur.content, 
-                             projectName: prosedur.content.projectName || project.name || 'Proyek',
-                             apd: prosedur.content.apd || prosedur.content.selectedApd || [],
-                             tools: prosedur.content.tools || [],
-                             perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
-                             tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
-                             revisions: prosedur.content.revisions || [],
-                           }} />
-                        </PDFViewer>
-                      ) : (
-                        <div className="p-12 text-center text-slate-500">Format dokumen tidak valid.</div>
-                      )}
-                    </div>
-                 </div>
+                 <ReviewCard
+                   tone={canApproveProsedur ? 'action' : 'waiting'}
+                   icon={<FileSignature className="w-5 h-5" />}
+                   title="Prosedur Kerja (SOP)"
+                   blurb={
+                     isProsedurTahapReviewPgsol
+                       ? 'Verifikasi teknis: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke HSE PGSOL.'
+                       : isProsedurTahapHsePgsol
+                         ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada SOP sudah memadai sebelum diteruskan ke HSSE PGN.'
+                         : isProsedurTahapHssePgn
+                           ? 'Verifikasi HSSE PGN: pastikan aspek keselamatan kerja pada SOP sudah memadai dari sisi PGN sebelum diteruskan ke PM Zona.'
+                           : 'Persetujuan akhir PM Zona: SOP sudah lolos review PGSOL dan HSSE PGN.'
+                   }
+                   rail={
+                     <StageRail
+                       steps={PROCEDURE_STAGE_SEQUENCE}
+                       currentIndex={prosedurTimelineIndex}
+                       tone={canApproveProsedur ? 'action' : 'waiting'}
+                       rows={stageAssignments ?? {}}
+                       onRollback={canRollback && prosedurTimelineIndex < PROCEDURE_STAGE_SEQUENCE.length ? (step) => openRollback('procedure', prosedur.id, step) : undefined}
+                     />
+                   }
+                   actions={canApproveProsedur ? (
+                     <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-56">
+                       <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
+                         {isProsedurTahapReviewPgsol ? 'Teruskan ke HSE PGSOL' : isProsedurTahapHsePgsol ? 'Teruskan ke HSSE PGN' : isProsedurTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui SOP'}
+                       </button>
+                       <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
+                     </div>
+                   ) : undefined}
+                 >
+                   <DocPreview label="Pratinjau Prosedur Kerja" defaultOpen={canApproveProsedur}>
+                     {prosedur?.content?.prosedur_html ? (
+                        <div className="prose prose-slate max-w-none p-6 border border-slate-200 rounded-xl bg-white shadow-sm" dangerouslySetInnerHTML={{ __html: prosedur.content.prosedur_html }} />
+                     ) : prosedur?.content ? (
+                       <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
+                          <ProsedurPDF data={{
+                            ...prosedur.content,
+                            projectName: prosedur.content.projectName || project.name || 'Proyek',
+                            apd: prosedur.content.apd || prosedur.content.selectedApd || [],
+                            tools: prosedur.content.tools || [],
+                            perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
+                            tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
+                            revisions: prosedur.content.revisions || [],
+                          }} />
+                       </PDFViewer>
+                     ) : (
+                       <div className="p-12 text-center text-slate-500">Format dokumen tidak valid.</div>
+                     )}
+                   </DocPreview>
+                 </ReviewCard>
                )}
 
                {/* JSA sudah direview oleh saya — pemisahan wewenang, harus orang lain yang menyetujui */}
@@ -937,60 +988,50 @@ export default function AdminProjectClient({
 
                {/* JIKA JSA PENDING */}
                {showJsaCard && (
-                 <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50">
-                    <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                       <div>
-                         <div className="flex items-center gap-2 mb-1 flex-wrap">
-                           <ShieldAlert className="w-5 h-5 text-amber-600" />
-                           <h3 className="text-lg font-bold text-amber-900">Job Safety Analysis (JSA)</h3>
-                           <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900">
-                             {isTahapReviewPgsol ? 'Tahap 1 — Review PGSOL' : isTahapHsePgsol ? 'Tahap 2 — Review HSE PGSOL' : isTahapHssePgn ? 'Tahap 3 — Review HSSE PGN' : 'Tahap 4 — Persetujuan PM Zona'}
-                           </span>
-                         </div>
-                         <p className="text-amber-700 text-sm">
-                           {isTahapReviewPgsol
-                             ? 'Verifikasi teknis: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar.'
-                             : isTahapHsePgsol
-                               ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada JSA ini sudah memadai sebelum diteruskan ke HSSE PGN.'
-                               : isTahapHssePgn
-                                 ? 'Verifikasi HSSE PGN: pastikan aspek keselamatan kerja pada JSA ini sudah memadai dari sisi PGN sebelum diteruskan ke PM Zona.'
-                                 : 'Otorisasi akhir: JSA sudah direview HSSE PGN. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'}
-                         </p>
-                         <StageProgress {...jsaProgress} />
-                         <details className="mt-3 group">
-                           <summary className="text-xs font-bold text-amber-700 cursor-pointer hover:text-amber-900 list-none flex items-center gap-1">
-                             <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
-                           </summary>
-                           <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
-                             <DocStageTimeline
-                               steps={JSA_STAGE_SEQUENCE}
-                               currentIndex={jsaTimelineIndex}
-                               rows={stageAssignments ?? {}}
-                               onRollback={canRollback && jsaTimelineIndex < JSA_STAGE_SEQUENCE.length ? (step) => openRollback('jsa', jsa.id, step) : undefined}
-                             />
-                           </div>
-                         </details>
-                       </div>
-                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                         <button
-                           onClick={handleHseAssistant}
-                           disabled={hseLoading || !jsa?.jsa_steps?.length}
-                           title="Minta AI memindai langkah kerja berisiko tinggi dengan mitigasi lemah"
-                           className="px-5 py-2.5 text-sm font-bold text-center text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
-                         >
-                           {hseLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                           Analisis Anomali AI
-                         </button>
-                         {canApproveJsa && (
-                           <>
-                             <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
-                             <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                               {isTahapReviewPgsol ? 'Review & Teruskan ke HSE PGSOL' : isTahapHsePgsol ? 'Review & Teruskan ke HSSE PGN' : isTahapHssePgn ? 'Review & Teruskan ke PM Zona' : 'Setujui JSA'}
-                             </button>
-                           </>
-                         )}
-                       </div>
-                    </div>
+                 <ReviewCard
+                   tone={canApproveJsa ? 'action' : 'waiting'}
+                   icon={<ShieldAlert className="w-5 h-5" />}
+                   title="Job Safety Analysis (JSA)"
+                   blurb={
+                     isTahapReviewPgsol
+                       ? 'Verifikasi teknis: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar.'
+                       : isTahapHsePgsol
+                         ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada JSA ini sudah memadai sebelum diteruskan ke HSSE PGN.'
+                         : isTahapHssePgn
+                           ? 'Verifikasi HSSE PGN: pastikan aspek keselamatan kerja pada JSA ini sudah memadai dari sisi PGN sebelum diteruskan ke PM Zona.'
+                           : 'Otorisasi akhir: JSA sudah direview HSSE PGN. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'
+                   }
+                   rail={
+                     <StageRail
+                       steps={JSA_STAGE_SEQUENCE}
+                       currentIndex={jsaTimelineIndex}
+                       tone={canApproveJsa ? 'action' : 'waiting'}
+                       rows={stageAssignments ?? {}}
+                       onRollback={canRollback && jsaTimelineIndex < JSA_STAGE_SEQUENCE.length ? (step) => openRollback('jsa', jsa.id, step) : undefined}
+                     />
+                   }
+                   actions={
+                     <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-56">
+                       {canApproveJsa && (
+                         <>
+                           <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
+                             {isTahapReviewPgsol ? 'Teruskan ke HSE PGSOL' : isTahapHsePgsol ? 'Teruskan ke HSSE PGN' : isTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui JSA'}
+                           </button>
+                           <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
+                         </>
+                       )}
+                       <button
+                         onClick={handleHseAssistant}
+                         disabled={hseLoading || !jsa?.jsa_steps?.length}
+                         title="Minta AI memindai langkah kerja berisiko tinggi dengan mitigasi lemah"
+                         className="w-full px-5 py-2.5 text-sm font-bold text-center text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                       >
+                         {hseLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                         Analisis Anomali AI
+                       </button>
+                     </div>
+                   }
+                 >
                     {hseError && (
                       <div className="flex items-start gap-3 bg-rose-50 border-b border-rose-100 px-4 sm:px-6 py-4">
                         <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
@@ -1033,7 +1074,7 @@ export default function AdminProjectClient({
                         />
                       </div>
                     )}
-                    <div className="bg-slate-100 p-2">
+                    <DocPreview label="Pratinjau JSA" defaultOpen={canApproveJsa}>
                       <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
                          <JsaPDF projectId={project.id} signatories={jsaSignatories} preparer={{ satker: project.vendor_profiles?.company_name }} steps={jsa?.jsa_steps?.map((step: any) => {
                            let bahayaObj: any = {}; let risikoObj: any = {}; let tindakanObj: any = {};
@@ -1047,8 +1088,8 @@ export default function AdminProjectClient({
                            };
                          }) || []} />
                       </PDFViewer>
-                    </div>
-                 </div>
+                    </DocPreview>
+                 </ReviewCard>
                )}
 
                {/* JIKA ADA PTW PENDING (bisa lebih dari satu tipe sekaligus) */}
@@ -1056,39 +1097,30 @@ export default function AdminProjectClient({
                  const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
                  const safety = getPtwSafetyIssues(row);
                  const rowCanApprove = canApprovePtwRow(row);
-                 const rowProgress = stageProgress(ptwStageKeyForRow(row));
                  const rowTimelineIndex = ptwStageIndex(row.status);
                  return (
-                   <div key={row.id} className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden ring-4 ring-amber-50 mb-6">
-                      <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                         <div>
-                           <div className="flex items-center gap-2 mb-1">
-                             <Stamp className="w-5 h-5 text-amber-600" />
-                             <h3 className="text-lg font-bold text-amber-900">Permit to Work — {rowTitle}</h3>
-                           </div>
-                           <p className="text-amber-700 text-sm">Vendor telah melengkapi PTW. Silakan review pekerja & peralatan.</p>
-                           <StageProgress {...rowProgress} />
-                           <details className="mt-3 group">
-                             <summary className="text-xs font-bold text-amber-700 cursor-pointer hover:text-amber-900 list-none flex items-center gap-1">
-                               <ChevronDown className="w-3.5 h-3.5 group-open:hidden" /><ChevronUp className="w-3.5 h-3.5 hidden group-open:inline" /> Lihat detail seluruh tahapan
-                             </summary>
-                             <div className="mt-3 bg-white rounded-xl border border-amber-100 p-4">
-                               <DocStageTimeline
-                                 steps={PTW_STAGE_SEQUENCE}
-                                 currentIndex={rowTimelineIndex}
-                                 rows={stageAssignments ?? {}}
-                                 onRollback={canRollback && rowTimelineIndex < PTW_STAGE_SEQUENCE.length ? (step) => openRollback('ptw', row.id, step) : undefined}
-                               />
-                             </div>
-                           </details>
-                         </div>
-                         {rowCanApprove && (
-                           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                             <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
-                             <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
-                           </div>
-                         )}
-                      </div>
+                   <ReviewCard
+                     key={row.id}
+                     tone={rowCanApprove ? 'action' : 'waiting'}
+                     icon={<Stamp className="w-5 h-5" />}
+                     title={`Permit to Work — ${rowTitle}`}
+                     blurb="Vendor telah melengkapi PTW. Periksa pekerja, peralatan, dan masa berlaku izin sebelum memutuskan."
+                     rail={
+                       <StageRail
+                         steps={PTW_STAGE_SEQUENCE}
+                         currentIndex={rowTimelineIndex}
+                         tone={rowCanApprove ? 'action' : 'waiting'}
+                         rows={stageAssignments ?? {}}
+                         onRollback={canRollback && rowTimelineIndex < PTW_STAGE_SEQUENCE.length ? (step) => openRollback('ptw', row.id, step) : undefined}
+                       />
+                     }
+                     actions={rowCanApprove ? (
+                       <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-56">
+                         <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
+                         <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
+                       </div>
+                     ) : undefined}
+                   >
                       {safety.hasIssues && (
                         <div className="flex items-start gap-3 bg-rose-50 border-b border-rose-100 px-4 sm:px-6 py-4">
                           <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
@@ -1101,8 +1133,8 @@ export default function AdminProjectClient({
                           </div>
                         </div>
                       )}
-                      <div className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                      <div className="p-4 sm:p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                             <div className="bg-slate-50 px-5 py-4 border-b border-slate-200 font-bold text-sm text-slate-800 flex items-center gap-2">
                               <Users className="w-4 h-4 text-slate-500" /> Pekerja Terdaftar
@@ -1146,38 +1178,38 @@ export default function AdminProjectClient({
                             </div>
                           </div>
                         </div>
-                        <div className="bg-slate-100 p-2 rounded-2xl">
-                          <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
-                            <PtwPDF
-                              projectId={project.id}
-                              ptwNumber={row.ptw_number}
-                              projectName={project.name}
-                              vendorName={project.vendor_profiles?.company_name}
-                              location={project.location}
-                              startDate={project.start_date}
-                              endDate={project.end_date}
-                              description={project.description}
-                              ptwType={row.ptw_type || 'dingin'}
-                              hazards={row.hazards || []}
-                              apd={row.apd || {}}
-                              pekerja={row.workers || []}
-                              peralatan={row.equipment || []}
-                              gasTests={row.gas_tests || []}
-                              validFrom={row.valid_from}
-                              validTo={row.valid_to}
-                              workStart={row.work_start}
-                              workEnd={row.work_end}
-                              hotWorkTypes={row.hot_work_types || []}
-                              gasTestFrequency={row.gas_test_frequency || {}}
-                              checklistData={row.safety_checklist || {}}
-                              jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
-                              siblings={ptws}
-                              signatories={ptwSignatories?.[row.id]}
-                            />
-                          </PDFViewer>
-                        </div>
                       </div>
-                   </div>
+                      <DocPreview label="Pratinjau PTW" defaultOpen={rowCanApprove}>
+                        <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
+                          <PtwPDF
+                            projectId={project.id}
+                            ptwNumber={row.ptw_number}
+                            projectName={project.name}
+                            vendorName={project.vendor_profiles?.company_name}
+                            location={project.location}
+                            startDate={project.start_date}
+                            endDate={project.end_date}
+                            description={project.description}
+                            ptwType={row.ptw_type || 'dingin'}
+                            hazards={row.hazards || []}
+                            apd={row.apd || {}}
+                            pekerja={row.workers || []}
+                            peralatan={row.equipment || []}
+                            gasTests={row.gas_tests || []}
+                            validFrom={row.valid_from}
+                            validTo={row.valid_to}
+                            workStart={row.work_start}
+                            workEnd={row.work_end}
+                            hotWorkTypes={row.hot_work_types || []}
+                            gasTestFrequency={row.gas_test_frequency || {}}
+                            checklistData={row.safety_checklist || {}}
+                            jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
+                            siblings={ptws}
+                            signatories={ptwSignatories?.[row.id]}
+                          />
+                        </PDFViewer>
+                      </DocPreview>
+                   </ReviewCard>
                  );
                })}
 

@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
-import { ArrowLeft, CheckCircle2, XCircle, FileText, Loader2 } from 'lucide-react';
+import { ArrowLeft, XCircle, FileText, Loader2 } from 'lucide-react';
 import { approveProcedure, rejectProcedure } from '../../actions';
-import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
+import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
+import { StageRail } from '@/components/internal/stage-rail';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
@@ -48,12 +49,16 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
   // direview oleh PM") tidak lagi benar saat status masih Review PGSOL
   // atau Review HSE PGSOL.
   const statusBlurb =
-    prosedur.status === PROCEDURE_STATUS.reviewPgsol
+    prosedur.status === PROCEDURE_STATUS.reviewInternalVendor
+      ? 'Dokumen ini masih direview internal oleh staff vendor sendiri — belum masuk ke rantai persetujuan PGSOL/PGN.'
+      : prosedur.status === PROCEDURE_STATUS.reviewPgsol
       ? 'Dokumen prosedur kerja ini sedang menunggu verifikasi teknis oleh PGSOL sebelum diteruskan ke review HSE PGSOL.'
       : prosedur.status === PROCEDURE_STATUS.reviewHsePgsol
-      ? 'Dokumen prosedur kerja ini telah direview teknis PGSOL dan sedang menunggu review HSE PGSOL sebelum diteruskan ke PM.'
+      ? 'Dokumen prosedur kerja ini telah direview teknis PGSOL dan sedang menunggu review HSE PGSOL sebelum diteruskan ke HSSE PGN.'
+      : prosedur.status === PROCEDURE_STATUS.reviewHssePgn
+      ? 'Dokumen prosedur kerja ini telah lolos review PGSOL dan sedang menunggu verifikasi keselamatan oleh HSSE PGN sebelum diteruskan ke PM Zona.'
       : prosedur.status === PROCEDURE_STATUS.menungguReviewPM
-      ? 'Dokumen prosedur kerja ini telah direview PGSOL dan diajukan untuk persetujuan akhir oleh PM.'
+      ? 'Dokumen prosedur kerja ini telah direview PGSOL dan HSSE PGN, dan diajukan untuk persetujuan akhir oleh PM Zona.'
       : prosedur.status === PROCEDURE_STATUS.approved
       ? 'Dokumen prosedur kerja ini telah disetujui.'
       : 'Dokumen prosedur kerja ini dikembalikan ke vendor untuk revisi.';
@@ -119,67 +124,83 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-200">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">Prosedur #{prosedur.id.slice(0, 8).toUpperCase()}</h2>
-              <p className="text-xs text-slate-500 font-medium">Diajukan pada {new Date(prosedur.created_at).toLocaleDateString('id-ID')}</p>
-            </div>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-            prosedur.status === PROCEDURE_STATUS.draft ? 'bg-slate-100 text-slate-600' :
-            prosedur.status === PROCEDURE_STATUS.reviewPgsol ? 'bg-amber-100 text-amber-700' :
-            prosedur.status === PROCEDURE_STATUS.reviewHsePgsol ? 'bg-amber-100 text-amber-700' :
-            prosedur.status === PROCEDURE_STATUS.menungguReviewPM ? 'bg-orange-100 text-orange-600' :
-            prosedur.status === PROCEDURE_STATUS.approved ? 'bg-green-100 text-green-700' :
-            'bg-rose-100 text-rose-700'
+      <div className={`relative bg-white rounded-3xl overflow-hidden border ${
+        canApprove ? 'border-amber-300 shadow-xl ring-4 ring-amber-50' : 'border-slate-200 shadow-sm'
+      }`}>
+        <span aria-hidden className={`absolute left-0 top-0 bottom-0 w-1.5 ${canApprove ? 'bg-amber-400' : 'bg-slate-200'}`} />
+
+        <div className={`p-6 pl-8 border-b ${canApprove ? 'bg-amber-50/60 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
+          <span className={`inline-flex text-[10px] font-black uppercase tracking-[0.12em] px-2 py-0.5 rounded ${
+            canApprove ? 'bg-amber-200/80 text-amber-900' : 'bg-slate-200 text-slate-600'
           }`}>
-            {prosedur.status}
+            {canApprove ? 'Perlu tindakan Anda' : 'Hanya dapat dilihat'}
           </span>
+
+          <div className="mt-3 flex flex-col md:flex-row md:items-start justify-between gap-5">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 shrink-0 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Prosedur #{prosedur.id.slice(0, 8).toUpperCase()}</h2>
+                  <p className="text-xs text-slate-500 font-medium">Diajukan pada {new Date(prosedur.created_at).toLocaleDateString('id-ID')}</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-600 mt-3 max-w-prose">{statusBlurb}</p>
+
+              <div className="mt-4">
+                <StageRail
+                  steps={PROCEDURE_STAGE_SEQUENCE}
+                  currentIndex={procedureStageIndex(prosedur.status)}
+                  tone={
+                    prosedur.status === PROCEDURE_STATUS.approved ? 'done'
+                      : prosedur.status === PROCEDURE_STATUS.draft ? 'returned'
+                      : canApprove ? 'action' : 'waiting'
+                  }
+                />
+              </div>
+            </div>
+
+            {canApprove && (
+              <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-56 shrink-0">
+                <button
+                  onClick={handleApprove}
+                  disabled={isApproving}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm shadow-emerald-200"
+                >
+                  {isApproving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Setujui Prosedur
+                </button>
+                <button
+                  onClick={() => setRejectModalOpen(true)}
+                  className="w-full px-5 py-2.5 rounded-xl font-bold text-sm text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 transition-colors shadow-sm"
+                >
+                  Tolak & Kembalikan
+                </button>
+              </div>
+            )}
+          </div>
+
+          {prosedur.content?.revisions?.length > 0 && (
+            <div className="mt-5">
+              <RejectionNote note={prosedur.content.revisions[prosedur.content.revisions.length - 1].note} />
+            </div>
+          )}
         </div>
 
-        <div className="p-6 space-y-4">
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 mb-2">
-             <p className="text-sm text-slate-600">{statusBlurb}</p>
-             {prosedur.content?.revisions?.length > 0 && (
-               <div className="mt-4">
-                 <RejectionNote note={prosedur.content.revisions[prosedur.content.revisions.length - 1].note} />
-               </div>
-             )}
-          </div>
-          <div className="w-full bg-slate-500 rounded-xl overflow-hidden border border-slate-200" style={{ height: '800px' }}>
+        <div className="p-4 sm:p-6">
+          <div className="w-full bg-slate-100 rounded-xl overflow-hidden border border-slate-200" style={{ height: '800px' }}>
             {pdfData ? (
               <PDFViewer width="100%" height="100%" className="border-none">
                 <ProsedurPDF data={pdfData} />
               </PDFViewer>
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-300">Data konten tidak tersedia.</div>
+              <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">Data konten tidak tersedia.</div>
             )}
           </div>
         </div>
-
-        {canApprove && (
-          <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end items-center gap-3">
-            <button 
-              onClick={() => setRejectModalOpen(true)}
-              className="px-6 py-2.5 rounded-xl font-bold text-sm text-red-600 bg-white border border-red-200 hover:bg-red-50 transition-colors"
-            >
-              Tolak
-            </button>
-            <button 
-              onClick={handleApprove}
-              disabled={isApproving}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-green-600 hover:bg-green-700 transition-colors shadow-sm shadow-green-600/30"
-            >
-              {isApproving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Setujui Prosedur
-            </button>
-          </div>
-        )}
       </div>
 
       {rejectModalOpen && (
