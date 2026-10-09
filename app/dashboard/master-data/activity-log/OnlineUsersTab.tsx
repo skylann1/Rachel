@@ -12,7 +12,7 @@ import { TypeBadge, timeAgo } from './activity-ui';
 
 const PRUNE_MS = 10_000;
 const POLL_FALLBACK_MS = 30_000;
-const POLL_RESYNC_MS = 120_000;
+const POLL_RESYNC_MS = 30_000;
 const REFETCH_DEBOUNCE_MS = 500;
 
 /**
@@ -24,7 +24,8 @@ const REFETCH_DEBOUNCE_MS = 500;
  * heartbeat tidak menghasilkan event apa pun. Karena itu daftar dipangkas
  * lokal tiap 10 detik memakai aturan 2 menit yang sama dengan server. Kalau
  * kanal gagal tersambung, jatuh ke polling 30 detik; saat tersambung tetap ada
- * sinkronisasi ulang tiap 2 menit untuk mengoreksi event yang terlewat.
+ * sinkronisasi ulang tiap 30 detik untuk mengoreksi event yang terlewat, plus
+ * sinkron seketika saat tab kembali aktif atau kanal tersambung ulang.
  */
 export default function OnlineUsersTab({
   initialUsers, onSelectUser, onCountChange,
@@ -52,40 +53,82 @@ export default function OnlineUsersTab({
 
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel('user-presence-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
-        const row = payload.new as { user_id?: string; current_path?: string | null; last_seen_at?: string } | undefined;
-        const oldRow = payload.old as { user_id?: string } | undefined;
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let wasSubscribed = false;
 
-        if (payload.eventType === 'DELETE') {
-          const id = oldRow?.user_id;
-          if (id) setUsers(prev => prev.filter(u => u.userId !== id));
-          return;
-        }
-        if (!row?.user_id || !row.last_seen_at) return;
+    // Pastikan kanal Realtime bergabung dengan JWT user, bukan anon key —
+    // kalau subscribe lebih dulu dari sesi terbaca, RLS menyaring semua event
+    // dan tab terlihat "Live" padahal tidak pernah menerima apa-apa.
+    const start = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) supabase.realtime.setAuth(session.access_token);
+      } catch {
+        // lanjut tanpa setAuth; polling fallback tetap menjaga daftar segar.
+      }
+      if (cancelled) return;
 
-        if (!isOnline(row.last_seen_at)) {
-          // Sinyal "keluar" (tab terakhir ditutup): last_seen_at digeser ke belakang.
-          setUsers(prev => prev.filter(u => u.userId !== row.user_id));
-          return;
-        }
-        if (knownIds.current.has(row.user_id)) {
-          setUsers(prev => prev.map(u => u.userId === row.user_id
-            ? { ...u, currentPath: row.current_path ?? null, lastSeenAt: row.last_seen_at! }
-            : u));
-        } else {
-          // Pengguna yang belum ada di daftar — profilnya tidak ikut di event, ambil ulang.
-          scheduleRefetch();
-        }
-      })
-      .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+      channel = supabase
+        .channel('user-presence-watch')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
+          const row = payload.new as { user_id?: string; current_path?: string | null; last_seen_at?: string } | undefined;
+          const oldRow = payload.old as { user_id?: string } | undefined;
+
+          if (payload.eventType === 'DELETE') {
+            const id = oldRow?.user_id;
+            if (id) {
+              knownIds.current.delete(id);
+              setUsers(prev => prev.filter(u => u.userId !== id));
+            }
+            return;
+          }
+          if (!row?.user_id || !row.last_seen_at) return;
+          const userId = row.user_id;
+
+          if (!isOnline(row.last_seen_at)) {
+            // Sinyal "keluar" (tab terakhir ditutup): last_seen_at digeser ke belakang.
+            knownIds.current.delete(userId);
+            setUsers(prev => prev.filter(u => u.userId !== userId));
+            return;
+          }
+          if (knownIds.current.has(userId)) {
+            setUsers(prev => prev.map(u => u.userId === userId
+              ? { ...u, currentPath: row.current_path ?? null, lastSeenAt: row.last_seen_at! }
+              : u));
+          } else {
+            // Pengguna yang belum ada di daftar — profilnya tidak ikut di event, ambil ulang.
+            scheduleRefetch();
+          }
+        })
+        .subscribe((status) => {
+          const subscribed = status === 'SUBSCRIBED';
+          setLive(subscribed);
+          // Setelah (re)connect, event selama kanal putus sudah hilang — ambil ulang.
+          if (subscribed && wasSubscribed) scheduleRefetch();
+          if (subscribed) wasSubscribed = true;
+        });
+    };
+    start();
 
     return () => {
+      cancelled = true;
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [scheduleRefetch]);
+
+  // Tab di-background dibatasi browser (timer & WebSocket), event bisa terlewat.
+  // Begitu admin kembali ke tab ini, langsung sinkron.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') refetch(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [refetch]);
 
   useEffect(() => {
     const id = setInterval(refetch, live ? POLL_RESYNC_MS : POLL_FALLBACK_MS);
