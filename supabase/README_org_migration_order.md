@@ -148,4 +148,5 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
    (`CREATE TABLE IF NOT EXISTS` + `DROP POLICY IF EXISTS`). Kode aplikasi
    menelan error insert log, jadi deploy sebelum migrasi tidak merusak
    login/CRUD — tapi halaman Log Aktivitas akan kosong sampai file ini
-   dijalankan.
+   dijalankan. Sudah diterapkan di project Supabase live lewat MCP pada
+   2026-10-10.
