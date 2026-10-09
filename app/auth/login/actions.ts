@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { logActivity } from "@/lib/activity-log";
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -35,12 +36,17 @@ export async function login(formData: FormData) {
     redirect(`/auth/login?error=Akses ditolak. ${debugMsg}`);
   }
 
+  await logActivity(supabase, { actorId: authData.user.id, action: 'Login', entityType: 'auth' });
+
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }
 
 export async function logout() {
   const supabase = await createClient();
+  // Ambil user SEBELUM signOut — setelahnya sesi sudah tidak ada.
+  const { data: { user } } = await supabase.auth.getUser();
+  await logActivity(supabase, { actorId: user?.id ?? null, action: 'Logout', entityType: 'auth' });
   await supabase.auth.signOut();
   redirect("/auth/login");
 }

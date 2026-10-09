@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 import { hasPermissionForUser } from "@/utils/permissions";
 import { writeStageAssignment, PGN_STAGE_KEYS } from "@/lib/stage-assignments";
+import { logActivity } from "@/lib/activity-log";
 
 export async function createProject(formData: FormData) {
   const supabase = await createClient();
@@ -52,6 +53,8 @@ export async function createProject(formData: FormData) {
       link: `/vendor/dashboard/projects/${project.id}/prosedur`,
     });
   }
+
+  await logActivity(supabase, { actorId: user.id, action: "Membuat proyek", entityType: "project", entityId: project.id, notes: name });
 
   revalidatePath("/dashboard/master-data/project");
 }

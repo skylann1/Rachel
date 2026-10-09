@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { logActivity } from "@/lib/activity-log";
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -31,12 +32,16 @@ export async function login(formData: FormData) {
     redirect("/vendor/login?error=Akses ditolak. Akun ini bukan akun Vendor.");
   }
 
+  await logActivity(supabase, { actorId: authData.user.id, action: 'Login', entityType: 'auth' });
+
   revalidatePath("/", "layout");
   redirect("/vendor/dashboard");
 }
 
 export async function logout() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  await logActivity(supabase, { actorId: user?.id ?? null, action: 'Logout', entityType: 'auth' });
   await supabase.auth.signOut();
   redirect("/vendor/login");
 }

@@ -17,6 +17,14 @@ export const allPermissionModules = [
     ]
   },
   {
+    id: 'activityLog',
+    title: 'Log Aktivitas',
+    description: 'Riwayat aktivitas sistem (login, perubahan Master Data, approval dokumen) dan daftar pengguna yang sedang online.',
+    items: [
+      { key: 'view', label: 'Melihat Log Aktivitas & Pengguna Online', allowedTypes: ['pgn'] },
+    ]
+  },
+  {
     id: 'inspection',
     title: 'Modul Inspeksi & Temuan K3',
     description: 'Manajemen inspeksi lapangan dan temuan unsafe act / unsafe condition.',

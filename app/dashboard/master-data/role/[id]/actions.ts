@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { assertSameRoleType, sanitizePermissionsForType, type RoleActor } from '@/lib/role-access';
 import { allPermissionModules } from '../constants';
+import { logActivity } from '@/lib/activity-log';
 
 export async function updateRolePermissions(
   id: string,
@@ -61,6 +62,8 @@ export async function updateRolePermissions(
       console.error('Error updating role:', error);
       return { error: 'Gagal memperbarui konfigurasi role.' };
     }
+
+    await logActivity(authClient, { actorId: user.id, action: 'Mengubah permission role', entityType: 'role', entityId: id, notes: name });
 
     return { success: true };
   } catch (error: any) {

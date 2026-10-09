@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 import { sendEmail, passwordResetEmailHtml } from '@/lib/email';
+import { logActivity } from '@/lib/activity-log';
 
 interface AccountActor {
   userId: string;
@@ -203,6 +204,8 @@ export async function addAccount(formData: FormData) {
       }
     }
 
+    await logActivity(await createClient(), { actorId: actor.userId, action: 'Membuat akun', entityType: 'account', entityId: data.user?.id ?? null, notes: `${fullName} (${role})` });
+
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
     return { success: true };
@@ -295,6 +298,8 @@ export async function updateAccount(id: string, formData: FormData) {
       await adminAuthClient.from('internal_profiles').upsert({ id, nip: nip });
     }
 
+    await logActivity(await createClient(), { actorId: actor.userId, action: 'Mengubah akun', entityType: 'account', entityId: id, notes: `${fullName} (${role})` });
+
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
     return { success: true };
@@ -322,6 +327,8 @@ export async function suspendAccount(id: string, isSuspended: boolean) {
 
     // Attempt to update status in profiles if column exists (it might not exist, but we fallback)
     await adminAuthClient.from('profiles').update({ status: isSuspended ? 'Inactive' : 'Active' }).eq('id', id);
+
+    await logActivity(await createClient(), { actorId: actor.userId, action: isSuspended ? 'Menangguhkan akun' : 'Mengaktifkan kembali akun', entityType: 'account', entityId: id });
 
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
@@ -375,6 +382,8 @@ export async function resetAccountPassword(id: string) {
       emailSent = !emailError;
     }
 
+    await logActivity(await createClient(), { actorId: actor.userId, action: 'Reset password akun', entityType: 'account', entityId: id });
+
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');
     return { success: true, password: randomPassword, emailSent };
@@ -397,6 +406,8 @@ export async function deleteAccount(id: string) {
     if (error) {
       return { error: error.message || 'Gagal menghapus akun' };
     }
+
+    await logActivity(await createClient(), { actorId: actor.userId, action: 'Menghapus akun', entityType: 'account', entityId: id });
 
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');

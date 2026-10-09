@@ -141,3 +141,11 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
    dengan nama di Riwayat Dokumen dan timeline approval. Additive, aman
    dijalankan ulang (`ADD COLUMN IF NOT EXISTS`). Sudah diterapkan di
    project Supabase live lewat MCP pada 2026-10-05.
+9. `schema_activity_log.sql` — tabel `activity_logs` (jejak login/logout dan
+   CRUD Master Data) dan `user_presence` (heartbeat pengguna online +
+   halaman yang sedang dibuka), untuk halaman Master Data → Log Aktivitas.
+   Additive dan tidak bergantung migrasi lain; aman dijalankan ulang
+   (`CREATE TABLE IF NOT EXISTS` + `DROP POLICY IF EXISTS`). Kode aplikasi
+   menelan error insert log, jadi deploy sebelum migrasi tidak merusak
+   login/CRUD — tapi halaman Log Aktivitas akan kosong sampai file ini
+   dijalankan.

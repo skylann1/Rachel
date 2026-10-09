@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 import { assertSameRoleType, type RoleActor } from '@/lib/role-access';
+import { logActivity } from '@/lib/activity-log';
 
 const VALID_ROLE_TYPES = ['pgn', 'pgsol', 'vendor'];
 
@@ -77,6 +78,8 @@ export async function addRole(formData: FormData) {
       return { error: error.message || 'Gagal menambahkan role.' };
     }
 
+    await logActivity(await createClient(), { actorId: actor.userId, action: 'Membuat role', entityType: 'role', notes: name });
+
     revalidatePath('/dashboard/master-data/role');
     revalidatePath('/dashboard/master-data/account');
     return { success: true };
@@ -123,6 +126,8 @@ export async function updateRole(id: string, formData: FormData) {
       return { error: error.message || 'Gagal mengubah role.' };
     }
 
+    await logActivity(await createClient(), { actorId: actor.userId, action: 'Mengubah role', entityType: 'role', entityId: id, notes: name });
+
     revalidatePath('/dashboard/master-data/role');
     revalidatePath('/dashboard/master-data/account');
     return { success: true };
@@ -153,6 +158,8 @@ export async function deleteRole(id: string) {
       }
       return { error: error.message || 'Gagal menghapus role.' };
     }
+
+    await logActivity(await createClient(), { actorId: actor.userId, action: 'Menghapus role', entityType: 'role', entityId: id });
 
     revalidatePath('/dashboard/master-data/role');
     revalidatePath('/dashboard/master-data/account');

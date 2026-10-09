@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { writeStageAssignment, PGSOL_STAGE_KEYS } from '@/lib/stage-assignments';
 import { revalidatePath } from 'next/cache';
+import { logActivity } from '@/lib/activity-log';
 
 export async function getPgsolProjects() {
   const supabase = await createClient();
@@ -56,6 +57,8 @@ export async function savePgsolAssignment(
     projectId, docType, stageKey, assigneeIds,
   });
   if (result.error) return { error: result.error };
+
+  await logActivity(supabase, { actorId: user.id, action: 'Mengubah assignment PGSOL', entityType: 'pgsol_assignment', entityId: projectId, notes: `${docType} / ${stageKey}` });
 
   revalidatePath(`/dashboard/master-data/project-pgsol-assign/${projectId}`);
   return { success: true };

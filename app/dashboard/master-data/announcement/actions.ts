@@ -4,6 +4,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
+import { logActivity } from '@/lib/activity-log';
 
 export interface Announcement {
   id: string;
@@ -106,6 +107,8 @@ export async function addAnnouncement(formData: FormData) {
       return { error: error.message || 'Gagal menambahkan pengumuman.' };
     }
 
+    await logActivity(await createClient(), { actorId: userId, action: 'Membuat pengumuman', entityType: 'announcement', notes: title });
+
     revalidatePath('/dashboard/master-data/announcement');
     revalidatePath('/dashboard');
     revalidatePath('/vendor/dashboard');
@@ -117,7 +120,7 @@ export async function addAnnouncement(formData: FormData) {
 
 export async function updateAnnouncement(id: string, formData: FormData) {
   try {
-    const { error: permError } = await requireAnnouncementAccess();
+    const { error: permError, userId } = await requireAnnouncementAccess();
     if (permError) return { error: permError };
 
     const title = formData.get('title') as string;
@@ -145,6 +148,8 @@ export async function updateAnnouncement(id: string, formData: FormData) {
       return { error: error.message || 'Gagal mengubah pengumuman.' };
     }
 
+    await logActivity(await createClient(), { actorId: userId, action: 'Mengubah pengumuman', entityType: 'announcement', entityId: id, notes: title });
+
     revalidatePath('/dashboard/master-data/announcement');
     revalidatePath('/dashboard');
     revalidatePath('/vendor/dashboard');
@@ -156,7 +161,7 @@ export async function updateAnnouncement(id: string, formData: FormData) {
 
 export async function deleteAnnouncement(id: string) {
   try {
-    const { error: permError } = await requireAnnouncementAccess();
+    const { error: permError, userId } = await requireAnnouncementAccess();
     if (permError) return { error: permError };
 
     const adminClient = createAdminClient();
@@ -169,6 +174,8 @@ export async function deleteAnnouncement(id: string) {
       return { error: error.message || 'Gagal menghapus pengumuman.' };
     }
 
+    await logActivity(await createClient(), { actorId: userId, action: 'Menghapus pengumuman', entityType: 'announcement', entityId: id });
+
     revalidatePath('/dashboard/master-data/announcement');
     revalidatePath('/dashboard');
     revalidatePath('/vendor/dashboard');
@@ -180,7 +187,7 @@ export async function deleteAnnouncement(id: string) {
 
 export async function toggleAnnouncementActive(id: string, isActive: boolean) {
   try {
-    const { error: permError } = await requireAnnouncementAccess();
+    const { error: permError, userId } = await requireAnnouncementAccess();
     if (permError) return { error: permError };
 
     const adminClient = createAdminClient();
@@ -192,6 +199,8 @@ export async function toggleAnnouncementActive(id: string, isActive: boolean) {
     if (error) {
       return { error: error.message || 'Gagal mengubah status pengumuman.' };
     }
+
+    await logActivity(await createClient(), { actorId: userId, action: isActive ? 'Mengaktifkan pengumuman' : 'Menonaktifkan pengumuman', entityType: 'announcement', entityId: id });
 
     revalidatePath('/dashboard/master-data/announcement');
     revalidatePath('/dashboard');

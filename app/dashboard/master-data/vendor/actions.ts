@@ -4,6 +4,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
+import { logActivity } from '@/lib/activity-log';
 
 async function requireManageVendor() {
   const supabase = await createClient();
@@ -12,6 +13,12 @@ async function requireManageVendor() {
   const allowed = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_vendor');
   if (!allowed) return 'Anda tidak memiliki izin untuk mengelola data vendor.';
   return null;
+}
+
+async function logVendorActivity(action: string, entityId: string, notes: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  await logActivity(supabase, { actorId: user?.id ?? null, action, entityType: 'vendor', entityId, notes });
 }
 
 // Update Vendor Data
@@ -73,6 +80,8 @@ export async function updateVendor(orgId: string, formData: FormData) {
         .eq('id', picId)
         .eq('org_id', orgId);
     }
+
+    await logVendorActivity('Mengubah data vendor', orgId, companyName);
 
     revalidatePath('/dashboard/master-data/vendor');
     revalidatePath('/dashboard/master-data/account');
@@ -181,6 +190,8 @@ export async function addVendor(formData: FormData) {
       await adminAuthClient.from('organizations').delete().eq('id', orgId);
       return { error: 'Gagal membuat data perusahaan vendor. Pembuatan dibatalkan.' };
     }
+
+    await logVendorActivity('Membuat data vendor', orgId, companyName);
 
     revalidatePath('/dashboard/master-data/vendor');
     revalidatePath('/dashboard/master-data/account');

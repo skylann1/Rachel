@@ -13,6 +13,7 @@ import {
 import { getSidebarBadges } from "@/app/dashboard/actions/sidebar-badges";
 import { InternalNotificationBell } from "@/components/internal/notification-bell";
 import { getRoleLabel } from "@/lib/roles";
+import { PresenceHeartbeat } from "@/components/internal/presence-heartbeat";
 
 export default async function AuthDashboardLayout({
   children,
@@ -36,6 +37,7 @@ export default async function AuthDashboardLayout({
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans text-slate-900">
+      <PresenceHeartbeat />
       {/* Sidebar - Dark Theme */}
       <DesktopSidebar
         user={user}
