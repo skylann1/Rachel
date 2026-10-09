@@ -6,6 +6,7 @@ import { hasPermissionForUser } from '@/utils/permissions';
 import { assertSameRoleType, sanitizePermissionsForType, type RoleActor } from '@/lib/role-access';
 import { allPermissionModules } from '../constants';
 import { logActivity } from '@/lib/activity-log';
+import { diffFields, diffPermissions } from '@/lib/activity-diff';
 
 export async function updateRolePermissions(
   id: string,
@@ -48,13 +49,20 @@ export async function updateRolePermissions(
       }
     }
 
+    const nextPermissions = sanitizePermissionsForType(permissions, type, allPermissionModules);
+    const { data: beforeRole } = await supabase
+      .from('roles')
+      .select('name, description, type, permissions')
+      .eq('id', id)
+      .single();
+
     const { error } = await supabase
       .from('roles')
       .update({
         name,
         description,
         type,
-        permissions: sanitizePermissionsForType(permissions, type, allPermissionModules)
+        permissions: nextPermissions
       })
       .eq('id', id);
 
@@ -63,7 +71,17 @@ export async function updateRolePermissions(
       return { error: 'Gagal memperbarui konfigurasi role.' };
     }
 
-    await logActivity(authClient, { actorId: user.id, action: 'Mengubah permission role', entityType: 'role', entityId: id, notes: name });
+    await logActivity(authClient, {
+      actorId: user.id, action: 'Mengubah permission role', entityType: 'role', entityId: id, notes: name,
+      metadata: {
+        changes: diffFields(
+          beforeRole ?? {},
+          { name, description, type },
+          { name: 'Nama role', description: 'Deskripsi', type: 'Tipe' },
+        ),
+        permissions: diffPermissions(beforeRole?.permissions, nextPermissions),
+      },
+    });
 
     return { success: true };
   } catch (error: any) {

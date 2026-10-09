@@ -6,6 +6,7 @@ import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 import { assertSameRoleType, type RoleActor } from '@/lib/role-access';
 import { logActivity } from '@/lib/activity-log';
+import { diffFields } from '@/lib/activity-diff';
 
 const VALID_ROLE_TYPES = ['pgn', 'pgsol', 'vendor'];
 
@@ -110,6 +111,8 @@ export async function updateRole(id: string, formData: FormData) {
       return { error: 'Tipe Role tidak valid.' };
     }
 
+    const { data: beforeRole } = await adminClient.from('roles').select('name, description, type').eq('id', id).single();
+
     const { error } = await adminClient
       .from('roles')
       .update({
@@ -126,7 +129,16 @@ export async function updateRole(id: string, formData: FormData) {
       return { error: error.message || 'Gagal mengubah role.' };
     }
 
-    await logActivity(await createClient(), { actorId: actor.userId, action: 'Mengubah role', entityType: 'role', entityId: id, notes: name });
+    await logActivity(await createClient(), {
+      actorId: actor.userId, action: 'Mengubah role', entityType: 'role', entityId: id, notes: name,
+      metadata: {
+        changes: diffFields(
+          beforeRole ?? {},
+          { name: name.toLowerCase().replace(/\s+/g, '_'), description, type },
+          { name: 'Nama role', description: 'Deskripsi', type: 'Tipe' },
+        ),
+      },
+    });
 
     revalidatePath('/dashboard/master-data/role');
     revalidatePath('/dashboard/master-data/account');

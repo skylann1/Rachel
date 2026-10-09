@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 import { logActivity } from '@/lib/activity-log';
+import { diffFields, type ActivityMetadata } from '@/lib/activity-diff';
 
 async function requireManageVendor() {
   const supabase = await createClient();
@@ -15,10 +16,10 @@ async function requireManageVendor() {
   return null;
 }
 
-async function logVendorActivity(action: string, entityId: string, notes: string) {
+async function logVendorActivity(action: string, entityId: string, notes: string, metadata?: ActivityMetadata) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  await logActivity(supabase, { actorId: user?.id ?? null, action, entityType: 'vendor', entityId, notes });
+  await logActivity(supabase, { actorId: user?.id ?? null, action, entityType: 'vendor', entityId, notes, metadata });
 }
 
 // Update Vendor Data
@@ -48,6 +49,12 @@ export async function updateVendor(orgId: string, formData: FormData) {
     }
 
     const adminAuthClient = createAdminClient();
+
+    const { data: beforeVendor } = await adminAuthClient
+      .from('vendor_profiles')
+      .select('company_name, phone, company_email, address, csms_status')
+      .eq('id', orgId)
+      .single();
 
     // 1. Update vendor_profiles (id = id organisasi)
     const { error: vendorError } = await adminAuthClient
@@ -81,7 +88,13 @@ export async function updateVendor(orgId: string, formData: FormData) {
         .eq('org_id', orgId);
     }
 
-    await logVendorActivity('Mengubah data vendor', orgId, companyName);
+    await logVendorActivity('Mengubah data vendor', orgId, companyName, {
+      changes: diffFields(
+        beforeVendor ?? {},
+        { company_name: companyName, phone, company_email: companyEmail, address, csms_status: csmsStatus },
+        { company_name: 'Nama perusahaan', phone: 'Telepon', company_email: 'Email perusahaan', address: 'Alamat', csms_status: 'Status CSMS' },
+      ),
+    });
 
     revalidatePath('/dashboard/master-data/vendor');
     revalidatePath('/dashboard/master-data/account');

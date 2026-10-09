@@ -7,6 +7,7 @@ import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 import { sendEmail, passwordResetEmailHtml } from '@/lib/email';
 import { logActivity } from '@/lib/activity-log';
+import { diffFields } from '@/lib/activity-diff';
 
 interface AccountActor {
   userId: string;
@@ -237,7 +238,7 @@ export async function updateAccount(id: string, formData: FormData) {
     // di bawah lalu ter-upsert pada id organisasi (PGN) yang salah.
     // EditAccountModal sudah mengunci field ini di UI; dikunci lagi di
     // sini supaya bukan cuma UI yang menegakkannya.
-    const { data: targetProfile } = await adminAuthClient.from('profiles').select('type, org_id').eq('id', id).single();
+    const { data: targetProfile } = await adminAuthClient.from('profiles').select('type, org_id, full_name, role, jabatan').eq('id', id).single();
     if (!targetProfile) return { error: 'Akun tidak ditemukan.' };
     const type = targetProfile.type as string;
 
@@ -298,7 +299,16 @@ export async function updateAccount(id: string, formData: FormData) {
       await adminAuthClient.from('internal_profiles').upsert({ id, nip: nip });
     }
 
-    await logActivity(await createClient(), { actorId: actor.userId, action: 'Mengubah akun', entityType: 'account', entityId: id, notes: `${fullName} (${role})` });
+    await logActivity(await createClient(), {
+      actorId: actor.userId, action: 'Mengubah akun', entityType: 'account', entityId: id, notes: `${fullName} (${role})`,
+      metadata: {
+        changes: diffFields(
+          { full_name: targetProfile.full_name, role: targetProfile.role, jabatan: targetProfile.jabatan },
+          { full_name: fullName, role, jabatan },
+          { full_name: 'Nama', role: 'Role', jabatan: 'Jabatan' },
+        ),
+      },
+    });
 
     revalidatePath('/dashboard/master-data/account');
     revalidatePath('/vendor/dashboard/staff');

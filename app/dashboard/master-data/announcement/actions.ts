@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { revalidatePath } from 'next/cache';
 import { logActivity } from '@/lib/activity-log';
+import { diffFields, type FieldChange } from '@/lib/activity-diff';
 
 export interface Announcement {
   id: string;
@@ -133,6 +134,12 @@ export async function updateAnnouncement(id: string, formData: FormData) {
     }
 
     const adminClient = createAdminClient();
+    const { data: beforeAnn } = await adminClient
+      .from('announcements')
+      .select('title, description, image_url, display_order')
+      .eq('id', id)
+      .single();
+
     const { error } = await adminClient
       .from('announcements')
       .update({
@@ -148,7 +155,19 @@ export async function updateAnnouncement(id: string, formData: FormData) {
       return { error: error.message || 'Gagal mengubah pengumuman.' };
     }
 
-    await logActivity(await createClient(), { actorId: userId, action: 'Mengubah pengumuman', entityType: 'announcement', entityId: id, notes: title });
+    // URL gambar terlalu panjang untuk ditampilkan sebagai before/after — cukup tandai diganti.
+    const changes: FieldChange[] = diffFields(
+      beforeAnn ?? {},
+      { title, description, display_order },
+      { title: 'Judul', description: 'Deskripsi', display_order: 'Urutan tampil' },
+    );
+    if (beforeAnn && beforeAnn.image_url !== image_url) {
+      changes.push({ field: 'image_url', label: 'Gambar', before: '(gambar lama)', after: '(gambar baru)' });
+    }
+    await logActivity(await createClient(), {
+      actorId: userId, action: 'Mengubah pengumuman', entityType: 'announcement', entityId: id, notes: title,
+      metadata: { changes },
+    });
 
     revalidatePath('/dashboard/master-data/announcement');
     revalidatePath('/dashboard');

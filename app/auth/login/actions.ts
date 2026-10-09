@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { logActivity } from "@/lib/activity-log";
+import { logFailedLogin, logRejectedLogin, logSuccessfulLogin } from "@/lib/login-audit";
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -16,6 +17,7 @@ export async function login(formData: FormData) {
   const { data: authData, error } = await supabase.auth.signInWithPassword(data);
 
   if (error) {
+    await logFailedLogin(data.email, error.message);
     redirect("/auth/login?error=" + error.message);
   }
 
@@ -31,12 +33,13 @@ export async function login(formData: FormData) {
     // lewat roles.permissions — bukan lagi lewat portal/login terpisah
     // (docs/superpowers/specs/2026-09-29-pgsol-dashboard-merge-design.md).
     // Vendor tetap ditolak di sini (punya /vendor/login sendiri).
+    await logRejectedLogin(authData.user.id, data.email, 'Akun bukan PGN/PGSOL');
     await supabase.auth.signOut();
     const debugMsg = `Data profil: ${JSON.stringify(profile) || 'Kosong'}. Error: ${profileError?.message || 'Tidak ada error DB'}`;
     redirect(`/auth/login?error=Akses ditolak. ${debugMsg}`);
   }
 
-  await logActivity(supabase, { actorId: authData.user.id, action: 'Login', entityType: 'auth' });
+  await logSuccessfulLogin(supabase, authData.user.id);
 
   revalidatePath("/", "layout");
   redirect("/dashboard");

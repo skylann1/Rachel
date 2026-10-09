@@ -150,3 +150,12 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
    login/CRUD — tapi halaman Log Aktivitas akan kosong sampai file ini
    dijalankan. Sudah diterapkan di project Supabase live lewat MCP pada
    2026-10-10.
+10. `schema_activity_log_advanced.sql` — WAJIB setelah item 9. Menambah
+    `activity_logs.ip_address/user_agent/metadata`, tabel `presence_history`,
+    fungsi `can_view_activity_log()`, dan memasukkan `user_presence` ke
+    publikasi Realtime. **Mengetatkan RLS**: baca `activity_logs`,
+    `user_presence`, dan `presence_history` kini hanya untuk admin / role
+    pemegang `activityLog.view`, dan INSERT `activity_logs` dikunci ke
+    `actor_id = auth.uid()` (login gagal ditulis server pakai service role).
+    Aman dijalankan ulang. Sudah diterapkan di project Supabase live lewat
+    MCP pada 2026-10-10.

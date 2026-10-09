@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { logActivity } from "@/lib/activity-log";
+import { logFailedLogin, logRejectedLogin, logSuccessfulLogin } from "@/lib/login-audit";
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -16,6 +17,7 @@ export async function login(formData: FormData) {
   const { data: authData, error } = await supabase.auth.signInWithPassword(data);
 
   if (error) {
+    await logFailedLogin(data.email, error.message);
     redirect("/vendor/login?error=" + error.message);
   }
 
@@ -28,11 +30,12 @@ export async function login(formData: FormData) {
 
   if (profile?.type !== 'vendor') {
     // Kalau bukan vendor, sign out paksa dan tolak
+    await logRejectedLogin(authData.user.id, data.email, 'Akun bukan Vendor');
     await supabase.auth.signOut();
     redirect("/vendor/login?error=Akses ditolak. Akun ini bukan akun Vendor.");
   }
 
-  await logActivity(supabase, { actorId: authData.user.id, action: 'Login', entityType: 'auth' });
+  await logSuccessfulLogin(supabase, authData.user.id);
 
   revalidatePath("/", "layout");
   redirect("/vendor/dashboard");

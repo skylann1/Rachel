@@ -2,7 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
-import { writeStageAssignment, PGSOL_STAGE_KEYS } from '@/lib/stage-assignments';
+import { writeStageAssignment, getStageAssignments, PGSOL_STAGE_KEYS } from '@/lib/stage-assignments';
 import { revalidatePath } from 'next/cache';
 import { logActivity } from '@/lib/activity-log';
 
@@ -53,12 +53,30 @@ export async function savePgsolAssignment(
   const { data: actorProfile } = await supabase.from('profiles').select('type').eq('id', user.id).single();
   if (actorProfile?.type !== 'pgsol') return { error: 'Aksi ini hanya untuk admin PGSOL.' };
 
+  const beforeIds = (await getStageAssignments(supabase, projectId, docType, stageKey)).map(r => r.assignee_id);
+
   const result = await writeStageAssignment(supabase, user.id, {
     projectId, docType, stageKey, assigneeIds,
   });
   if (result.error) return { error: result.error };
 
-  await logActivity(supabase, { actorId: user.id, action: 'Mengubah assignment PGSOL', entityType: 'pgsol_assignment', entityId: projectId, notes: `${docType} / ${stageKey}` });
+  // Daftar reviewer sebelum → sesudah, sebagai nama (bukan UUID) supaya terbaca di log.
+  const allIds = [...new Set([...beforeIds, ...assigneeIds])];
+  const { data: people } = allIds.length > 0
+    ? await supabase.from('profiles').select('id, full_name').in('id', allIds)
+    : { data: [] as { id: string; full_name: string | null }[] };
+  const nameOf = (id: string) => people?.find((p: { id: string }) => p.id === id)?.full_name || 'Tidak diketahui';
+  const names = (ids: string[]) => ids.length > 0 ? ids.map(nameOf).join(', ') : null;
+
+  await logActivity(supabase, {
+    actorId: user.id, action: 'Mengubah assignment PGSOL', entityType: 'pgsol_assignment', entityId: projectId,
+    notes: `${docType} / ${stageKey}`,
+    metadata: {
+      changes: names(beforeIds) === names(assigneeIds) ? [] : [
+        { field: 'assignees', label: 'Reviewer', before: names(beforeIds), after: names(assigneeIds) },
+      ],
+    },
+  });
 
   revalidatePath(`/dashboard/master-data/project-pgsol-assign/${projectId}`);
   return { success: true };
