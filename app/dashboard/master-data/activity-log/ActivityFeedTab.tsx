@@ -39,7 +39,7 @@ export function ChangeDetail({ metadata }: { metadata: ActivityMetadata }) {
     <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2 text-xs">
       {metadata.reason && <p className="text-slate-600"><span className="font-bold">Alasan:</span> {metadata.reason}</p>}
       {metadata.changes?.map(c => (
-        <div key={c.field} className="grid grid-cols-[7rem_1fr] gap-2 items-start">
+        <div key={c.field} className="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-0.5 sm:gap-2 items-start">
           <span className="font-bold text-slate-500">{c.label}</span>
           <span className="min-w-0 break-words">
             <span className="text-rose-600 line-through decoration-rose-300">{c.before ?? '(kosong)'}</span>
@@ -86,7 +86,7 @@ export function FeedRow({
   const detail = hasDetail(row.metadata);
 
   return (
-    <li className={`flex gap-3 ${compact ? 'py-3' : 'px-5 py-4'}`}>
+    <li className={`flex gap-3 ${compact ? 'py-3' : 'px-4 sm:px-5 py-4'}`}>
       <div className={`shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center ${tone.icon}`}>
         <Icon className="w-4 h-4" />
       </div>
@@ -126,7 +126,7 @@ export function FeedRow({
           </>
         )}
       </div>
-      {!compact && <TypeBadge type={row.actorType} />}
+      {!compact && <div className="shrink-0 self-start"><TypeBadge type={row.actorType} /></div>}
     </li>
   );
 }
@@ -203,7 +203,7 @@ export default function ActivityFeedTab({
 
   const hasActiveFilter = !!(filters.search || filters.category || filters.from || filters.to || (filters.kind && filters.kind !== 'all'));
   const reset = () => { setSearchInput(''); setFilters({ kind: 'all' }); };
-  const fieldClass = 'px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary';
+  const fieldClass = 'px-3 py-2.5 sm:py-2 text-base sm:text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary';
 
   return (
     <div className="space-y-4">
@@ -223,7 +223,7 @@ export default function ActivityFeedTab({
             value={filters.kind ?? 'all'}
             onChange={e => setFilters(f => ({ ...f, kind: e.target.value as FeedFilters['kind'], category: undefined }))}
             aria-label="Sumber log"
-            className={fieldClass}
+            className={`${fieldClass} w-full sm:w-auto`}
           >
             <option value="all">Semua sumber</option>
             <option value="activity">Sistem (login & Master Data)</option>
@@ -233,7 +233,7 @@ export default function ActivityFeedTab({
             value={filters.category ?? ''}
             onChange={e => setFilters(f => ({ ...f, category: e.target.value || undefined }))}
             aria-label="Kategori"
-            className={fieldClass}
+            className={`${fieldClass} w-full sm:w-auto`}
           >
             <option value="">Semua kategori</option>
             {Object.entries(CATEGORY_LABEL)
@@ -243,38 +243,40 @@ export default function ActivityFeedTab({
               })
               .map(([key, label]) => <option key={key} value={key}>{label}</option>)}
           </select>
-          <input
-            type="date" value={filters.from ?? ''} max={filters.to || undefined}
-            onChange={e => setFilters(f => ({ ...f, from: e.target.value || undefined }))}
-            aria-label="Dari tanggal" className={fieldClass}
-          />
-          <span className="text-slate-400 text-sm">s/d</span>
-          <input
-            type="date" value={filters.to ?? ''} min={filters.from || undefined}
-            onChange={e => setFilters(f => ({ ...f, to: e.target.value || undefined }))}
-            aria-label="Sampai tanggal" className={fieldClass}
-          />
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <input
+              type="date" value={filters.from ?? ''} max={filters.to || undefined}
+              onChange={e => setFilters(f => ({ ...f, from: e.target.value || undefined }))}
+              aria-label="Dari tanggal" className={`${fieldClass} flex-1 min-w-0 sm:flex-none`}
+            />
+            <span className="text-slate-400 text-sm shrink-0">s/d</span>
+            <input
+              type="date" value={filters.to ?? ''} min={filters.from || undefined}
+              onChange={e => setFilters(f => ({ ...f, to: e.target.value || undefined }))}
+              aria-label="Sampai tanggal" className={`${fieldClass} flex-1 min-w-0 sm:flex-none`}
+            />
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-1">
             {PRESETS.map(p => (
               <button
                 key={p.label}
                 onClick={() => setFilters(f => ({ ...f, from: p.from(), to: p.to() }))}
-                className="px-2.5 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                className="px-3 py-2 sm:px-2.5 sm:py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
               >
                 {p.label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto sm:ml-auto">
             {hasActiveFilter && (
-              <button onClick={reset} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800">
+              <button onClick={reset} className="inline-flex items-center gap-1 px-2.5 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">
                 <X className="w-3.5 h-3.5" /> Reset
               </button>
             )}
             <button
               onClick={exportCsv}
               disabled={exporting}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-lg transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-lg transition-colors"
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               Ekspor CSV

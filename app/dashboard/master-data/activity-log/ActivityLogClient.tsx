@@ -36,7 +36,7 @@ export default function ActivityLogClient({
     <div className="space-y-6">
       <SecurityAlerts initialAlerts={initialAlerts} />
 
-      <div className="flex gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-sm w-fit">
+      <div className="flex gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-sm w-full sm:w-fit">
         {tabs.map(t => {
           const Icon = t.icon;
           return (
@@ -44,7 +44,7 @@ export default function ActivityLogClient({
               key={t.id}
               onClick={() => setTab(t.id)}
               aria-pressed={tab === t.id}
-              className={`flex items-center gap-2 py-2.5 px-4 text-sm font-bold rounded-lg transition-all ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 py-2.5 px-3 sm:px-4 text-sm font-bold rounded-lg transition-all ${
                 tab === t.id ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
               }`}
             >
