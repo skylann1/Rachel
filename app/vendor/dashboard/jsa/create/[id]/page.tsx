@@ -34,14 +34,19 @@ export default function JSACreatePage() {
   const [projectInfo, setProjectInfo] = useState<{ name: string; contract_number: string | null; location: string | null; companyName: string | null } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [docId, setDocId] = useState<string | null>(null);
+  // Tombol Submit hanya untuk penyusun (jsa.create); reviewer memakai Setujui/Tolak.
+  const [canCreate, setCanCreate] = useState(false);
+  const [jsaStatus, setJsaStatus] = useState<string | null>(null);
   const [preparer, setPreparer] = useState<{ nama: string; jabatan: string; satker: string | null } | null>(null);
 
   React.useEffect(() => {
     async function loadData() {
       if (projectId) {
         const data = await getJsa(projectId as string);
+        if (data && 'canCreate' in data) setCanCreate(!!data.canCreate);
         if (data && data.jsa) {
           setDocId(data.jsa.id);
+          setJsaStatus(data.jsa.status);
         }
         let finalSteps: any[] = [];
 
@@ -300,6 +305,8 @@ export default function JSACreatePage() {
 
   // Minimal satu langkah kerja harus terisi sebelum JSA bisa diajukan.
   const canSubmitJsa = jsaSteps.some(s => (s.langkah || '').trim().length > 0);
+  // Sama dengan guard di saveJsa: hanya JSA baru / Draft / masih di review vendor yang boleh diajukan (ulang).
+  const canResubmit = !jsaStatus || ['Draft', 'Review HSE Vendor', 'Review PM Vendor'].includes(jsaStatus);
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-12 px-4">
@@ -314,14 +321,16 @@ export default function JSACreatePage() {
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {canCreate && canResubmit && (
           <button onClick={handleSimpan} disabled={isSaving || !canSubmitJsa} className="flex-1 md:flex-none justify-center px-6 py-3 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors shadow-sm shadow-primary/30 flex items-center gap-2">
             {isSaving ? (
               <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</span>
             ) : (
-              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Submit JSA</span>
+              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> {jsaStatus && jsaStatus !== 'Draft' ? 'Ajukan Ulang JSA' : 'Submit JSA'}</span>
             )}
           </button>
-          {!canSubmitJsa && (
+          )}
+          {canCreate && canResubmit && !canSubmitJsa && (
             <p className="w-full md:text-right text-xs font-semibold text-rose-600">Isi minimal satu langkah pekerjaan sebelum menekan Submit.</p>
           )}
         </div>
