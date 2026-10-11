@@ -132,6 +132,17 @@ export async function saveJsa(projectId: string, jsaData: any) {
 
 export async function getJsa(projectId: string) {
   const supabase = await createClient();
+
+  // Penyusun = user yang sedang membuka form (vendor) — dipakai blok
+  // "Disiapkan Oleh" pada pratinjau PDF, supaya tidak berisi nama karangan.
+  let preparerBase: { nama: string; jabatan: string } | null = null;
+  {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: me } = await supabase.from('profiles').select('full_name, jabatan, role').eq('id', user.id).single();
+      if (me) preparerBase = { nama: me.full_name || '', jabatan: me.jabatan || '' };
+    }
+  }
   const { data: jsa, error } = await supabase
     .from('jsa')
     .select('id, status')
@@ -192,8 +203,9 @@ if (jsa) {
       project: project
         ? { name: project.name, contract_number: project.contract_number, location: project.location, companyName }
         : null,
+      preparer: preparerBase ? { ...preparerBase, satker: companyName } : null,
     };
   }
 
-  return { jsa: null, steps: [], procedureSteps, procedureSections, project: null };
+  return { jsa: null, steps: [], procedureSteps, procedureSections, project: null, preparer: preparerBase ? { ...preparerBase, satker: null } : null };
 }

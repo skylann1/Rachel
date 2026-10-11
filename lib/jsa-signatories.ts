@@ -22,12 +22,48 @@ export interface JsaSignatory {
   tanggal: string;
 }
 
-export interface JsaSignatories {
-  reviewer: JsaSignatory | null;
-  approver: JsaSignatory | null;
+/** Satu tahap pada jejak persetujuan (semua tahap berurutan, bukan hanya tiga blok tanda tangan). */
+export interface JsaTrailRow {
+  label: string;
+  nama: string;
+  status: 'approved' | 'rejected' | 'pending' | 'none';
+  tanggal: string;
 }
 
-export const JSA_SIGNATORIES_KOSONG: JsaSignatories = { reviewer: null, approver: null };
+export interface JsaSignatories {
+  /** Penyusun (vendor) — dari aktor pertama di document_logs JSA, null kalau belum ada jejaknya. */
+  preparer: { nama: string; jabatan: string } | null;
+  reviewer: JsaSignatory | null;
+  approver: JsaSignatory | null;
+  trail: JsaTrailRow[];
+}
+
+export const JSA_SIGNATORIES_KOSONG: JsaSignatories = { preparer: null, reviewer: null, approver: null, trail: [] };
+
+/** Urutan tahap JSA beserta labelnya — sinkron dengan JSA_STAGE_SEQUENCE (lib/jsa-status.ts). */
+const TRAIL_STAGES: { key: string; label: string }[] = [
+  { key: 'jsa.hse_vendor', label: 'HSE Vendor' },
+  { key: 'jsa.review_vendor', label: 'PM Vendor' },
+  { key: 'jsa.hse_pgsol', label: 'HSE PGSOL' },
+  { key: 'jsa.review_pgsol', label: 'PM PGSOL' },
+  { key: 'jsa.hsse_pgn', label: 'HSSE PGN' },
+  { key: 'jsa.approve_pgn', label: 'PM Zona PGN' },
+];
+
+function trailRow(label: string, rows: StageAssignmentRowWithName[]): JsaTrailRow {
+  if (rows.length === 0) return { label, nama: '', status: 'none', tanggal: '' };
+  const status: JsaTrailRow['status'] =
+    rows.some(r => r.status === 'rejected') ? 'rejected'
+    : rows.every(r => r.status === 'approved') ? 'approved'
+    : 'pending';
+  const decided = rows.filter(r => r.decided_at).map(r => r.decided_at as string).sort();
+  return {
+    label,
+    nama: rows.map(r => r.assignee_name || 'Tidak diketahui').join(', '),
+    status,
+    tanggal: status === 'approved' && decided.length > 0 ? formatTanggal(decided[decided.length - 1]) : '',
+  };
+}
 
 function formatTanggal(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -62,13 +98,30 @@ export async function getJsaSignatories(
 ): Promise<JsaSignatories> {
   if (!jsa?.id) return JSA_SIGNATORIES_KOSONG;
 
-  const [pmPgsolRows, pgnRows] = await Promise.all([
-    getStageAssignmentsWithNames(supabase, projectId, 'jsa', 'jsa.review_pgsol'),
-    getStageAssignmentsWithNames(supabase, projectId, 'jsa', 'jsa.approve_pgn'),
-  ]);
+  const stageRows = await Promise.all(
+    TRAIL_STAGES.map(s => getStageAssignmentsWithNames(supabase, projectId, 'jsa', s.key)),
+  );
+  const rowsOf = (key: string) => stageRows[TRAIL_STAGES.findIndex(s => s.key === key)] ?? [];
+
+  // Penyusun = aktor pertama yang tercatat di log dokumen JSA ini.
+  let preparer: JsaSignatories['preparer'] = null;
+  const { data: firstLog } = await supabase
+    .from('document_logs')
+    .select('actor_id')
+    .eq('doc_type', 'jsa').eq('doc_id', jsa.id)
+    .not('actor_id', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  const actorId = firstLog?.[0]?.actor_id as string | undefined;
+  if (actorId) {
+    const { data: p } = await supabase.from('profiles').select('full_name, jabatan, role').eq('id', actorId).single();
+    if (p) preparer = { nama: p.full_name || '', jabatan: p.jabatan || getRoleLabel(p.role) };
+  }
 
   return {
-    reviewer: gabunganSignatory(pmPgsolRows, 'PGSOL'),
-    approver: gabunganSignatory(pgnRows, 'PGN'),
+    preparer,
+    reviewer: gabunganSignatory(rowsOf('jsa.review_pgsol'), 'PGSOL'),
+    approver: gabunganSignatory(rowsOf('jsa.approve_pgn'), 'PGN'),
+    trail: TRAIL_STAGES.map((s, i) => trailRow(s.label, stageRows[i])),
   };
 }

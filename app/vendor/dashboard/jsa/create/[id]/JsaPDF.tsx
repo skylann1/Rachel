@@ -1,6 +1,7 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 import { kebutuhanSummary, isKebutuhanEmpty } from '@/lib/procedure-kebutuhan';
+import { RPN_LEVELS } from '@/lib/jsa-risk';
 
 const B = '#000';
 // Colors extracted directly from docs/templates/JSA EXAMPLE.xlsx (theme + dxf fills)
@@ -367,41 +368,36 @@ const RiskBlockData = ({ risk, rpnStyle, variant }: { risk: any; rpnStyle: any; 
 
 const renderControlCell = (control: any) => {
   if (typeof control === 'string') {
-    return <View style={{ flex: 1, padding: 1.5 }}><Text style={{ fontSize: 3.5 }}>{control}</Text></View>;
+    return <View style={{ flexGrow: 1, padding: 1.5 }}><Text style={{ fontSize: 4 }}>{control}</Text></View>;
   }
-  if (!control) return <View style={{ flex: 1 }}></View>;
+  if (!control) return <View style={{ flexGrow: 1 }}></View>;
 
   const rows = [
     { label: 'Eliminasi', val: control.eliminasi },
     { label: 'Substitusi', val: control.substitusi },
-    { label: 'Rekaya Alat', val: control.rekayasa },
+    { label: 'Rekayasa Alat', val: control.rekayasa },
     { label: 'Administrasi', val: control.administrasi },
-    { label: 'APD', val: control.apd }
+    { label: 'APD', val: control.apd },
   ];
 
+  // Lima baris dibagi rata mengisi tinggi baris tabel (flexGrow), bukan
+  // menumpuk di atas dengan ruang kosong besar di bawahnya ketika kolom lain
+  // (langkah / kebutuhan) lebih tinggi.
   return (
-    <View style={{ width: '100%' }}>
+    <View style={{ flexGrow: 1, width: '100%' }}>
       {rows.map((r, i) => (
         <View key={i} style={{
+          flexGrow: 1,
           flexDirection: 'row',
           borderBottomWidth: i < rows.length - 1 ? 0.5 : 0,
           borderColor: '#000',
+          minHeight: 9,
         }}>
-          <View style={{
-            width: '35%',
-            borderRightWidth: 0.5,
-            borderColor: '#000',
-            paddingVertical: 2,
-            paddingHorizontal: 1.5,
-          }}>
-            <Text style={{ fontSize: 3.5 }}>{r.label}</Text>
+          <View style={{ width: '38%', borderRightWidth: 0.5, borderColor: '#000', padding: 1.5, backgroundColor: '#F4F6F8', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 3.8, fontWeight: 'bold' }}>{r.label}</Text>
           </View>
-          <View style={{
-            width: '65%',
-            paddingVertical: 2,
-            paddingHorizontal: 1.5,
-          }}>
-            <Text style={{ fontSize: 3.5 }}>{r.val || ''}</Text>
+          <View style={{ width: '62%', padding: 1.5, justifyContent: 'center' }}>
+            <Text style={{ fontSize: 4 }}>{r.val || ''}</Text>
           </View>
         </View>
       ))}
@@ -409,11 +405,25 @@ const renderControlCell = (control: any) => {
   );
 };
 
-export default function JsaPDF({ projectId, steps, signatories, preparer, team, projectInfo }: any) {
+/** Stempel tanda tangan: hanya tampil kalau memang sudah ditandatangani. */
+const SignatureStamp = ({ signed, label }: { signed: boolean; label: string }) => (
+  <View style={styles.signatureArea}>
+    {signed
+      ? <Text style={styles.signatureStamp}>{label}</Text>
+      : <Text style={{ fontSize: 5, fontStyle: 'italic', color: '#94a3b8' }}>Menunggu</Text>}
+  </View>
+);
+
+export default function JsaPDF({ projectId, steps, signatories, preparer: preparerProp, team, projectInfo, preparerSigned = false }: any) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const reviewer = signatories?.reviewer ?? null;
+  // Nama penyusun dari jejak dokumen kalau pemanggil tidak memberinya.
+  const preparer = { ...(signatories?.preparer ?? {}), ...(preparerProp ?? {}) };
+  if (!preparerProp?.nama && signatories?.preparer?.nama) preparer.nama = signatories.preparer.nama;
+  if (!preparerProp?.jabatan && signatories?.preparer?.jabatan) preparer.jabatan = signatories.preparer.jabatan;
   const approver = signatories?.approver ?? null;
-  const preparerName = preparer?.nama || 'Vendor Representative';
+  const trail: { label: string; nama: string; status: string; tanggal: string }[] = signatories?.trail ?? [];
+  const finalApproved = !!approver;
   const teamRows = (team && team.length > 0) ? team : Array.from({ length: 4 }).map(() => ({ nama: '', jabatan: '' }));
 
   return (
@@ -458,16 +468,14 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team, 
           <View style={styles.approvalCol}>
             <Text style={styles.approvalTitle}>Disiapkan Oleh</Text>
             <View style={styles.approvalBody}>
-              <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {preparer?.nama || 'Vendor Representative'}</Text></View>
-              <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {preparer?.jabatan || 'Site Supervisor'}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {preparer?.nama || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {preparer?.jabatan || ''}</Text></View>
               <View style={styles.infoRow}><Text style={styles.infoLabel}>Perusahaan / Satker</Text><Text style={styles.infoValue}>: {preparer?.satker || '-'}</Text></View>
               <View style={styles.infoRow}><Text style={styles.infoLabel}>Tanggal</Text><Text style={styles.infoValue}>: {preparer?.tanggal || currentDate}</Text></View>
             </View>
             <View style={styles.signatureBox}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
-              <View style={styles.signatureArea}>
-                <Text style={styles.signatureStamp}>APPROVED</Text>
-              </View>
+              <SignatureStamp signed={!!preparerSigned} label="DISIAJUKAN" />
             </View>
           </View>
           <View style={styles.approvalCol}>
@@ -480,15 +488,13 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team, 
             </View>
             <View style={styles.signatureBox}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
-              <View style={styles.signatureArea}>
-                <Text style={styles.signatureStamp}>APPROVED</Text>
-              </View>
+              <SignatureStamp signed={!!reviewer} label="APPROVED" />
             </View>
           </View>
           <View style={[styles.approvalCol, { borderRightWidth: 0 }]}>
             <Text style={styles.approvalTitle}>Disetujui Oleh</Text>
             <View style={styles.approvalBody}>
-              <View style={styles.infoRow}><Text style={styles.infoLabel}>Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver?.satker || ''}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver ? 'PM / OM Zona PGN' : ''}</Text></View>
               <View style={styles.infoRow}><Text style={styles.infoLabel}>Nama</Text><Text style={styles.infoValue}>: {approver?.nama || ''}</Text></View>
               <View style={styles.infoRow}><Text style={styles.infoLabel}>Jabatan</Text><Text style={styles.infoValue}>: {approver?.jabatan || ''}</Text></View>
               <View style={styles.infoRow}><Text style={styles.infoLabel}>Satker Penanggung Jawab</Text><Text style={styles.infoValue}>: {approver?.satker || ''}</Text></View>
@@ -496,9 +502,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team, 
             </View>
             <View style={[styles.signatureBox, { borderLeftWidth: 0 }]}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
-              <View style={styles.signatureArea}>
-                <Text style={styles.signatureStamp}>APPROVED</Text>
-              </View>
+              <SignatureStamp signed={!!approver} label="APPROVED" />
             </View>
           </View>
         </View>
@@ -596,16 +600,18 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team, 
 
               <RiskBlockData risk={step.residualRisk} rpnStyle={getRpnStyle(step.residualRisk?.rpn || 0)} variant="residual" />
 
-              <View style={[styles.tCell, styles.colParaf]}><Text style={{ fontSize: 5, textAlign: 'center' }}>APPROVED</Text></View>
+              <View style={[styles.tCell, styles.colParaf]}><Text style={{ fontSize: 5, textAlign: 'center', fontWeight: 'bold', color: '#16a34a' }}>{finalApproved ? 'APPROVED' : ''}</Text></View>
             </View>
           ))}
           
         </View>
 
         {/* ttd note */}
-        <View style={{ alignItems: 'flex-end', marginTop: 3 }}>
-          <Text style={{ fontSize: 4, fontStyle: 'italic' }}>APPROVED</Text>
-        </View>
+        {finalApproved && (
+          <View style={{ alignItems: 'flex-end', marginTop: 3 }}>
+            <Text style={{ fontSize: 4, fontStyle: 'italic' }}>APPROVED</Text>
+          </View>
+        )}
 
         {/* Team Penyusun JSA */}
         <View style={[styles.teamSection, { marginTop: 6 }]} wrap={false}>
@@ -622,10 +628,57 @@ export default function JsaPDF({ projectId, steps, signatories, preparer, team, 
               <View style={[styles.teamCell, { width: '32%' }]}><Text>{member?.nama || ''}</Text></View>
               <View style={[styles.teamCell, { width: '32%' }]}><Text>{member?.jabatan || ''}</Text></View>
               <View style={[styles.teamCell, { width: '30%', borderRightWidth: 0, alignItems: 'center' }]}>
-                <Text style={[styles.signatureStamp, { fontSize: 6 }]}>APPROVED</Text>
+                <Text style={[styles.signatureStamp, { fontSize: 6 }]}>{preparerSigned && (member?.nama || '') ? 'DISIAJUKAN' : ''}</Text>
               </View>
             </View>
           ))}
+        </View>
+
+        {/* Jejak persetujuan — seluruh tahap berurutan, bukan hanya tiga blok tanda tangan */}
+        {trail.length > 0 && (
+          <View style={[styles.teamSection, { marginTop: 6 }]} wrap={false}>
+            <Text style={styles.teamTitle}>Jejak Persetujuan</Text>
+            <View style={styles.teamHeaderRow}>
+              <View style={[styles.teamCellHeader, { width: '6%' }]}><Text>No</Text></View>
+              <View style={[styles.teamCellHeader, { width: '24%' }]}><Text>Tahap</Text></View>
+              <View style={[styles.teamCellHeader, { width: '40%' }]}><Text>Penanggung Jawab</Text></View>
+              <View style={[styles.teamCellHeader, { width: '14%' }]}><Text>Status</Text></View>
+              <View style={[styles.teamCellHeader, { width: '16%', borderRightWidth: 0 }]}><Text>Tanggal</Text></View>
+            </View>
+            {trail.map((t, i) => (
+              <View key={i} style={styles.teamRow}>
+                <View style={[styles.teamCell, { width: '6%' }]}><Text style={styles.textCenter}>{i + 1}</Text></View>
+                <View style={[styles.teamCell, { width: '24%' }]}><Text>{t.label}</Text></View>
+                <View style={[styles.teamCell, { width: '40%' }]}><Text>{t.nama || '-'}</Text></View>
+                <View style={[styles.teamCell, { width: '14%', alignItems: 'center' }]}>
+                  <Text style={{
+                    fontWeight: 'bold',
+                    color: t.status === 'approved' ? '#16a34a' : t.status === 'rejected' ? '#dc2626' : '#94a3b8',
+                  }}>
+                    {t.status === 'approved' ? 'Disetujui' : t.status === 'rejected' ? 'Ditolak' : t.status === 'pending' ? 'Menunggu' : 'Belum ditugaskan'}
+                  </Text>
+                </View>
+                <View style={[styles.teamCell, { width: '16%', borderRightWidth: 0 }]}><Text>{t.tanggal || ''}</Text></View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Keterangan tingkat risiko (RPN) — sama dengan warna kolom RPN di tabel */}
+        <View style={[styles.teamSection, { marginTop: 6 }]} wrap={false}>
+          <Text style={styles.teamTitle}>Keterangan Nilai RPN (Severity x Probability)</Text>
+          <View style={{ flexDirection: 'row' }}>
+            {[...RPN_LEVELS].reverse().map((l, i, arr) => (
+              <View key={i} style={{
+                width: `${100 / arr.length}%`, padding: 3, alignItems: 'center',
+                backgroundColor: l.level.hex,
+                borderRightWidth: i < arr.length - 1 ? 1 : 0, borderColor: B,
+              }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 5, color: l.level.ink }}>{l.range}</Text>
+                <Text style={{ fontSize: 4.5, color: l.level.ink }}>{l.level.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
       </Page>
