@@ -1,8 +1,10 @@
+// components/internal/assign-stages-form.tsx
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Loader2, CheckCircle2, Lock, Check, FileText, ShieldAlert, ClipboardList, Undo2, UserCheck, HardHat } from 'lucide-react';
-import { savePgsolAssignment } from '../actions';
+import {
+  Loader2, CheckCircle2, Lock, Check, FileText, ShieldAlert, ClipboardList, Undo2, AlertCircle, Search,
+} from 'lucide-react';
 
 type DocType = 'procedure' | 'jsa' | 'ptw';
 
@@ -10,7 +12,10 @@ export interface AssignCandidate { id: string; full_name: string; }
 
 export interface AssignStage {
   stageKey: string;
-  role: 'HSE' | 'PM PGSOL';
+  /** Nama peran tahap, mis. "HSSE PGN". */
+  label: string;
+  /** Penjelasan singkat: apa yang dilakukan orang di tahap ini. */
+  hint?: string;
   candidates: AssignCandidate[];
   currentIds: string[];
   locked: boolean;
@@ -21,6 +26,10 @@ export interface AssignGroup {
   title: string;
   stages: AssignStage[];
 }
+
+type SaveFn = (
+  projectId: string, docType: DocType, stageKey: string, assigneeIds: string[],
+) => Promise<{ error?: string; success?: boolean }>;
 
 const GROUP_ICON: Record<DocType, typeof FileText> = {
   procedure: FileText,
@@ -38,7 +47,21 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
 }
 
-export default function AssignPgsolForm({ projectId, groups }: { projectId: string; groups: AssignGroup[] }) {
+/**
+ * Form penugasan approver per proyek — dipakai admin PGN dan admin PGSOL.
+ * Semua perubahan di semua tahap disimpan sekaligus lewat satu tombol (bukan
+ * satu-satu per tahap). Tahap yang masih kosong ditandai jelas, karena tahap
+ * tanpa penugas membuat dokumen tersangkut (approval fail-closed).
+ */
+export default function AssignStagesForm({
+  projectId, groups, save, emptyHint,
+}: {
+  projectId: string;
+  groups: AssignGroup[];
+  save: SaveFn;
+  /** Dipakai saat sebuah tahap tidak punya kandidat sama sekali. */
+  emptyHint: string;
+}) {
   // Baseline = apa yang tersimpan di server. Diperbarui setelah simpan berhasil
   // supaya hitungan "belum disimpan" langsung nol tanpa menunggu refresh.
   const [baseline, setBaseline] = useState<Record<string, string[]>>(() => {
@@ -49,6 +72,7 @@ export default function AssignPgsolForm({ projectId, groups }: { projectId: stri
   const [selected, setSelected] = useState<Record<string, string[]>>(baseline);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedFlash, setSavedFlash] = useState(false);
+  const [query, setQuery] = useState('');
   const [pending, startTransition] = useTransition();
 
   const allStages = useMemo(
@@ -56,6 +80,9 @@ export default function AssignPgsolForm({ projectId, groups }: { projectId: stri
     [groups],
   );
   const dirtyStages = allStages.filter(s => !s.locked && !sameSet(selected[s.stageKey] ?? [], baseline[s.stageKey] ?? []));
+  const emptyCount = allStages.filter(s => (selected[s.stageKey] ?? []).length === 0).length;
+  const filledCount = allStages.length - emptyCount;
+  const showSearch = allStages.some(s => s.candidates.length > 8);
 
   function toggle(stageKey: string, id: string) {
     setSavedFlash(false);
@@ -81,7 +108,7 @@ export default function AssignPgsolForm({ projectId, groups }: { projectId: stri
       const nextBaseline = { ...baseline };
       for (const s of dirtyStages) {
         const ids = selected[s.stageKey] ?? [];
-        const res = await savePgsolAssignment(projectId, s.docType, s.stageKey, ids);
+        const res = await save(projectId, s.docType, s.stageKey, ids);
         if (res.error) nextErrors[s.stageKey] = res.error;
         else nextBaseline[s.stageKey] = ids;
       }
@@ -94,10 +121,42 @@ export default function AssignPgsolForm({ projectId, groups }: { projectId: stri
     });
   }
 
+  const q = query.trim().toLowerCase();
+
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-28">
+      {/* Ringkasan kelengkapan */}
+      <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${
+        emptyCount === 0
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          : 'bg-amber-50 border-amber-200 text-amber-800'
+      }`}>
+        {emptyCount === 0
+          ? <CheckCircle2 className="w-5 h-5 shrink-0" />
+          : <AlertCircle className="w-5 h-5 shrink-0" />}
+        <p className="font-medium">
+          {emptyCount === 0
+            ? <>Semua tahap sudah punya penanggung jawab ({filledCount}/{allStages.length}).</>
+            : <><span className="font-bold">{emptyCount} tahap belum ditugaskan</span> — dokumen yang sampai di tahap itu tidak bisa diproses sampai ada yang ditunjuk.</>}
+        </p>
+      </div>
+
+      {showSearch && (
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Cari nama staff..."
+            className="w-full pl-10 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          />
+        </div>
+      )}
+
       {groups.map(group => {
         const Icon = GROUP_ICON[group.docType];
+        const cols = group.stages.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2';
         return (
           <section key={group.docType} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
             <header className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50/60">
@@ -107,31 +166,52 @@ export default function AssignPgsolForm({ projectId, groups }: { projectId: stri
               <h2 className="text-base font-bold text-slate-800">{group.title}</h2>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x divide-slate-100">
-              {group.stages.map(stage => {
+            <div className={`grid grid-cols-1 ${cols} md:divide-x divide-slate-100`}>
+              {group.stages.map((stage, idx) => {
                 const sel = selected[stage.stageKey] ?? [];
                 const dirty = !stage.locked && !sameSet(sel, baseline[stage.stageKey] ?? []);
-                const RoleIcon = stage.role === 'PM PGSOL' ? UserCheck : HardHat;
                 const allOn = stage.candidates.length > 0 && sel.length === stage.candidates.length;
+                const empty = sel.length === 0;
+                const visible = q
+                  ? stage.candidates.filter(c => c.full_name.toLowerCase().includes(q))
+                  : stage.candidates;
                 return (
                   <div key={stage.stageKey} className="p-5 space-y-3 border-t border-slate-100 first:border-t-0 md:border-t-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <RoleIcon className="w-4 h-4 text-slate-400 shrink-0" />
-                        <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wide">{stage.role}</h3>
-                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
-                          {sel.length}/{stage.candidates.length}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <span className={`w-6 h-6 mt-0.5 rounded-full text-[11px] font-black flex items-center justify-center shrink-0 ${
+                          empty ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'
+                        }`}>
+                          {idx + 1}
                         </span>
-                        {dirty && <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Diubah</span>}
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-bold text-slate-800 leading-tight">{stage.label}</h3>
+                          {stage.hint && <p className="text-xs text-slate-500 mt-0.5">{stage.hint}</p>}
+                        </div>
                       </div>
                       {!stage.locked && stage.candidates.length > 1 && (
                         <button
                           type="button"
                           onClick={() => setAll(stage, !allOn)}
-                          className="text-xs font-semibold text-primary hover:underline shrink-0"
+                          className="text-xs font-semibold text-primary hover:underline shrink-0 mt-0.5"
                         >
                           {allOn ? 'Kosongkan' : 'Pilih semua'}
                         </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border ${
+                        empty
+                          ? 'text-amber-700 bg-amber-50 border-amber-200'
+                          : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                      }`}>
+                        {empty ? 'Belum ditugaskan' : `${sel.length} ditugaskan`}
+                      </span>
+                      {dirty && (
+                        <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5">
+                          Diubah
+                        </span>
                       )}
                     </div>
 
@@ -147,10 +227,12 @@ export default function AssignPgsolForm({ projectId, groups }: { projectId: stri
                     )}
 
                     {stage.candidates.length === 0 ? (
-                      <p className="text-sm text-slate-400 py-2">Tidak ada staff PGSOL dengan izin {stage.role.toLowerCase()} tahap ini.</p>
+                      <p className="text-sm text-slate-400 py-2">{emptyHint}</p>
+                    ) : visible.length === 0 ? (
+                      <p className="text-sm text-slate-400 py-2">Tidak ada nama yang cocok.</p>
                     ) : (
                       <ul className="space-y-1.5">
-                        {stage.candidates.map(c => {
+                        {visible.map(c => {
                           const on = sel.includes(c.id);
                           return (
                             <li key={c.id}>

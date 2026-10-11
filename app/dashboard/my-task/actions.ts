@@ -5,8 +5,9 @@ import { getEffectivePtwStatus, PTW_STATUS, PTW_PENDING_STATUSES, PTW_STAGE_PERM
 import { JSA_STATUS, JSA_STAGE_PERMISSION, JSA_PENDING_STATUSES } from "@/lib/jsa-status";
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, PROCEDURE_PENDING_STATUSES } from "@/lib/procedure-status";
 import { hasPermissionForUser } from "@/utils/permissions";
+import { getAssignmentGaps, PARTY_LABEL, STAGE_SHORT_LABEL } from "@/lib/assignment-gaps";
 
-export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan';
+export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan' | 'Penugasan';
 export type UrgencyType = 'High' | 'Medium' | 'Low';
 
 export interface TaskItem {
@@ -314,6 +315,30 @@ export async function getMyTasks(): Promise<TaskItem[]> {
         });
       });
     }
+  }
+
+  // 6. Penugasan approver — khusus admin penugasan (PGN/PGSOL): proyek aktif
+  // yang masih punya slot approval kosong. Tanpa ini dokumen tersangkut diam-diam
+  // karena approval fail-closed (lihat lib/assignment-gaps.ts).
+  {
+    const gaps = await getAssignmentGaps(supabase, user.id);
+    gaps.forEach(g => {
+      const preview = g.missing.slice(0, 3).map(k => STAGE_SHORT_LABEL[k] ?? k).join(', ');
+      const more = g.missing.length > 3 ? ` +${g.missing.length - 3} lainnya` : '';
+      tasks.push({
+        id: `gap-${g.projectId}`,
+        title: `Tugaskan Approver — ${g.missing.length} dari ${g.total} tahap kosong`,
+        type: 'Penugasan',
+        projectName: g.projectName,
+        vendorName: g.vendorName,
+        date: g.createdAt,
+        url: g.url,
+        status: `${PARTY_LABEL[g.party]}: ${preview}${more}`,
+        // Slot kosong sampai dokumen diajukan = risiko tersangkut; makin lama makin mendesak.
+        urgency: getUrgency(g.createdAt),
+        timeInQueue: formatTimeInQueue(g.createdAt),
+      });
+    });
   }
 
   // Sort tasks by date (newest first)

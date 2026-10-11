@@ -1,10 +1,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Save, Briefcase, MapPin, Calendar, Building2, Activity, Users } from 'lucide-react';
+import { ArrowLeft, Briefcase, MapPin, Calendar, Building2, Activity, Users, AlertCircle, CheckCircle2, Pencil } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
-import AssignmentPanel from './AssignmentPanel';
-import { getStageAssignments, getEligibleAssignees, PGN_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
+import { getStageAssignmentsWithNames, PGN_STAGE_KEYS } from '@/lib/stage-assignments';
 
 const STAGE_LABELS: Record<string, string> = {
   'procedure.hsse_pgn': 'Review Prosedur Kerja — HSSE PGN',
@@ -40,30 +39,18 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
 
   const vendorList = vendors || [];
 
-  // Kandidat assignment harus dibatasi ke org admin yang sedang login. Role
-  // `admin` (PGN) memegang seluruh permission, jadi tanpa batas org daftar
-  // kandidat tiap tahap akan tercampur lintas organisasi. Diambil dari profil
-  // pengguna sendiri — persis cara writeStageAssignment menentukan "org milik
-  // admin yang menugaskan".
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', user?.id).single();
-  const actorOrgId = actorProfile?.org_id ?? '';
-
+  // Ringkasan penugasan PGN: siapa saja per tahap + mana yang masih kosong.
+  // Pengeditan ada di halaman terpisah (/assign) supaya form-nya lega.
   const slots = await Promise.all(PGN_STAGE_KEYS.map(async (stageKey) => {
     const docType = stageKey.split('.')[0];
-    const permission = STAGE_KEY_PERMISSION[stageKey];
-    const [candidates, assignments] = await Promise.all([
-      getEligibleAssignees(supabase, permission.module, permission.action, actorOrgId),
-      getStageAssignments(supabase, projectId, docType, stageKey),
-    ]);
+    const assignments = await getStageAssignmentsWithNames(supabase, projectId, docType, stageKey);
     return {
       stageKey,
       label: STAGE_LABELS[stageKey],
-      candidates,
-      currentAssigneeIds: assignments.map(a => a.assignee_id),
-      locked: assignments.some(a => a.status !== 'pending'),
+      assignees: assignments.map(a => ({ name: a.assignee_name || 'Tanpa nama', status: a.status })),
     };
   }));
+  const emptySlots = slots.filter(s => s.assignees.length === 0).length;
 
   const statusOptions = [
     { value: 'Menunggu Review', label: 'Menunggu Review' },
@@ -208,11 +195,55 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
               </div>
 
               {/* Seksi 4: Assignment Approval PGN */}
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-6 pt-6 border-t border-slate-100">
-                <Users className="w-5 h-5 text-primary" />
-                Assignment Approval PGN
-              </h2>
-              <AssignmentPanel projectId={project.id} slots={slots} />
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pt-6 border-t border-slate-100">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  Assignment Approval PGN
+                </h2>
+                <Link
+                  href={`/dashboard/master-data/project/${project.id}/assign`}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors"
+                >
+                  <Pencil className="w-4 h-4" /> Atur Penugasan
+                </Link>
+              </div>
+
+              <div className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm mb-4 ${
+                emptySlots === 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}>
+                {emptySlots === 0 ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                <span className="font-medium">
+                  {emptySlots === 0
+                    ? 'Semua tahap PGN sudah punya penanggung jawab.'
+                    : `${emptySlots} dari ${slots.length} tahap PGN belum ditugaskan — dokumen akan tersangkut di tahap itu.`}
+                </span>
+              </div>
+
+              <ul className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                {slots.map(slot => (
+                  <li key={slot.stageKey} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-white">
+                    <span className="text-sm font-semibold text-slate-700">{slot.label}</span>
+                    {slot.assignees.length === 0 ? (
+                      <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">Belum ditugaskan</span>
+                    ) : (
+                      <span className="flex flex-wrap gap-1.5 justify-end">
+                        {slot.assignees.map((a, i) => (
+                          <span
+                            key={i}
+                            className={`text-xs font-medium rounded-full px-2.5 py-0.5 border ${
+                              a.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : a.status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-slate-50 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            {a.name}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
 
             </div>
           </div>

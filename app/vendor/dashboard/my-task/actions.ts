@@ -5,8 +5,9 @@ import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { JSA_STATUS } from "@/lib/jsa-status";
 import { PTW_STATUS } from "@/lib/ptw-status";
 import { PTW_TYPES } from "@/lib/ptw-types";
+import { getAssignmentGaps, PARTY_LABEL, STAGE_SHORT_LABEL } from "@/lib/assignment-gaps";
 
-export type VendorTaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Temuan';
+export type VendorTaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Temuan' | 'Penugasan';
 export type VendorUrgencyType = 'High' | 'Medium' | 'Low';
 
 export interface VendorTaskItem {
@@ -260,6 +261,25 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
         timeInQueue: formatTimeInQueue(date),
       });
     }
+  });
+
+  // Penugasan HSE/PM Vendor — khusus admin vendor: slot approval internal yang
+  // masih kosong membuat dokumen tersangkut di tahap review vendor.
+  const gaps = await getAssignmentGaps(supabase, user.id);
+  gaps.forEach(g => {
+    const preview = g.missing.slice(0, 3).map(k => STAGE_SHORT_LABEL[k] ?? k).join(', ');
+    const more = g.missing.length > 3 ? ` +${g.missing.length - 3} lainnya` : '';
+    tasks.push({
+      id: `gap-${g.projectId}`,
+      title: `Tugaskan HSE & PM Vendor — ${g.missing.length} dari ${g.total} tahap kosong`,
+      type: 'Penugasan',
+      projectName: g.projectName,
+      date: g.createdAt,
+      url: g.url,
+      status: `${PARTY_LABEL[g.party]}: ${preview}${more}`,
+      urgency: getUrgency(g.createdAt),
+      timeInQueue: formatTimeInQueue(g.createdAt),
+    });
   });
 
   return tasks.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());

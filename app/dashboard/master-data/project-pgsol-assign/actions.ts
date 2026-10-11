@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { writeStageAssignment, getStageAssignments, PGSOL_STAGE_KEYS } from '@/lib/stage-assignments';
+import { notifyAddedAssigneesIfActive } from '@/lib/assignment-notify';
 import { revalidatePath } from 'next/cache';
 import { logActivity } from '@/lib/activity-log';
 
@@ -19,14 +20,10 @@ export async function getPgsolProjects() {
     `)
     .order('created_at', { ascending: false });
   if (error) { console.error('getPgsolProjects error:', error.message); return []; }
-  // Proyek relevan buat PGSOL begitu punya Prosedur Kerja, JSA, ATAU PTW —
-  // tahap PGSOL ada di ketiga jenis dokumen.
-  return (data || []).filter((p: any) => {
-    const procRows = Array.isArray(p.procedures) ? p.procedures : (p.procedures ? [p.procedures] : []);
-    const jsaRows = Array.isArray(p.jsa) ? p.jsa : (p.jsa ? [p.jsa] : []);
-    const ptwRows = Array.isArray(p.ptw) ? p.ptw : (p.ptw ? [p.ptw] : []);
-    return procRows.length > 0 || jsaRows.length > 0 || ptwRows.length > 0;
-  });
+  // Semua proyek aktif ditampilkan, termasuk yang belum punya dokumen: slot
+  // HSE/PM PGSOL idealnya diisi SEBELUM vendor mengajukan, supaya dokumen
+  // pertama langsung punya penanggung jawab (lihat lib/assignment-gaps.ts).
+  return (data || []).filter((p: any) => !['Selesai', 'Completed', 'Ditolak'].includes(p.status));
 }
 
 export async function savePgsolAssignment(
@@ -60,6 +57,10 @@ export async function savePgsolAssignment(
   });
   if (result.error) return { error: result.error };
 
+  await notifyAddedAssigneesIfActive(supabase, {
+    projectId, docType, stageKey, addedIds: assigneeIds.filter(id => !beforeIds.includes(id)),
+  });
+
   // Daftar reviewer sebelum → sesudah, sebagai nama (bukan UUID) supaya terbaca di log.
   const allIds = [...new Set([...beforeIds, ...assigneeIds])];
   const { data: people } = allIds.length > 0
@@ -79,5 +80,6 @@ export async function savePgsolAssignment(
   });
 
   revalidatePath(`/dashboard/master-data/project-pgsol-assign/${projectId}`);
+  revalidatePath('/dashboard/my-task');
   return { success: true };
 }

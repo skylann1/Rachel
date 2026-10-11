@@ -4,7 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermission } from '@/utils/permissions';
 import { getStageAssignments, getEligibleAssignees } from '@/lib/stage-assignments';
-import AssignPgsolForm, { type AssignGroup, type AssignStage } from './AssignPgsolForm';
+import AssignStagesForm, { type AssignGroup, type AssignStage } from '@/components/internal/assign-stages-form';
+import { savePgsolAssignment } from '../actions';
 
 const DOC_TYPES = [
   { docType: 'procedure', title: 'Prosedur Kerja' },
@@ -15,8 +16,8 @@ const DOC_TYPES = [
 // Urutan = urutan tahap: HSE PGSOL dulu, baru PM PGSOL (stage_key lama
 // `review_pgsol` dipertahankan untuk PM PGSOL, lihat lib/jsa-status.ts).
 const ROLES = [
-  { role: 'HSE', suffix: 'hse_pgsol' },
-  { role: 'PM PGSOL', suffix: 'review_pgsol' },
+  { label: 'HSE PGSOL', suffix: 'hse_pgsol', hint: 'Verifikasi aspek keselamatan (HSE) lebih dulu.' },
+  { label: 'PM PGSOL', suffix: 'review_pgsol', hint: 'Verifikasi teknis setelah HSE, lalu ke PGN.' },
 ] as const;
 
 export default async function ProjectPgsolAssignDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -35,7 +36,7 @@ export default async function ProjectPgsolAssignDetailPage({ params }: { params:
   const groups: AssignGroup[] = await Promise.all(
     DOC_TYPES.map(async ({ docType, title }) => {
       const stages: AssignStage[] = await Promise.all(
-        ROLES.map(async ({ role, suffix }) => {
+        ROLES.map(async ({ label, hint, suffix }) => {
           const stageKey = `${docType}.${suffix}`;
           const [candidates, assignments] = await Promise.all([
             getEligibleAssignees(supabase, docType, suffix, orgId),
@@ -43,7 +44,8 @@ export default async function ProjectPgsolAssignDetailPage({ params }: { params:
           ]);
           return {
             stageKey,
-            role,
+            label,
+            hint,
             candidates,
             currentIds: assignments.map(a => a.assignee_id),
             locked: assignments.some(a => a.status !== 'pending'),
@@ -68,7 +70,12 @@ export default async function ProjectPgsolAssignDetailPage({ params }: { params:
           </p>
         </div>
       </div>
-      <AssignPgsolForm projectId={projectId} groups={groups} />
+      <AssignStagesForm
+        projectId={projectId}
+        groups={groups}
+        save={savePgsolAssignment}
+        emptyHint="Belum ada staff PGSOL dengan izin tahap ini. Berikan izinnya lewat Role & Permission."
+      />
     </div>
   );
 }

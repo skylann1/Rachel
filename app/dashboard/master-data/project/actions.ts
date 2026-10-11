@@ -4,7 +4,8 @@ import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 import { hasPermissionForUser } from "@/utils/permissions";
-import { writeStageAssignment, PGN_STAGE_KEYS } from "@/lib/stage-assignments";
+import { writeStageAssignment, getStageAssignments, PGN_STAGE_KEYS } from "@/lib/stage-assignments";
+import { notifyProjectNeedsAssignment, notifyAddedAssigneesIfActive } from "@/lib/assignment-notify";
 import { logActivity } from "@/lib/activity-log";
 
 export async function createProject(formData: FormData) {
@@ -54,6 +55,12 @@ export async function createProject(formData: FormData) {
     });
   }
 
+  // Tahap approval baru berjalan kalau ada yang ditugaskan — ingatkan admin
+  // tiap pihak (PGN/PGSOL/vendor) sejak proyek dibuat, bukan setelah dokumen tersangkut.
+  await notifyProjectNeedsAssignment(supabase, {
+    projectId: project.id, projectName: name, vendorOrgId: vendor_id || null, excludeUserId: user.id,
+  });
+
   await logActivity(supabase, { actorId: user.id, action: "Membuat proyek", entityType: "project", entityId: project.id, notes: name });
 
   revalidatePath("/dashboard/master-data/project");
@@ -71,9 +78,25 @@ export async function saveStageAssignment(projectId: string, stageKey: string, a
     return { error: 'Tahap ini bukan tahap yang dikelola admin PGN.' };
   }
 
-  const result = await writeStageAssignment(supabase, user.id, { projectId, docType: stageKey.split('.')[0], stageKey, assigneeIds });
+  const docType = stageKey.split('.')[0];
+  const beforeIds = (await getStageAssignments(supabase, projectId, docType, stageKey)).map(r => r.assignee_id);
+
+  const result = await writeStageAssignment(supabase, user.id, { projectId, docType, stageKey, assigneeIds });
   if (result.error) return { error: result.error };
 
+  // Penugasan terlambat: kalau dokumennya sudah di tahap ini, orang yang baru
+  // ditunjuk tidak akan pernah dapat notifikasi tahap — kirim sekarang.
+  await notifyAddedAssigneesIfActive(supabase, {
+    projectId, docType, stageKey, addedIds: assigneeIds.filter(id => !beforeIds.includes(id)),
+  });
+
   revalidatePath(`/dashboard/master-data/project/${projectId}`);
+  revalidatePath(`/dashboard/master-data/project/${projectId}/assign`);
+  revalidatePath('/dashboard/my-task');
   return { success: true };
+}
+
+/** Bentuk yang dipakai form penugasan bersama (AssignStagesForm). */
+export async function savePgnAssignment(projectId: string, _docType: string, stageKey: string, assigneeIds: string[]) {
+  return saveStageAssignment(projectId, stageKey, assigneeIds);
 }

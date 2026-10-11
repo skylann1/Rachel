@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { notifyEmptyStage } from "@/lib/assignment-notify";
 
 // =====================================================================
 // NOTIFICATION TYPES
@@ -364,7 +365,18 @@ export async function notifyAssignees({
     .eq('stage_key', stageKey)
     .eq('status', 'pending');
 
-  if (!assignees || assignees.length === 0) return;
+  if (!assignees || assignees.length === 0) {
+    // Tahap tanpa penugas sama sekali (bukan sekadar semuanya sudah memutuskan):
+    // dokumen akan tersangkut diam-diam, jadi kabari admin pihak pemilik tahap.
+    const { count } = await supabase
+      .from('stage_assignments')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .eq('doc_type', docType)
+      .eq('stage_key', stageKey);
+    if (!count) await notifyEmptyStage(supabase, { projectId, docType, stageKey });
+    return;
+  }
 
   await supabase.from('notifications').insert(
     assignees.map(a => ({

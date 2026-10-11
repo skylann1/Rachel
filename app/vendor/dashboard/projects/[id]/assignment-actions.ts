@@ -3,7 +3,8 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { hasPermissionForUser } from "@/utils/permissions";
-import { writeStageAssignment, VENDOR_STAGE_KEYS } from "@/lib/stage-assignments";
+import { writeStageAssignment, getStageAssignments, VENDOR_STAGE_KEYS } from "@/lib/stage-assignments";
+import { notifyAddedAssigneesIfActive } from "@/lib/assignment-notify";
 
 export async function saveVendorStageAssignment(projectId: string, stageKey: string, assigneeIds: string[]) {
   const supabase = await createClient();
@@ -17,8 +18,15 @@ export async function saveVendorStageAssignment(projectId: string, stageKey: str
     return { error: 'Tahap ini bukan tahap yang dikelola vendor.' };
   }
 
-  const result = await writeStageAssignment(supabase, user.id, { projectId, docType: stageKey.split('.')[0], stageKey, assigneeIds });
+  const docType = stageKey.split('.')[0];
+  const beforeIds = (await getStageAssignments(supabase, projectId, docType, stageKey)).map(r => r.assignee_id);
+
+  const result = await writeStageAssignment(supabase, user.id, { projectId, docType, stageKey, assigneeIds });
   if (result.error) return { error: result.error };
+
+  await notifyAddedAssigneesIfActive(supabase, {
+    projectId, docType, stageKey, addedIds: assigneeIds.filter(id => !beforeIds.includes(id)),
+  });
 
   revalidatePath(`/vendor/dashboard/projects/${projectId}`);
   return { success: true };

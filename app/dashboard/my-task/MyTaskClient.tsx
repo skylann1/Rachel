@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
@@ -33,7 +34,7 @@ interface MyTaskClientProps {
 
 type SortMode = 'urgency' | 'oldest' | 'name';
 
-const TASK_TYPES: TaskType[] = ['Prosedur', 'JSA', 'PTW', 'Insiden', 'Pengawasan'];
+const TASK_TYPES: TaskType[] = ['Penugasan', 'Prosedur', 'JSA', 'PTW', 'Insiden', 'Pengawasan'];
 
 const TYPE_META: Record<TaskType, { color: string; icon: React.ElementType; soft: string; ink: string }> = {
   Prosedur:   { color: '#4f46e5', icon: FileSignature,  soft: 'bg-indigo-50',  ink: 'text-indigo-600' },
@@ -41,6 +42,7 @@ const TYPE_META: Record<TaskType, { color: string; icon: React.ElementType; soft
   PTW:        { color: '#059669', icon: CheckCircle,    soft: 'bg-emerald-50', ink: 'text-emerald-600' },
   Insiden:    { color: '#e11d48', icon: AlertTriangle,  soft: 'bg-rose-50',    ink: 'text-rose-600' },
   Pengawasan: { color: '#0ea5e9', icon: Eye,            soft: 'bg-sky-50',     ink: 'text-sky-600' },
+  Penugasan:  { color: '#7c3aed', icon: UserPlus,       soft: 'bg-violet-50',  ink: 'text-violet-600' },
 };
 
 const URGENCY_META = {
@@ -123,7 +125,7 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
   }, [projectNames, selectedProject]);
 
   const typeCounts = useMemo(() => {
-    const counts: Record<TaskType, number> = { Prosedur: 0, JSA: 0, PTW: 0, Insiden: 0, Pengawasan: 0 };
+    const counts: Record<TaskType, number> = { Prosedur: 0, JSA: 0, PTW: 0, Insiden: 0, Pengawasan: 0, Penugasan: 0 };
     tasks.forEach(t => counts[t.type]++);
     return counts;
   }, [tasks]);
@@ -472,7 +474,7 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
                                 href={task.url}
                                 className="flex items-center gap-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-primary px-4 py-2 rounded-lg transition-all shadow-sm hover:shadow-md hover:shadow-primary/25"
                               >
-                                {task.type === 'Pengawasan' ? 'Buka Proyek' : 'Eksekusi'}
+                                {task.type === 'Pengawasan' ? 'Buka Proyek' : task.type === 'Penugasan' ? 'Tugaskan' : 'Eksekusi'}
                                 <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                               </Link>
                             </div>
@@ -519,7 +521,7 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
 
       {/* ── Disposisi modal ────────────────────────────────────────── */}
       {isDisposisiModalOpen && disposisiTargets.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <form onSubmit={handleDisposisi} className="bg-white rounded-2xl w-full max-w-md flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -578,7 +580,7 @@ export default function MyTaskClient({ tasks: initialTasks, userRole, internalUs
               </button>
             </div>
           </form>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );
