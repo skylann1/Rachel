@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, UploadCloud, FileText, Download, Trash2, Loader2 } from 'lucide-react';
 import { getVendorDocuments, saveDocumentMetadata, deleteVendorDocument } from './actions';
@@ -172,7 +173,7 @@ export default function DokumenK3Page() {
 
       {/* Modal Upload Dokumen */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <div className="bg-white rounded-2xl w-full max-w-xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <div>
@@ -256,7 +257,7 @@ export default function DokumenK3Page() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

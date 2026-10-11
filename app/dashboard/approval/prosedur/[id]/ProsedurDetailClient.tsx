@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -204,8 +205,9 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
       </div>
 
       {rejectModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <ModalPortal onClose={() => setRejectModalOpen(false)} blocking={isRejecting} zIndex={110}>
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl ring-1 ring-black/5">
+            <div className="h-1.5 bg-gradient-to-r from-rose-500 to-rose-400" />
             <div className="p-6 border-b border-slate-100 flex items-center gap-3 text-red-600">
               <XCircle className="w-6 h-6" />
               <h3 className="font-bold text-lg text-slate-800">Tolak Dokumen</h3>
@@ -239,7 +241,7 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

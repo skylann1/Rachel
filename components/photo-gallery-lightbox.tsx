@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -20,7 +21,7 @@ export function PhotoGalleryLightbox({
   const goNext = () => setIndex((i) => (i + 1) % photos.length);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-200">
+    <ModalPortal zIndex={110}>
       <button
         onClick={onClose}
         className="absolute top-4 right-4 p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
@@ -55,6 +56,6 @@ export function PhotoGalleryLightbox({
           </>
         )}
       </div>
-    </div>
+    </ModalPortal>
   );
 }

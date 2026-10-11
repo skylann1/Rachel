@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2, Download, History, UserPlus } from 'lucide-react';
 import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs, validateInspection, closeInspectionDirectly } from './actions';
@@ -374,7 +375,7 @@ export default function InspectionPage() {
 
       {/* Modal Lapor Temuan */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <form onSubmit={handleCreate} className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl h-[90vh] md:h-auto md:max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <div>
@@ -515,12 +516,12 @@ export default function InspectionPage() {
               </button>
             </div>
           </form>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Modal Disposisi */}
       {isDisposisiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <form onSubmit={handleDisposisi} className="bg-white rounded-2xl w-full max-w-md flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><UserPlus className="w-5 h-5 text-primary" /> Disposisi Inspeksi</h2>
@@ -567,12 +568,12 @@ export default function InspectionPage() {
               </button>
             </div>
           </form>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Modal Tutup Langsung (temuan tanpa vendor) */}
       {isCloseModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <div className="bg-white rounded-2xl w-full max-w-md flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-600" /> Tutup Langsung</h2>
@@ -614,12 +615,12 @@ export default function InspectionPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Modal Validasi Perbaikan */}
       {isValidasiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh]">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CheckCircle className="w-5 h-5 text-primary" /> Validasi Perbaikan</h2>
@@ -685,12 +686,12 @@ export default function InspectionPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Modal Log History */}
       {isHistoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh]">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><History className="w-5 h-5 text-primary" /> Log History Inspeksi</h2>
@@ -726,7 +727,7 @@ export default function InspectionPage() {
               )}
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Lightbox Galeri Foto */}

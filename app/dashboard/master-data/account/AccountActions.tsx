@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import { useState } from 'react';
 import { Edit2, ShieldOff, Shield, Trash2, Loader2, AlertTriangle, KeyRound, Copy, Check } from 'lucide-react';
 import EditAccountModal from './EditAccountModal';
@@ -111,7 +112,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
 
       {/* Suspend Confirmation Modal */}
       {isConfirmSuspendOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal text-left">
+        <ModalPortal zIndex={110}>
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col items-center text-center">
             <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${isSuspended ? 'bg-amber-100' : 'bg-rose-100'}`}>
               {isSuspended ? <Shield className="w-6 h-6 text-amber-600" /> : <ShieldOff className="w-6 h-6 text-rose-600" />}
@@ -141,12 +142,12 @@ export default function AccountActions({ account, roles, lockedType }: { account
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Delete Confirmation Modal */}
       {isConfirmDeleteOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal text-left">
+        <ModalPortal zIndex={110}>
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col items-center text-center">
             <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center mb-4">
               <AlertTriangle className="w-6 h-6 text-rose-600" />
@@ -172,12 +173,12 @@ export default function AccountActions({ account, roles, lockedType }: { account
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Reset Password Confirmation Modal */}
       {isConfirmResetOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal text-left">
+        <ModalPortal zIndex={110}>
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col items-center text-center">
             <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
               <KeyRound className="w-6 h-6 text-amber-600" />
@@ -203,12 +204,12 @@ export default function AccountActions({ account, roles, lockedType }: { account
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Reset Password Result Modal */}
       {(resetPassword || resetError) && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal text-left">
+        <ModalPortal zIndex={110}>
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col items-center text-center">
             {resetPassword ? (
               <>
@@ -254,7 +255,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
               </>
             )}
           </div>
-        </div>
+        </ModalPortal>
       )}
     </>
   );

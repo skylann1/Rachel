@@ -9,6 +9,7 @@ import {
   Users, Activity, FileText, MessageSquare, ChevronDown, ChevronUp, History, Sparkles, QrCode, Siren,
   ClipboardList, LogIn, Clock, Undo2
 } from 'lucide-react';
+import { ModalPortal } from '@/components/ui/modal-portal';
 import { ProjectDiscussion } from '@/components/project-discussion';
 import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, rejectPtw, resumePtw, rollbackStage } from '@/app/dashboard/approval/actions';
 import dynamic from 'next/dynamic';
@@ -142,19 +143,23 @@ function DocPreview({ label, defaultOpen, children }: {
 function DocumentModal({ isOpen, onClose, title, children }: any) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl w-full max-w-6xl h-[90vh] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
-          <h3 className="font-bold text-slate-800 text-lg">{title}</h3>
-          <button onClick={onClose} className="w-10 h-10 rounded-xl hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors">
-            <X className="w-5 h-5" />
+    <ModalPortal onClose={onClose} zIndex={100}>
+      <div className="flex h-[90dvh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
+          <h3 className="truncate text-base font-bold text-slate-900 sm:text-lg">{title}</h3>
+          <button
+            onClick={onClose}
+            aria-label="Tutup"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="flex-1 bg-slate-100">
-           {children}
+        <div className="flex-1 overflow-hidden bg-slate-100">
+          {children}
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -176,41 +181,61 @@ function RejectModal({ onConfirm, onCancel, isLoading }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600">
-            <X className="w-5 h-5" />
+    <ModalPortal onClose={onCancel} blocking={isLoading} zIndex={110}>
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5">
+        <div className="h-1.5 bg-gradient-to-r from-rose-500 to-rose-400" />
+        <div className="p-6 sm:p-7">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 ring-8 ring-rose-50/70">
+              <X className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 pt-0.5">
+              <h3 className="text-lg font-bold text-slate-900">Tolak &amp; Kembalikan</h3>
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                Dokumen dikembalikan ke vendor sebagai Draft. Vendor harus memperbaiki lalu mengajukan ulang dari tahap awal.
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-slate-800">Tolak & Kembalikan</h3>
-            <p className="text-xs text-slate-500">Berikan catatan revisi untuk vendor.</p>
+
+          <label className="mt-5 block text-xs font-bold uppercase tracking-wide text-slate-500">
+            Catatan revisi <span className="text-rose-500">*</span>
+          </label>
+          <textarea
+            autoFocus
+            value={note}
+            onChange={e => { setNote(e.target.value); if (showError) setShowError(false); }}
+            rows={5}
+            className={`mt-1.5 w-full resize-none rounded-2xl border bg-slate-50 p-3.5 text-sm text-slate-800 placeholder:text-slate-400 transition focus:bg-white focus:outline-none focus:ring-4 ${
+              showError
+                ? 'border-rose-400 focus:border-rose-400 focus:ring-rose-100'
+                : 'border-slate-200 focus:border-rose-400 focus:ring-rose-100'
+            }`}
+            placeholder="Contoh: Tolong lengkapi mitigasi pada langkah ke-3..."
+          />
+          {showError && (
+            <p className="mt-1.5 text-xs font-semibold text-rose-600">Catatan revisi wajib diisi sebelum menolak dokumen.</p>
+          )}
+
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              onClick={onCancel}
+              disabled={isLoading}
+              className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-rose-200 transition-colors hover:bg-rose-700 disabled:opacity-50"
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+              Tolak Dokumen
+            </button>
           </div>
-        </div>
-        <textarea
-          value={note}
-          onChange={e => { setNote(e.target.value); if (showError) setShowError(false); }}
-          className={`w-full h-32 p-3 border rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 resize-none ${showError ? 'border-rose-400 focus:ring-rose-300' : 'border-slate-200 focus:ring-rose-300'}`}
-          placeholder="Contoh: Tolong lengkapi mitigasi pada langkah ke-3..."
-        />
-        {showError && (
-          <p className="text-xs font-semibold text-rose-600 mt-1.5">Catatan revisi wajib diisi sebelum menolak dokumen.</p>
-        )}
-        <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-xl transition-colors">
-            Batal
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl transition-colors"
-          >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-            Tolak Dokumen
-          </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -232,41 +257,61 @@ function RollbackModal({ stageLabel, onConfirm, onCancel, isLoading }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
-            <Undo2 className="w-5 h-5" />
+    <ModalPortal onClose={onCancel} blocking={isLoading} zIndex={110}>
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5">
+        <div className="h-1.5 bg-gradient-to-r from-amber-500 to-amber-400" />
+        <div className="p-6 sm:p-7">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 ring-8 ring-amber-50/70">
+              <Undo2 className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 pt-0.5">
+              <h3 className="text-lg font-bold text-slate-900">Rollback ke &ldquo;{stageLabel}&rdquo;</h3>
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                Tahap ini dan setelahnya akan diulang dari nol. Alasan wajib diisi dan tercatat di log dokumen.
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-slate-800">Rollback ke &ldquo;{stageLabel}&rdquo;</h3>
-            <p className="text-xs text-slate-500">Tahap ini dan setelahnya akan diulang dari nol. Wajib berikan alasan.</p>
+
+          <label className="mt-5 block text-xs font-bold uppercase tracking-wide text-slate-500">
+            Alasan rollback <span className="text-rose-500">*</span>
+          </label>
+          <textarea
+            autoFocus
+            value={reason}
+            onChange={e => { setReason(e.target.value); if (showError) setShowError(false); }}
+            rows={4}
+            className={`mt-1.5 w-full resize-none rounded-2xl border bg-slate-50 p-3.5 text-sm text-slate-800 placeholder:text-slate-400 transition focus:bg-white focus:outline-none focus:ring-4 ${
+              showError
+                ? 'border-rose-400 focus:border-rose-400 focus:ring-rose-100'
+                : 'border-slate-200 focus:border-amber-400 focus:ring-amber-100'
+            }`}
+            placeholder="Contoh: Approval tahap ini keliru, perlu direview ulang oleh orang yang tepat..."
+          />
+          {showError && (
+            <p className="mt-1.5 text-xs font-semibold text-rose-600">Alasan rollback wajib diisi.</p>
+          )}
+
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              onClick={onCancel}
+              disabled={isLoading}
+              className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-amber-200 transition-colors hover:bg-amber-700 disabled:opacity-50"
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+              Konfirmasi Rollback
+            </button>
           </div>
-        </div>
-        <textarea
-          value={reason}
-          onChange={e => { setReason(e.target.value); if (showError) setShowError(false); }}
-          className={`w-full h-28 p-3 border rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 resize-none ${showError ? 'border-rose-400 focus:ring-rose-300' : 'border-slate-200 focus:ring-amber-300'}`}
-          placeholder="Contoh: Approval tahap ini keliru, perlu direview ulang oleh orang yang tepat..."
-        />
-        {showError && (
-          <p className="text-xs font-semibold text-rose-600 mt-1.5">Alasan rollback wajib diisi.</p>
-        )}
-        <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-xl transition-colors">
-            Batal
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-xl transition-colors"
-          >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
-            Konfirmasi Rollback
-          </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -314,41 +359,51 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
   isLoading: boolean;
 }) {
   const { title, desc } = APPROVE_LABELS[labelKey] ?? APPROVE_LABELS.prosedur;
+  const danger = !!warning;
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
-            <Check className="w-5 h-5" />
+    <ModalPortal onClose={onCancel} blocking={isLoading} zIndex={110}>
+      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5">
+        <div className={`h-1.5 bg-gradient-to-r ${danger ? 'from-rose-500 to-rose-400' : 'from-emerald-500 to-teal-400'}`} />
+        <div className="p-6 sm:p-7">
+          <div className="flex flex-col items-center text-center">
+            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ring-8 ${
+              danger ? 'bg-rose-50 text-rose-600 ring-rose-50/70' : 'bg-emerald-50 text-emerald-600 ring-emerald-50/70'
+            }`}>
+              {danger ? <AlertTriangle className="h-7 w-7" /> : <Check className="h-7 w-7" />}
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-slate-900">{title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">{desc}</p>
           </div>
-          <div>
-            <h3 className="font-bold text-slate-800">{title}</h3>
-            <p className="text-xs text-slate-500">{desc}</p>
+
+          {warning && (
+            <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-3.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+              <p className="text-xs font-semibold leading-relaxed text-rose-800">{warning}</p>
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+            <button
+              onClick={onCancel}
+              disabled={isLoading}
+              className="rounded-xl border border-slate-200 bg-white px-6 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={isLoading}
+              className={`flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-colors disabled:opacity-50 ${
+                danger ? 'bg-rose-600 shadow-rose-200 hover:bg-rose-700' : 'bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700'
+              }`}
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {danger ? 'Tetap Setujui' : 'Ya, Setujui'}
+            </button>
           </div>
-        </div>
-        {warning && (
-          <div className="flex items-start gap-2.5 bg-rose-50 border border-rose-200 rounded-xl p-3 mb-4">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-            <p className="text-xs font-semibold text-rose-800 leading-relaxed">{warning}</p>
-          </div>
-        )}
-        <div className="flex justify-end gap-2 mt-2">
-          <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-xl transition-colors">
-            Batal
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isLoading}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 rounded-xl transition-colors shadow-sm ${
-              warning ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
-            }`}
-          >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            {warning ? 'Tetap Setujui' : 'Ya, Setujui'}
-          </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 

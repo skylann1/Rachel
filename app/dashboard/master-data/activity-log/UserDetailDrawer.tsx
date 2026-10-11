@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useEffect, useState } from 'react';
 import { X, Loader2, Clock, LogIn, Monitor, Timer, History } from 'lucide-react';
 import { getUserDetail } from './actions';
@@ -61,7 +62,7 @@ export default function UserDetailDrawer({ userId, onClose }: { userId: string |
   const maxModule = Math.max(...(detail?.moduleTime.map(m => m.minutes) ?? [1]), 1);
 
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+    <ModalPortal onClose={onClose} zIndex={120} className="justify-end">
       <aside
         role="dialog"
         aria-modal="true"
@@ -192,6 +193,6 @@ export default function UserDetailDrawer({ userId, onClose }: { userId: string |
           )}
         </div>
       </aside>
-    </div>
+    </ModalPortal>
   );
 }

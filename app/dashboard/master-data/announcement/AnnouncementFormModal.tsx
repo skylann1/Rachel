@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useRef, useState } from 'react';
 import { X, Loader2, AlertCircle, Megaphone, UploadCloud } from 'lucide-react';
 import { uploadImage } from '@/utils/supabase/storage';
@@ -69,7 +70,7 @@ export default function AnnouncementFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <ModalPortal zIndex={100}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2">
@@ -159,6 +160,6 @@ export default function AnnouncementFormModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

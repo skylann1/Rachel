@@ -1,5 +1,6 @@
 "use client";
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Loader2, Inbox, ArrowRight } from 'lucide-react';
@@ -43,10 +44,7 @@ export function DashboardDetailModal({ config, onClose }: { config: DetailModalC
   if (!config) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
+    <ModalPortal onClose={onClose} zIndex={100}>
       <div
         className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden animate-fade-up"
         onClick={(e) => e.stopPropagation()}
@@ -100,6 +98,6 @@ export function DashboardDetailModal({ config, onClose }: { config: DetailModalC
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

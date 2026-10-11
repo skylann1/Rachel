@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import { useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { addAccount } from './actions';
@@ -42,7 +43,7 @@ export default function AddAccountModal({ isOpen, onClose, roles, lockedType }: 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    <ModalPortal zIndex={100}>
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
@@ -198,6 +199,6 @@ export default function AddAccountModal({ isOpen, onClose, roles, lockedType }: 
         </div>
 
       </div>
-    </div>
+    </ModalPortal>
   );
 }

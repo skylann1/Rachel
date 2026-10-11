@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Copy, Check } from 'lucide-react';
@@ -14,7 +15,7 @@ export default function CheckinQrModal({ url, onClose }: { url: string; onClose:
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <ModalPortal onClose={onClose} zIndex={100}>
       <div className="bg-white rounded-2xl p-6 max-w-xs w-full text-center relative" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600">
           <X className="w-5 h-5" />
@@ -32,6 +33,6 @@ export default function CheckinQrModal({ url, onClose }: { url: string; onClose:
           {copied ? 'Tautan Disalin' : 'Salin Tautan'}
         </button>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

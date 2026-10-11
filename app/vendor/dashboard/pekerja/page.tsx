@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit2, Trash2, Loader2, Users, ShieldCheck, Wrench, AlertTriangle } from 'lucide-react';
 import { getWorkers, saveWorker, deleteWorker, WorkerItem, CompetencyItem } from './actions';
@@ -368,7 +369,7 @@ export default function PekerjaMasterPage() {
 
       {/* Modal Tambah/Edit Pekerja */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh]">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
               <div>
@@ -436,7 +437,7 @@ export default function PekerjaMasterPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

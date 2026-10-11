@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState } from 'react';
 import { X, Loader2, AlertCircle, Shield } from 'lucide-react';
 import { addRole } from './actions';
@@ -32,7 +33,7 @@ export default function AddRoleModal({ isOpen, onClose, onSuccess }: { isOpen: b
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal">
+    <ModalPortal zIndex={100}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
@@ -115,6 +116,6 @@ export default function AddRoleModal({ isOpen, onClose, onSuccess }: { isOpen: b
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

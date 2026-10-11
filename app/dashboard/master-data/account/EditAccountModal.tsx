@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import { useState, useEffect } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { updateAccount } from './actions';
@@ -52,7 +53,7 @@ export default function EditAccountModal({ isOpen, onClose, account, roles }: Ed
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal text-left">
+    <ModalPortal zIndex={100}>
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
@@ -190,6 +191,6 @@ export default function EditAccountModal({ isOpen, onClose, account, roles }: Ed
         </div>
 
       </div>
-    </div>
+    </ModalPortal>
   );
 }

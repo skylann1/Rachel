@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState } from 'react';
 import { X, Building2, User, Mail, Lock, Phone, MapPin } from 'lucide-react';
 import { addVendor } from './actions';
@@ -28,7 +29,7 @@ export default function AddVendorModal({ isOpen, onClose }: { isOpen: boolean; o
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm whitespace-normal">
+    <ModalPortal zIndex={100}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -160,6 +161,6 @@ export default function AddVendorModal({ isOpen, onClose }: { isOpen: boolean; o
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

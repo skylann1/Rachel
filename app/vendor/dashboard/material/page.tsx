@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit2, Trash2, Loader2, Package, AlertTriangle } from 'lucide-react';
 import { getMaterials, saveMaterial, deleteMaterial, MaterialItem } from './actions';
@@ -217,7 +218,7 @@ export default function MaterialMasterPage() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh]">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-slate-800">{form.id ? 'Edit Data Material' : 'Tambah Data Material'}</h2>
@@ -291,7 +292,7 @@ export default function MaterialMasterPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import {
@@ -469,7 +470,7 @@ export default function InboxClient({ notifications: initialNotifications, userI
 
       {/* Notification Preferences Modal */}
       {prefsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
@@ -523,7 +524,7 @@ export default function InboxClient({ notifications: initialNotifications, userI
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

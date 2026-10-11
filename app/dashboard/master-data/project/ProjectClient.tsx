@@ -1,5 +1,6 @@
 "use client";
 
+import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Search, Plus, MapPin, Calendar, Clock, Edit2, Trash2, Building2, Briefcase, X, ArrowRight, Hourglass, CheckCircle2 } from 'lucide-react';
@@ -282,7 +283,7 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
 
       {/* Modal Inisiasi Proyek Baru */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalPortal zIndex={100}>
           <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
@@ -424,7 +425,7 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
             </div>
           </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
     </div>

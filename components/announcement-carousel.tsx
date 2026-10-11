@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ModalPortal } from '@/components/ui/modal-portal';
 import type { Announcement } from '@/app/dashboard/master-data/announcement/actions';
 
 const AUTOPLAY_MS = 5000;
@@ -18,13 +19,6 @@ export function AnnouncementCarousel({ announcements }: { announcements: Announc
     }, AUTOPLAY_MS);
     return () => clearInterval(timer);
   }, [announcements.length, detail]);
-
-  useEffect(() => {
-    if (!detail) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetail(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [detail]);
 
   if (announcements.length === 0) return null;
 
@@ -88,36 +82,30 @@ export function AnnouncementCarousel({ announcements }: { announcements: Announc
       </div>
 
       {detail && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-          onClick={() => setDetail(null)}
-        >
-          <div
-            className="relative max-w-3xl w-full max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <ModalPortal onClose={() => setDetail(null)} zIndex={100}>
+          <div className="relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5">
             <button
               onClick={() => setDetail(null)}
-              className="absolute right-3 top-3 z-10 p-2 rounded-full bg-white/80 hover:bg-white text-slate-700 shadow-sm"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-md transition hover:bg-white"
               aria-label="Tutup"
             >
-              <X className="w-5 h-5" />
+              <X className="h-5 w-5" />
             </button>
-            <div className="bg-slate-900 flex items-center justify-center max-h-[60vh] overflow-hidden">
+            <div className="flex max-h-[55dvh] shrink-0 items-center justify-center overflow-hidden bg-slate-900">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={detail.image_url} alt={detail.title} className="max-w-full max-h-[60vh] object-contain" />
+              <img src={detail.image_url} alt={detail.title} className="max-h-[55dvh] max-w-full object-contain" />
             </div>
-            <div className="p-6 overflow-y-auto">
-              <h2 className="text-xl font-bold text-slate-800">{detail.title}</h2>
-              <p className="text-xs text-slate-400 mt-1">
+            <div className="overflow-y-auto p-6 sm:p-7">
+              <h2 className="text-xl font-bold text-slate-900">{detail.title}</h2>
+              <p className="mt-1 text-xs font-medium text-slate-400">
                 {new Date(detail.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
               {detail.description && (
-                <p className="text-sm text-slate-600 mt-4 whitespace-pre-wrap">{detail.description}</p>
+                <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{detail.description}</p>
               )}
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </>
   );
