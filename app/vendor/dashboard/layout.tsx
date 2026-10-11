@@ -4,6 +4,7 @@ import { VendorDesktopSidebar } from "@/components/vendor/desktop-sidebar";
 import { VendorNotificationBell } from "@/components/vendor/notification-bell";
 import { getUnreadCount, getNotificationPreferences } from "@/app/dashboard/inbox/actions";
 import { PresenceHeartbeat } from "@/components/internal/presence-heartbeat";
+import { SessionGuard } from "@/components/session-guard";
 import Link from "next/link";
 
 export default async function VendorDashboardLayout({
@@ -19,6 +20,7 @@ export default async function VendorDashboardLayout({
   return (
     <div className="flex h-screen w-full bg-slate-50">
       <PresenceHeartbeat />
+      {user && <SessionGuard userId={user.id} loginUrl="/vendor/login" />}
       <VendorDesktopSidebar />
 
       <main className="flex-1 flex flex-col overflow-hidden">

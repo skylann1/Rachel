@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { logActivity } from "@/lib/activity-log";
 import { logFailedLogin, logRejectedLogin, logSuccessfulLogin } from "@/lib/login-audit";
+import { broadcastSessionKick } from "@/lib/session-kick";
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
@@ -31,11 +32,20 @@ export async function login(formData: FormData) {
   if (profile?.type !== 'vendor') {
     // Kalau bukan vendor, sign out paksa dan tolak
     await logRejectedLogin(authData.user.id, data.email, 'Akun bukan Vendor');
-    await supabase.auth.signOut();
+    // 'local': hanya sesi percobaan ini — jangan mematikan sesi sah akun itu di realm lain.
+    await supabase.auth.signOut({ scope: 'local' });
     redirect("/vendor/login?error=Akses ditolak. Akun ini bukan akun Vendor.");
   }
 
   await logSuccessfulLogin(supabase, authData.user.id);
+
+  // Satu akun hanya boleh satu sesi aktif: login baru mencabut semua sesi lain
+  // milik akun ini (device/browser lain langsung ditolak di request berikutnya,
+  // karena middleware memvalidasi sesi lewat auth.getUser()). scope 'others'
+  // mempertahankan sesi yang baru saja dibuat.
+  await supabase.auth.signOut({ scope: 'others' });
+  // Device lama langsung diberi tahu (modal + keluar) tanpa menunggu aksi apa pun.
+  await broadcastSessionKick(authData.user.id);
 
   revalidatePath("/", "layout");
   redirect("/vendor/dashboard");
