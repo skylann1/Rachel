@@ -39,14 +39,14 @@ export async function saveProsedur(projectId: string, payload: any) {
       .eq('id', existing.id)
       .single();
     if (!current) throw new Error('Prosedur Kerja tidak ditemukan.');
-    const resubmittable = [PROCEDURE_STATUS.draft, PROCEDURE_STATUS.reviewInternalVendor];
+    const resubmittable = [PROCEDURE_STATUS.draft, PROCEDURE_STATUS.reviewHseVendor, PROCEDURE_STATUS.reviewPmVendor];
     if (!resubmittable.includes(current.status)) {
       throw new Error('Prosedur Kerja tidak bisa diajukan ulang karena sudah berjalan ke tahap berikutnya.');
     }
 
     const { data: updated, error } = await supabase
       .from('procedures')
-      .update({ content: payload, status: PROCEDURE_STATUS.reviewInternalVendor })
+      .update({ content: payload, status: PROCEDURE_STATUS.reviewHseVendor })
       .eq('id', existing.id)
       .eq('status', current.status)
       .select('id');
@@ -61,7 +61,7 @@ export async function saveProsedur(projectId: string, payload: any) {
       .insert({
         project_id: projectId,
         content: payload,
-        status: PROCEDURE_STATUS.reviewInternalVendor
+        status: PROCEDURE_STATUS.reviewHseVendor
       })
       .select('id')
       .single();
@@ -76,6 +76,7 @@ export async function saveProsedur(projectId: string, payload: any) {
   // sebelumnya. writeStageAssignment menolak menyunting baris non-'pending'
   // dan reviewer tidak punya baris 'pending' untuk ditindaklanjuti, sehingga
   // ronde baru macet permanen tanpa reset ini.
+  await resetStageAssignments(supabase, projectId, 'procedure', 'procedure.hse_vendor');
   await resetStageAssignments(supabase, projectId, 'procedure', 'procedure.review_vendor');
 
   if (procedureId) {
@@ -89,9 +90,9 @@ export async function saveProsedur(projectId: string, payload: any) {
   await notifyAssignees({
     projectId,
     docType: 'procedure',
-    stageKey: 'procedure.review_vendor',
+    stageKey: 'procedure.hse_vendor',
     type: 'action_required',
-    title: 'Prosedur Kerja Menunggu Review Internal',
+    title: 'Prosedur Kerja Menunggu Review HSE Vendor',
     message: `Prosedur kerja untuk proyek "${project?.name}" telah diajukan dan menunggu review internal Anda sebelum diteruskan ke PM.`,
     link: `/vendor/dashboard/projects/${projectId}/prosedur`,
   });

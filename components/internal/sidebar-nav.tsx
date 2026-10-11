@@ -32,7 +32,7 @@ const masterData = [
   // utils/permissions.ts), jadi tanpa ini menu ini ikut muncul buat admin PGN
   // walau halamannya sendiri (layout.tsx di bawah route itu) menolak akses
   // untuk siapa pun yang tipe organisasinya bukan 'pgsol'.
-  { name: 'Kelola Reviewer PGSOL', href: '/dashboard/master-data/project-pgsol-assign', icon: Users, permission: { module: 'jsa', action: 'manage_assignment_pgsol' }, requiresOrgType: 'pgsol' as const },
+  { name: 'Kelola HSE & PM PGSOL', href: '/dashboard/master-data/project-pgsol-assign', icon: Users, permission: { module: 'jsa', action: 'manage_assignment_pgsol' }, requiresOrgType: 'pgsol' as const },
   { name: 'Role & Permission', href: '/dashboard/master-data/role', icon: Shield, permission: { module: 'masterData', action: 'manage_role' } },
   { name: 'News & Pengumuman', href: '/dashboard/master-data/announcement', icon: Megaphone, permission: { module: 'announcement', action: 'manage' } },
   { name: 'Log Aktivitas', href: '/dashboard/master-data/activity-log', icon: Activity, permission: { module: 'activityLog', action: 'view' } },

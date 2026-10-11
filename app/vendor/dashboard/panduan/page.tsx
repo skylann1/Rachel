@@ -97,7 +97,7 @@ export default function VendorPanduanPage() {
             <Lane
               title="Yang Terjadi di Internal" icon={Search} tone="slate"
               items={[
-                <><strong>Review PGSOL</strong> — verifikasi teknis: bahaya sudah lengkap, mitigasi memadai.</>,
+                <><strong>Review HSE & PM PGSOL</strong> — verifikasi keselamatan dan teknis: bahaya sudah lengkap, mitigasi memadai.</>,
                 <><strong>Persetujuan PGN</strong> — otorisasi formal, menerima risiko sisa.</>,
                 <>Dua tahap ini <strong>wajib dilakukan dua orang berbeda</strong>.</>,
               ]}
@@ -108,14 +108,14 @@ export default function VendorPanduanPage() {
             label="Status yang akan Anda lihat"
             statuses={[
               { name: JSA_STATUS.draft, tone: 'slate' },
-              { name: JSA_STATUS.reviewPgsol, tone: 'amber' },
+              { name: JSA_STATUS.reviewPmPgsol, tone: 'amber' },
               { name: JSA_STATUS.approvalPgn, tone: 'amber' },
               { name: JSA_STATUS.approved, tone: 'emerald' },
             ]}
           />
 
           <NoteBox tone="amber" icon={AlertTriangle} title="Kalau ditolak">
-            JSA kembali ke tahap <strong>{JSA_STATUS.reviewPgsol}</strong> — bukan ke Draft. Artinya
+            JSA kembali ke tahap <strong>{JSA_STATUS.reviewPmPgsol}</strong> — bukan ke Draft. Artinya
             setelah Anda perbaiki, dokumen ditinjau ulang dari awal rantai persetujuan.
           </NoteBox>
         </PhaseCard>

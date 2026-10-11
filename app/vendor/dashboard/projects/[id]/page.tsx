@@ -19,9 +19,12 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   const actorOrgId = actorProfile?.org_id ?? '';
 
   const VENDOR_STAGE_LABELS: Record<string, string> = {
-    'procedure.review_vendor': 'Review Internal — Prosedur Kerja',
-    'jsa.review_vendor': 'Review Internal — JSA',
-    'ptw.review_vendor': 'Review Internal — PTW',
+    'procedure.hse_vendor': 'HSE Vendor — Prosedur Kerja',
+    'procedure.review_vendor': 'PM Vendor — Prosedur Kerja',
+    'jsa.hse_vendor': 'HSE Vendor — JSA',
+    'jsa.review_vendor': 'PM Vendor — JSA',
+    'ptw.hse_vendor': 'HSE Vendor — PTW',
+    'ptw.review_vendor': 'PM Vendor — PTW',
   };
 
   const assignmentSlots = canManageAssignments ? await Promise.all(VENDOR_STAGE_KEYS.map(async (stageKey) => {

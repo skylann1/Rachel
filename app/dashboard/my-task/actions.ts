@@ -43,7 +43,7 @@ export async function getMyTasks(): Promise<TaskItem[]> {
 
   const tasks: TaskItem[] = [];
 
-  // 1. Fetch Procedures — dua tahap: Review PGSOL, lalu Menunggu Review PM.
+  // 1. Fetch Procedures — tahap PGSOL: HSE lalu PM PGSOL, lalu HSSE PGN dan Menunggu Review PM.
   // Pola sama seperti blok JSA di bawah: ambil dulu stage_assignments
   // pending user ini untuk kedua stage_key Prosedur, per proyek, baru
   // cocokkan ke status Prosedur saat ini lewat PROCEDURE_STAGE_PERMISSION.
@@ -88,10 +88,10 @@ export async function getMyTasks(): Promise<TaskItem[]> {
             const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
             tasks.push({
               id: proc.id,
-              title: proc.status === PROCEDURE_STATUS.reviewPgsol
-                ? `Review Prosedur Kerja (PGSOL)`
-                : proc.status === PROCEDURE_STATUS.reviewHsePgsol
-                  ? `Review Prosedur Kerja (HSE PGSOL)`
+              title: proc.status === PROCEDURE_STATUS.reviewHsePgsol
+                ? `Review Prosedur Kerja (HSE PGSOL)`
+                : proc.status === PROCEDURE_STATUS.reviewPmPgsol
+                  ? `Review Prosedur Kerja (PM PGSOL)`
                   : proc.status === PROCEDURE_STATUS.reviewHssePgn
                     ? `Review Prosedur Kerja (HSSE PGN)`
                     : `Review Prosedur Kerja (PM Zona)`,
@@ -154,10 +154,10 @@ export async function getMyTasks(): Promise<TaskItem[]> {
 
             tasks.push({
               id: jsa.id,
-              title: jsa.status === JSA_STATUS.reviewPgsol
-                ? `Review JSA (PGSOL)`
-                : jsa.status === JSA_STATUS.reviewHsePgsol
-                  ? `Review JSA (HSE PGSOL)`
+              title: jsa.status === JSA_STATUS.reviewHsePgsol
+                ? `Review JSA (HSE PGSOL)`
+                : jsa.status === JSA_STATUS.reviewPmPgsol
+                  ? `Review JSA (PM PGSOL)`
                   : jsa.status === JSA_STATUS.reviewHssePgn
                     ? `Review JSA (HSSE PGN)`
                     : `Persetujuan JSA (PM Zona)`,

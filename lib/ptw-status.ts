@@ -1,25 +1,34 @@
 ﻿import { todayDateString } from '@/lib/site-ops';
 
 /**
- * Alur persetujuan PTW — review internal vendor, lalu PGSOL (Reviewer,
- * lalu HSE), lalu tiga tahap internal PGN.
+ * Alur persetujuan PTW — vendor (HSE -> PM), PGSOL (HSE -> PM), lalu tiga
+ * tahap internal PGN.
  *
- *   Review Internal Vendor -> Review PGSOL -> Review HSE PGSOL ->
- *   Menunggu Approval PM -> Review PTW Issuer -> Menunggu Penomoran HSSE
- *   -> PTW Aktif
+ *   Review HSE Vendor -> Review PM Vendor -> Review HSE PGSOL ->
+ *   Review PM PGSOL -> Menunggu Approval PM -> Review PTW Issuer ->
+ *   Menunggu Penomoran HSSE -> PTW Aktif
  *
- * Review Internal Vendor tidak pernah nyampe PM — staff vendor sendiri
+ * Catatan penamaan: stage_key & permission lama DIPERTAHANKAN supaya
+ * roles.permissions dan stage_assignments yang sudah ada tidak perlu
+ * dimigrasi — hanya artinya yang berubah:
+ *   ptw.hse_vendor    (baru) = HSE Vendor
+ *   ptw.review_vendor        = PM Vendor   (dulu "Review Internal Vendor")
+ *   ptw.hse_pgsol            = HSE PGSOL   (sekarang tahap PGSOL PERTAMA)
+ *   ptw.review_pgsol         = PM PGSOL    (dulu "Reviewer PGSOL", sekarang KEDUA)
+ *
+ * Review HSE/PM Vendor tidak pernah nyampe PM PGN — staff vendor sendiri
  * (ditugaskan admin vendor per proyek, lihat Fase 3) harus menyetujui dulu.
- * Review PGSOL -> Review HSE PGSOL: dua orang PGSOL berbeda, berurutan,
+ * Review HSE PGSOL -> Review PM PGSOL: dua orang PGSOL berbeda, berurutan,
  * sama polanya dengan Prosedur Kerja dan JSA.
  * Reject di tahap manapun mengembalikan status ke Draft; vendor merevisi
- * lalu mengajukan ulang (balik ke Review Internal Vendor).
+ * lalu mengajukan ulang (balik ke Review HSE Vendor).
  */
 export const PTW_STATUS = {
   draft: 'Draft',
-  reviewInternalVendor: 'Review Internal Vendor',
-  reviewPgsol: 'Review PGSOL',
+  reviewHseVendor: 'Review HSE Vendor',
+  reviewPmVendor: 'Review PM Vendor',
   reviewHsePgsol: 'Review HSE PGSOL',
+  reviewPmPgsol: 'Review PM PGSOL',
   menungguApprovalPM: 'Menunggu Approval PM',
   reviewPtwIssuer: 'Review PTW Issuer',
   menungguPenomoranHSSE: 'Menunggu Penomoran HSSE',
@@ -30,12 +39,12 @@ export const PTW_STATUS = {
 
 /**
  * Status yang berarti PTW sedang menunggu tindakan pihak INTERNAL
- * (PGN/PGSOL) — dipakai untuk /dashboard/my-task. `reviewInternalVendor`
+ * (PGN/PGSOL) — dipakai untuk /dashboard/my-task. `reviewHseVendor`/`reviewPmVendor`
  * SENGAJA tidak masuk sini: tahap itu menunggu staff vendor sendiri.
  */
 export const PTW_PENDING_STATUSES: string[] = [
-  PTW_STATUS.reviewPgsol,
   PTW_STATUS.reviewHsePgsol,
+  PTW_STATUS.reviewPmPgsol,
   PTW_STATUS.menungguApprovalPM,
   PTW_STATUS.reviewPtwIssuer,
   PTW_STATUS.menungguPenomoranHSSE,
@@ -52,21 +61,22 @@ export function isPtwPending(status: string | null | undefined): boolean {
  * Role & Permission otomatis bisa bertindak di tahap tersebut.
  */
 export const PTW_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
-  [PTW_STATUS.reviewPgsol]: { module: 'ptw', action: 'review_pgsol' },
   [PTW_STATUS.reviewHsePgsol]: { module: 'ptw', action: 'hse_pgsol' },
+  [PTW_STATUS.reviewPmPgsol]: { module: 'ptw', action: 'review_pgsol' },
   [PTW_STATUS.menungguApprovalPM]: { module: 'ptw', action: 'approve_pm' },
   [PTW_STATUS.reviewPtwIssuer]: { module: 'ptw', action: 'review_issuer' },
   [PTW_STATUS.menungguPenomoranHSSE]: { module: 'ptw', action: 'numbering_hsse' },
 };
 
 /**
- * Urutan lengkap tahap PTW (termasuk review internal vendor) — satu-satunya
+ * Urutan lengkap tahap PTW (termasuk dua tahap review vendor) — satu-satunya
  * sumber kebenaran urutan tahap untuk timeline approval (lihat DocStageTimeline).
  */
 export const PTW_STAGE_SEQUENCE = [
-  { key: 'ptw.review_vendor', label: 'Review Internal Vendor', status: PTW_STATUS.reviewInternalVendor },
-  { key: 'ptw.review_pgsol', label: 'Review PGSOL', status: PTW_STATUS.reviewPgsol },
+  { key: 'ptw.hse_vendor', label: 'Review HSE Vendor', status: PTW_STATUS.reviewHseVendor },
+  { key: 'ptw.review_vendor', label: 'Review PM Vendor', status: PTW_STATUS.reviewPmVendor },
   { key: 'ptw.hse_pgsol', label: 'Review HSE PGSOL', status: PTW_STATUS.reviewHsePgsol },
+  { key: 'ptw.review_pgsol', label: 'Review PM PGSOL', status: PTW_STATUS.reviewPmPgsol },
   { key: 'ptw.approve_pm', label: 'Approval PM', status: PTW_STATUS.menungguApprovalPM },
   { key: 'ptw.review_issuer', label: 'Review PTW Issuer', status: PTW_STATUS.reviewPtwIssuer },
   { key: 'ptw.numbering_hsse', label: 'Penomoran HSSE', status: PTW_STATUS.menungguPenomoranHSSE },

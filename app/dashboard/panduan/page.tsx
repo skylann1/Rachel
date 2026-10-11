@@ -94,7 +94,7 @@ export default function InternalPanduanPage() {
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Lane
-              title="Tahap A — Review PGSOL" icon={Inbox} tone="amber"
+              title="Tahap A — Review HSE & PM PGSOL" icon={Inbox} tone="amber"
               items={[
                 <>Butuh izin <Perm>jsa.review_pgsol</Perm>.</>,
                 <>Verifikasi teknis: bahaya tiap langkah sudah teridentifikasi lengkap.</>,
@@ -113,7 +113,7 @@ export default function InternalPanduanPage() {
           </div>
 
           <NoteBox tone="indigo" icon={ShieldCheck} title="Pemisahan wewenang dijaga sistem">
-            Orang yang melakukan Review PGSOL <strong>tidak bisa</strong> sekaligus menyetujui di tahap PGN,
+            Orang yang melakukan Review PM PGSOL <strong>tidak bisa</strong> sekaligus menyetujui di tahap PGN,
             meskipun ia punya kedua izin tersebut. Sistem akan menolaknya dan meminta approver lain.
           </NoteBox>
 
@@ -121,14 +121,14 @@ export default function InternalPanduanPage() {
             label="Rantai status"
             statuses={[
               { name: JSA_STATUS.draft, tone: 'slate' },
-              { name: JSA_STATUS.reviewPgsol, tone: 'amber' },
+              { name: JSA_STATUS.reviewPmPgsol, tone: 'amber' },
               { name: JSA_STATUS.approvalPgn, tone: 'amber' },
               { name: JSA_STATUS.approved, tone: 'emerald' },
             ]}
           />
 
           <NoteBox tone="amber" icon={AlertTriangle} title="Penolakan mengulang dari awal rantai">
-            Ditolak di tahap mana pun akan mengembalikan JSA ke <strong>{JSA_STATUS.reviewPgsol}</strong>
+            Ditolak di tahap mana pun akan mengembalikan JSA ke <strong>{JSA_STATUS.reviewPmPgsol}</strong>
             {' '}dan menghapus jejak reviewer sebelumnya — bukan kembali ke Draft. Setelah mitra
             memperbaiki, dokumen ditinjau ulang dari tahap pertama.
           </NoteBox>

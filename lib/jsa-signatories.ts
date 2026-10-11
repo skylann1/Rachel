@@ -6,7 +6,7 @@ import { getStageAssignmentsWithNames, type StageAssignmentRowWithName } from '.
  *
  * Tiga blok pada form:
  *   Disiapkan Oleh  -> vendor yang menyusun JSA
- *   Direview Oleh   -> Reviewer PGSOL  (Satker Pemberi Kerja)
+ *   Direview Oleh   -> PM PGSOL (Satker Pemberi Kerja)
  *   Disetujui Oleh  -> Approver PGN    (Satker Penanggung Jawab)
  *
  * `nama`/`jabatan` bisa berisi lebih dari satu orang (dipisah ", ") kalau
@@ -62,13 +62,13 @@ export async function getJsaSignatories(
 ): Promise<JsaSignatories> {
   if (!jsa?.id) return JSA_SIGNATORIES_KOSONG;
 
-  const [hseRows, pgnRows] = await Promise.all([
-    getStageAssignmentsWithNames(supabase, projectId, 'jsa', 'jsa.hse_pgsol'),
+  const [pmPgsolRows, pgnRows] = await Promise.all([
+    getStageAssignmentsWithNames(supabase, projectId, 'jsa', 'jsa.review_pgsol'),
     getStageAssignmentsWithNames(supabase, projectId, 'jsa', 'jsa.approve_pgn'),
   ]);
 
   return {
-    reviewer: gabunganSignatory(hseRows, 'PGSOL'),
+    reviewer: gabunganSignatory(pmPgsolRows, 'PGSOL'),
     approver: gabunganSignatory(pgnRows, 'PGN'),
   };
 }

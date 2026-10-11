@@ -271,13 +271,13 @@ function RollbackModal({ stageLabel, onConfirm, onCancel, isLoading }: {
 }
 
 const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
-  'prosedur-review': {
-    title: 'Selesaikan Review PGSOL?',
-    desc: 'Anda menyatakan Prosedur Kerja sudah sesuai standar kerja aman. Dokumen akan diteruskan ke HSE PGSOL untuk verifikasi lanjutan.',
-  },
   'prosedur-hse': {
     title: 'Selesaikan Review HSE PGSOL?',
-    desc: 'Anda menyatakan aspek HSE Prosedur Kerja sudah memadai. Dokumen akan diteruskan ke HSSE PGN untuk verifikasi lanjutan.',
+    desc: 'Anda menyatakan aspek HSE Prosedur Kerja sudah memadai. Dokumen akan diteruskan ke PM PGSOL untuk verifikasi lanjutan.',
+  },
+  'prosedur-review': {
+    title: 'Selesaikan Review PM PGSOL?',
+    desc: 'Anda menyatakan Prosedur Kerja sudah sesuai standar kerja aman. Dokumen akan diteruskan ke HSSE PGN untuk verifikasi lanjutan.',
   },
   'prosedur-hsse-pgn': {
     title: 'Selesaikan Review HSSE PGN?',
@@ -285,13 +285,13 @@ const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
   },
   prosedur: { title: 'Setujui Prosedur Kerja?', desc: 'Dokumen SOP akan ditandai disetujui dan vendor dapat melanjutkan ke tahap JSA.' },
   jsa: { title: 'Setujui Job Safety Analysis?', desc: 'JSA akan ditandai disetujui pada tahap ini dan lanjut ke tahap berikutnya.' },
-  'jsa-review': {
-    title: 'Selesaikan Review PGSOL?',
-    desc: 'Anda menyatakan JSA sudah benar secara teknis. JSA akan diteruskan ke HSE PGSOL untuk verifikasi lanjutan.',
-  },
   'jsa-hse': {
     title: 'Selesaikan Review HSE PGSOL?',
-    desc: 'Anda menyatakan aspek HSE JSA sudah memadai. JSA akan diteruskan ke HSSE PGN untuk verifikasi lanjutan.',
+    desc: 'Anda menyatakan aspek HSE JSA sudah memadai. JSA akan diteruskan ke PM PGSOL untuk verifikasi lanjutan.',
+  },
+  'jsa-review': {
+    title: 'Selesaikan Review PM PGSOL?',
+    desc: 'Anda menyatakan JSA sudah benar secara teknis. JSA akan diteruskan ke HSSE PGN untuk verifikasi lanjutan.',
   },
   'jsa-hsse-pgn': {
     title: 'Selesaikan Review HSSE PGN?',
@@ -486,7 +486,7 @@ export default function AdminProjectClient({
   const isAssignedPending = (stageKey: string) =>
     getStageRows(stageKey).some(r => r.assignee_id === currentUserId && r.status === 'pending');
 
-  const isProsedurTahapReviewPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPgsol;
+  const isProsedurTahapReviewPgsol = prosedur?.status === PROCEDURE_STATUS.reviewPmPgsol;
   const isProsedurTahapHsePgsol = prosedur?.status === PROCEDURE_STATUS.reviewHsePgsol;
   const isProsedurTahapHssePgn = prosedur?.status === PROCEDURE_STATUS.reviewHssePgn;
   const procPerm = PROCEDURE_STAGE_PERMISSION[prosedur?.status];
@@ -496,9 +496,9 @@ export default function AdminProjectClient({
   const showProsedurCard = hasProsedurPermission;
 
   // JSA: dua tahap, dua orang berbeda.
-  //   Review PGSOL    -> permission jsa.review_pgsol
+  //   Review PM PGSOL -> permission jsa.review_pgsol
   //   Persetujuan PGN -> permission jsa.approve_pgn, DAN bukan orang yang mereview
-  const isTahapReviewPgsol = jsa?.status === JSA_STATUS.reviewPgsol;
+  const isTahapReviewPgsol = jsa?.status === JSA_STATUS.reviewPmPgsol;
   const isTahapHsePgsol = jsa?.status === JSA_STATUS.reviewHsePgsol;
   const isTahapHssePgn = jsa?.status === JSA_STATUS.reviewHssePgn;
   const jsaPerm = JSA_STAGE_PERMISSION[jsa?.status];
@@ -920,10 +920,10 @@ export default function AdminProjectClient({
                    icon={<FileSignature className="w-5 h-5" />}
                    title="Prosedur Kerja (SOP)"
                    blurb={
-                     isProsedurTahapReviewPgsol
-                       ? 'Verifikasi teknis: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke HSE PGSOL.'
-                       : isProsedurTahapHsePgsol
-                         ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada SOP sudah memadai sebelum diteruskan ke HSSE PGN.'
+                     isProsedurTahapHsePgsol
+                       ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada SOP sudah memadai sebelum diteruskan ke PM PGSOL.'
+                       : isProsedurTahapReviewPgsol
+                         ? 'Verifikasi PM PGSOL: pastikan SOP sudah sesuai standar kerja aman sebelum diteruskan ke HSSE PGN.'
                          : isProsedurTahapHssePgn
                            ? 'Verifikasi HSSE PGN: pastikan aspek keselamatan kerja pada SOP sudah memadai dari sisi PGN sebelum diteruskan ke PM Zona.'
                            : 'Persetujuan akhir PM Zona: SOP sudah lolos review PGSOL dan HSSE PGN.'
@@ -940,7 +940,7 @@ export default function AdminProjectClient({
                    actions={canApproveProsedur ? (
                      <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-56">
                        <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                         {isProsedurTahapReviewPgsol ? 'Teruskan ke HSE PGSOL' : isProsedurTahapHsePgsol ? 'Teruskan ke HSSE PGN' : isProsedurTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui SOP'}
+                         {isProsedurTahapHsePgsol ? 'Teruskan ke PM PGSOL' : isProsedurTahapReviewPgsol ? 'Teruskan ke HSSE PGN' : isProsedurTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui SOP'}
                        </button>
                        <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
                      </div>
@@ -993,10 +993,10 @@ export default function AdminProjectClient({
                    icon={<ShieldAlert className="w-5 h-5" />}
                    title="Job Safety Analysis (JSA)"
                    blurb={
-                     isTahapReviewPgsol
-                       ? 'Verifikasi teknis: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar.'
-                       : isTahapHsePgsol
-                         ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada JSA ini sudah memadai sebelum diteruskan ke HSSE PGN.'
+                     isTahapHsePgsol
+                       ? 'Verifikasi HSE: pastikan aspek keselamatan kerja pada JSA ini sudah memadai sebelum diteruskan ke PM PGSOL.'
+                       : isTahapReviewPgsol
+                         ? 'Verifikasi PM PGSOL: pastikan bahaya sudah teridentifikasi, mitigasi memadai, dan nilai risiko wajar sebelum diteruskan ke HSSE PGN.'
                          : isTahapHssePgn
                            ? 'Verifikasi HSSE PGN: pastikan aspek keselamatan kerja pada JSA ini sudah memadai dari sisi PGN sebelum diteruskan ke PM Zona.'
                            : 'Otorisasi akhir: JSA sudah direview HSSE PGN. Persetujuan Anda menerima risiko sisa dan mengizinkan pekerjaan berjalan.'
@@ -1015,7 +1015,7 @@ export default function AdminProjectClient({
                        {canApproveJsa && (
                          <>
                            <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
-                             {isTahapReviewPgsol ? 'Teruskan ke HSE PGSOL' : isTahapHsePgsol ? 'Teruskan ke HSSE PGN' : isTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui JSA'}
+                             {isTahapHsePgsol ? 'Teruskan ke PM PGSOL' : isTahapReviewPgsol ? 'Teruskan ke HSSE PGN' : isTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui JSA'}
                            </button>
                            <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
                          </>

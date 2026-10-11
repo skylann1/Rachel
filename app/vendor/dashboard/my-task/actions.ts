@@ -190,20 +190,41 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
   // dari bullet-bullet di atas yang submitter-perspective/org-wide).
   const { data: myAssignments } = await supabase
     .from('stage_assignments')
-    .select('id, project_id, doc_type, assigned_at')
+    .select('id, project_id, doc_type, assigned_at, stage_key')
     .eq('assignee_id', user.id)
     .eq('status', 'pending')
-    .in('stage_key', ['procedure.review_vendor', 'jsa.review_vendor', 'ptw.review_vendor']);
+    .in('stage_key', [
+      'procedure.hse_vendor', 'procedure.review_vendor',
+      'jsa.hse_vendor', 'jsa.review_vendor',
+      'ptw.hse_vendor', 'ptw.review_vendor',
+    ]);
 
   (myAssignments || []).forEach((a: any) => {
     const project = (projects || []).find((p: any) => p.id === a.project_id);
     if (!project) return;
     const date = a.assigned_at;
+    const isHse = String(a.stage_key).endsWith('.hse_vendor');
+    const tahap = isHse ? 'HSE Vendor' : 'PM Vendor';
+
+    // Baris assignment sudah 'pending' sejak admin menugaskan, jadi tanpa
+    // cek ini tugas muncul walau dokumen belum/tidak sedang di tahap itu
+    // (masih Draft, atau masih di HSE Vendor padahal ini slot PM Vendor).
+    const prosedurDoc = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
+    const jsaDoc = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
+    const ptwDocs: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+    const wantedStatus = isHse
+      ? { procedure: PROCEDURE_STATUS.reviewHseVendor, jsa: JSA_STATUS.reviewHseVendor, ptw: PTW_STATUS.reviewHseVendor }
+      : { procedure: PROCEDURE_STATUS.reviewPmVendor, jsa: JSA_STATUS.reviewPmVendor, ptw: PTW_STATUS.reviewPmVendor };
+    const inStage =
+      a.doc_type === 'procedure' ? prosedurDoc?.status === wantedStatus.procedure
+      : a.doc_type === 'jsa' ? jsaDoc?.status === wantedStatus.jsa
+      : ptwDocs.some((p: any) => p.status === wantedStatus.ptw);
+    if (!inStage) return;
 
     if (a.doc_type === 'procedure') {
       tasks.push({
         id: `review-vendor-procedure-${a.id}`,
-        title: 'Review Internal — Prosedur Kerja',
+        title: `Review ${tahap} — Prosedur Kerja`,
         type: 'Prosedur',
         projectName: project.name,
         date,
@@ -215,7 +236,7 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
     } else if (a.doc_type === 'jsa') {
       tasks.push({
         id: `review-vendor-jsa-${a.id}`,
-        title: 'Review Internal — JSA',
+        title: `Review ${tahap} — JSA`,
         type: 'JSA',
         projectName: project.name,
         date,
@@ -226,10 +247,10 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
       });
     } else if (a.doc_type === 'ptw') {
       const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
-      const pendingPtw = ptws.find((p: any) => p.status === PTW_STATUS.reviewInternalVendor);
+      const pendingPtw = ptws.find((p: any) => p.status === (isHse ? PTW_STATUS.reviewHseVendor : PTW_STATUS.reviewPmVendor));
       tasks.push({
         id: `review-vendor-ptw-${a.id}`,
-        title: `Review Internal — PTW${pendingPtw ? ` (${ptwTypeTitle(pendingPtw.ptw_type)})` : ''}`,
+        title: `Review ${tahap} — PTW${pendingPtw ? ` (${ptwTypeTitle(pendingPtw.ptw_type)})` : ''}`,
         type: 'PTW',
         projectName: project.name,
         date,

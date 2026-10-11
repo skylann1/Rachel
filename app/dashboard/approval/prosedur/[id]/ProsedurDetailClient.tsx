@@ -45,16 +45,16 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
   const canApprove = !!procPerm && !!permissions?.[procPerm.module]?.includes(procPerm.action);
 
   // Keterangan tahap — sadar-status. Prosedur kini punya gerbang PGSOL
-  // (Reviewer lalu HSE) sebelum PM, jadi teks lama ("diajukan untuk
+  // (HSE lalu PM PGSOL) sebelum PM, jadi teks lama ("diajukan untuk
   // direview oleh PM") tidak lagi benar saat status masih Review PGSOL
   // atau Review HSE PGSOL.
   const statusBlurb =
-    prosedur.status === PROCEDURE_STATUS.reviewInternalVendor
-      ? 'Dokumen ini masih direview internal oleh staff vendor sendiri — belum masuk ke rantai persetujuan PGSOL/PGN.'
-      : prosedur.status === PROCEDURE_STATUS.reviewPgsol
-      ? 'Dokumen prosedur kerja ini sedang menunggu verifikasi teknis oleh PGSOL sebelum diteruskan ke review HSE PGSOL.'
+    (prosedur.status === PROCEDURE_STATUS.reviewHseVendor || prosedur.status === PROCEDURE_STATUS.reviewPmVendor)
+      ? 'Dokumen ini masih direview internal oleh HSE Vendor dan PM Vendor — belum masuk ke rantai persetujuan PGSOL/PGN.'
       : prosedur.status === PROCEDURE_STATUS.reviewHsePgsol
-      ? 'Dokumen prosedur kerja ini telah direview teknis PGSOL dan sedang menunggu review HSE PGSOL sebelum diteruskan ke HSSE PGN.'
+      ? 'Dokumen prosedur kerja ini sedang menunggu review HSE PGSOL sebelum diteruskan ke PM PGSOL.'
+      : prosedur.status === PROCEDURE_STATUS.reviewPmPgsol
+      ? 'Dokumen prosedur kerja ini telah direview HSE PGSOL dan sedang menunggu review PM PGSOL sebelum diteruskan ke HSSE PGN.'
       : prosedur.status === PROCEDURE_STATUS.reviewHssePgn
       ? 'Dokumen prosedur kerja ini telah lolos review PGSOL dan sedang menunggu verifikasi keselamatan oleh HSSE PGN sebelum diteruskan ke PM Zona.'
       : prosedur.status === PROCEDURE_STATUS.menungguReviewPM

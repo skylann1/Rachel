@@ -11,69 +11,103 @@ import { notifyAssignees, notifyOrgMembers } from "@/app/dashboard/inbox/actions
 
 export type VendorReviewDocType = 'procedure' | 'jsa' | 'ptw';
 
+interface VendorStageConfig {
+  stageKey: string;
+  /** Status dokumen selama tahap ini berjalan. */
+  status: string;
+  /** Status berikutnya kalau SEMUA assignee tahap ini approve. */
+  nextStatus: string;
+  /** stage_key yang assignee-nya diberi notifikasi saat tahap ini selesai. */
+  nextStageKey: string;
+  nextStatusLabel: string;
+  /** true kalau tahap berikutnya sudah di luar vendor (PGSOL) — menentukan link notifikasi. */
+  nextStageIsExternal: boolean;
+}
+
 interface VendorReviewConfig {
   table: string;
-  stageKey: string;
-  externalStageKey: string;
-  reviewVendorStatus: string;
   draftStatus: string;
-  nextStatus: string;
-  nextStatusLabel: string;
+  /** Urut: HSE Vendor lalu PM Vendor. */
+  stages: VendorStageConfig[];
 }
 
 /**
- * Tahap review-internal-vendor bentuknya identik di ketiga tipe dokumen —
- * selalu tahap pertama, reject selalu balik ke Draft, approve-penuh selalu
- * memajukan ke tahap eksternal pertama yang sudah ada. Beda dari
- * approveProcedure/approveJsa/approvePtw di app/dashboard/approval/actions.ts
- * (yang terpisah karena tahap EKSTERNAL beda jumlah & field per tipe), tahap
- * ini cukup satu fungsi generik, table-driven lewat config di bawah.
+ * Review vendor = DUA tahap berurutan di ketiga tipe dokumen: HSE Vendor
+ * lalu PM Vendor (stage_key `*.hse_vendor` lalu `*.review_vendor` — nama
+ * lama dipertahankan untuk PM Vendor, lihat lib/jsa-status.ts). Reject di
+ * tahap manapun selalu balik ke Draft; approve-penuh PM Vendor memajukan
+ * ke tahap eksternal pertama (HSE PGSOL). Beda dari approveProcedure/
+ * approveJsa/approvePtw di app/dashboard/approval/actions.ts (yang terpisah
+ * karena tahap EKSTERNAL beda jumlah & field per tipe), tahap ini cukup
+ * satu fungsi generik, table-driven lewat config di bawah.
  */
+function buildVendorConfig(
+  docType: VendorReviewDocType,
+  table: string,
+  s: { draft: string; hseVendor: string; pmVendor: string; hsePgsol: string },
+  hsePgsolLabel: string,
+): VendorReviewConfig {
+  return {
+    table,
+    draftStatus: s.draft,
+    stages: [
+      {
+        stageKey: `${docType}.hse_vendor`, status: s.hseVendor,
+        nextStatus: s.pmVendor, nextStageKey: `${docType}.review_vendor`,
+        nextStatusLabel: 'Dokumen Menunggu Review PM Vendor', nextStageIsExternal: false,
+      },
+      {
+        stageKey: `${docType}.review_vendor`, status: s.pmVendor,
+        nextStatus: s.hsePgsol, nextStageKey: `${docType}.hse_pgsol`,
+        nextStatusLabel: hsePgsolLabel, nextStageIsExternal: true,
+      },
+    ],
+  };
+}
+
 const VENDOR_REVIEW_CONFIG: Record<VendorReviewDocType, VendorReviewConfig> = {
-  procedure: {
-    table: 'procedures',
-    stageKey: 'procedure.review_vendor',
-    externalStageKey: 'procedure.review_pgsol',
-    reviewVendorStatus: PROCEDURE_STATUS.reviewInternalVendor,
-    draftStatus: PROCEDURE_STATUS.draft,
-    nextStatus: PROCEDURE_STATUS.reviewPgsol,
-    nextStatusLabel: 'Prosedur Kerja Menunggu Review PGSOL',
-  },
-  jsa: {
-    table: 'jsa',
-    stageKey: 'jsa.review_vendor',
-    externalStageKey: 'jsa.review_pgsol',
-    reviewVendorStatus: JSA_STATUS.reviewInternalVendor,
-    draftStatus: JSA_STATUS.draft,
-    nextStatus: JSA_STATUS.reviewPgsol,
-    nextStatusLabel: 'JSA Menunggu Review PGSOL',
-  },
-  ptw: {
-    table: 'ptw',
-    stageKey: 'ptw.review_vendor',
-    externalStageKey: 'ptw.review_pgsol',
-    reviewVendorStatus: PTW_STATUS.reviewInternalVendor,
-    draftStatus: PTW_STATUS.draft,
-    nextStatus: PTW_STATUS.reviewPgsol,
-    nextStatusLabel: 'PTW Menunggu Review PGSOL',
-  },
+  procedure: buildVendorConfig('procedure', 'procedures', {
+    draft: PROCEDURE_STATUS.draft, hseVendor: PROCEDURE_STATUS.reviewHseVendor,
+    pmVendor: PROCEDURE_STATUS.reviewPmVendor, hsePgsol: PROCEDURE_STATUS.reviewHsePgsol,
+  }, 'Prosedur Kerja Menunggu Review HSE PGSOL'),
+  jsa: buildVendorConfig('jsa', 'jsa', {
+    draft: JSA_STATUS.draft, hseVendor: JSA_STATUS.reviewHseVendor,
+    pmVendor: JSA_STATUS.reviewPmVendor, hsePgsol: JSA_STATUS.reviewHsePgsol,
+  }, 'JSA Menunggu Review HSE PGSOL'),
+  ptw: buildVendorConfig('ptw', 'ptw', {
+    draft: PTW_STATUS.draft, hseVendor: PTW_STATUS.reviewHseVendor,
+    pmVendor: PTW_STATUS.reviewPmVendor, hsePgsol: PTW_STATUS.reviewHsePgsol,
+  }, 'PTW Menunggu Review HSE PGSOL'),
 };
+
+function stageForStatus(config: VendorReviewConfig, status: string | null | undefined) {
+  return config.stages.find(st => st.status === status) ?? null;
+}
 
 /**
  * Baris stage_assignments 'pending' milik user yang login untuk tahap
- * review-internal-vendor satu dokumen — dipakai widget approve/reject di
- * halaman form vendor untuk memutuskan apakah tombol ditampilkan sama
- * sekali. Return null kalau tidak login atau tidak ditugaskan.
+ * review-vendor yang SEDANG berjalan pada satu dokumen — dipakai widget
+ * approve/reject di halaman form vendor untuk memutuskan apakah tombol
+ * ditampilkan sama sekali. Tahap dicari dari status dokumen (bukan hanya
+ * proyek) supaya orang yang ditugaskan di PM Vendor tidak melihat tombol
+ * selagi dokumen masih di HSE Vendor. Return null kalau tidak login,
+ * dokumen tidak sedang di tahap vendor, atau tidak ditugaskan.
  */
-export async function getMyVendorReviewAssignment(projectId: string, docType: VendorReviewDocType): Promise<{ id: string } | null> {
+export async function getMyVendorReviewAssignment(
+  projectId: string, docType: VendorReviewDocType, docId?: string | null,
+): Promise<{ id: string; stageKey: string } | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user || !docId) return null;
 
   const config = VENDOR_REVIEW_CONFIG[docType];
-  const rows = await getStageAssignments(supabase, projectId, docType, config.stageKey);
+  const { data: doc } = await supabase.from(config.table).select('status').eq('id', docId).single();
+  const stage = stageForStatus(config, doc?.status);
+  if (!stage) return null;
+
+  const rows = await getStageAssignments(supabase, projectId, docType, stage.stageKey);
   const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
-  return myRow ? { id: myRow.id } : null;
+  return myRow ? { id: myRow.id, stageKey: stage.stageKey } : null;
 }
 
 export async function approveVendorInternalReview(docType: VendorReviewDocType, docId: string) {
@@ -84,9 +118,10 @@ export async function approveVendorInternalReview(docType: VendorReviewDocType, 
   const config = VENDOR_REVIEW_CONFIG[docType];
   const { data: current } = await supabase.from(config.table).select('status, project_id').eq('id', docId).single();
   if (!current?.project_id) throw new Error("Dokumen ini tidak terhubung ke proyek.");
-  if (current.status !== config.reviewVendorStatus) throw new Error("Dokumen tidak dalam tahap Review Internal Vendor.");
+  const stage = stageForStatus(config, current.status);
+  if (!stage) throw new Error("Dokumen tidak dalam tahap Review Vendor.");
 
-  const rows = await getStageAssignments(supabase, current.project_id, docType, config.stageKey);
+  const rows = await getStageAssignments(supabase, current.project_id, docType, stage.stageKey);
   const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
   if (!myRow) throw new Error("Anda tidak ditugaskan untuk mereview dokumen ini.");
 
@@ -98,7 +133,7 @@ export async function approveVendorInternalReview(docType: VendorReviewDocType, 
   // melihat snapshot awal yang belum mencatat approval satu sama lain,
   // sehingga dokumen macet permanen walau di DB semua baris sudah approved.
   // Pola sama dengan approveProcedure di app/dashboard/approval/actions.ts.
-  const freshRows = await getStageAssignments(supabase, current.project_id, docType, config.stageKey);
+  const freshRows = await getStageAssignments(supabase, current.project_id, docType, stage.stageKey);
   if (!isStageFullyApproved(freshRows)) {
     revalidatePath(`/vendor/dashboard/projects/${current.project_id}`);
     return;
@@ -110,7 +145,7 @@ export async function approveVendorInternalReview(docType: VendorReviewDocType, 
   // balapan.
   const { data: updated, error } = await supabase
     .from(config.table)
-    .update({ status: config.nextStatus })
+    .update({ status: stage.nextStatus })
     .eq('id', docId)
     .eq('status', current.status)
     .select('id');
@@ -121,18 +156,22 @@ export async function approveVendorInternalReview(docType: VendorReviewDocType, 
 
   await logDocumentEvent(supabase, {
     docType, docId, projectId: current.project_id, actorId: user.id,
-    action: 'Direview & Disetujui Internal Vendor',
+    action: stage.stageKey.endsWith('.hse_vendor') ? 'Direview & Disetujui HSE Vendor' : 'Direview & Disetujui PM Vendor',
   });
 
   const { data: project } = await supabase.from('projects').select('name').eq('id', current.project_id).single();
   await notifyAssignees({
     projectId: current.project_id,
     docType,
-    stageKey: config.externalStageKey,
+    stageKey: stage.nextStageKey,
     type: 'action_required',
-    title: config.nextStatusLabel,
-    message: `Dokumen untuk proyek "${project?.name}" telah direview internal vendor dan menunggu tindakan Anda.`,
-    link: `/dashboard/projects/${current.project_id}`,
+    title: stage.nextStatusLabel,
+    message: stage.nextStageIsExternal
+      ? `Dokumen untuk proyek "${project?.name}" telah direview internal vendor dan menunggu tindakan Anda.`
+      : `Dokumen untuk proyek "${project?.name}" telah direview HSE Vendor dan menunggu review PM Vendor Anda.`,
+    link: stage.nextStageIsExternal
+      ? `/dashboard/projects/${current.project_id}`
+      : `/vendor/dashboard/projects/${current.project_id}`,
   });
 
   revalidatePath(`/vendor/dashboard/projects/${current.project_id}`);
@@ -148,14 +187,20 @@ export async function rejectVendorInternalReview(docType: VendorReviewDocType, d
   // content.revisions, jsa/ptw pakai kolom rejection_note) — lihat di bawah.
   const { data: current } = await supabase.from(config.table).select('*').eq('id', docId).single();
   if (!current?.project_id) throw new Error("Dokumen ini tidak terhubung ke proyek.");
-  if (current.status !== config.reviewVendorStatus) throw new Error("Dokumen tidak dalam tahap Review Internal Vendor.");
+  const stage = stageForStatus(config, current.status);
+  if (!stage) throw new Error("Dokumen tidak dalam tahap Review Vendor.");
 
-  const rows = await getStageAssignments(supabase, current.project_id, docType, config.stageKey);
+  const rows = await getStageAssignments(supabase, current.project_id, docType, stage.stageKey);
   const myRow = rows.find(r => r.assignee_id === user.id && r.status === 'pending');
   if (!myRow) throw new Error("Anda tidak ditugaskan untuk mereview dokumen ini.");
 
   await supabase.from('stage_assignments').update({ status: 'rejected', decided_at: new Date().toISOString(), note }).eq('id', myRow.id);
-  await resetStageAssignments(supabase, current.project_id, docType, config.stageKey);
+  // Reject mengembalikan dokumen ke Draft, jadi SEMUA tahap vendor harus
+  // pending lagi (HSE Vendor yang sudah lolos ikut diulang) — kalau tidak,
+  // resubmit akan langsung meloncati HSE Vendor.
+  for (const st of config.stages) {
+    await resetStageAssignments(supabase, current.project_id, docType, st.stageKey);
+  }
 
   const updatePayload: Record<string, any> = { status: config.draftStatus };
   if (docType === 'procedure') {
@@ -178,9 +223,10 @@ export async function rejectVendorInternalReview(docType: VendorReviewDocType, d
     throw new Error("Dokumen ini baru saja diproses oleh pengguna lain. Muat ulang halaman untuk melihat status terbaru.");
   }
 
+  const penolak = stage.stageKey.endsWith('.hse_vendor') ? 'HSE Vendor' : 'PM Vendor';
   await logDocumentEvent(supabase, {
     docType, docId, projectId: current.project_id, actorId: user.id,
-    action: 'Ditolak Review Internal Vendor — Revisi Diperlukan', notes: note,
+    action: `Ditolak ${penolak} — Revisi Diperlukan`, notes: note,
   });
 
   const { data: project } = await supabase.from('projects').select('name, vendor_id').eq('id', current.project_id).single();
@@ -188,8 +234,8 @@ export async function rejectVendorInternalReview(docType: VendorReviewDocType, d
     await notifyOrgMembers({
       orgId: project.vendor_id,
       type: 'warning',
-      title: 'Dokumen Ditolak Review Internal — Perlu Revisi',
-      message: `Dokumen untuk proyek "${project?.name}" ditolak pada review internal vendor. Catatan: "${note}". Silakan perbaiki dan ajukan ulang.`,
+      title: `Dokumen Ditolak ${penolak} — Perlu Revisi`,
+      message: `Dokumen untuk proyek "${project?.name}" ditolak pada review ${penolak}. Catatan: "${note}". Silakan perbaiki dan ajukan ulang.`,
       link: `/vendor/dashboard/projects/${current.project_id}`,
     });
   }

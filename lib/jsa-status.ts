@@ -1,16 +1,26 @@
 /**
- * Alur persetujuan JSA — review internal vendor, lalu PGSOL (Reviewer, lalu HSE), lalu PGN (HSSE, lalu PM Zona).
+ * Alur persetujuan JSA — tiga pihak, masing-masing dua tahap berurutan:
+ * vendor (HSE -> PM), PGSOL (HSE -> PM), PGN (HSSE -> PM/OM Zona).
  *
- *   Draft -> Review Internal Vendor -> Review PGSOL -> Review HSE PGSOL ->
- *   Review HSSE PGN -> Persetujuan PGN -> JSA Disetujui
+ *   Draft -> Review HSE Vendor -> Review PM Vendor -> Review HSE PGSOL ->
+ *   Review PM PGSOL -> Review HSSE PGN -> Persetujuan PGN -> JSA Disetujui
  *
- * Review Internal Vendor : staff vendor sendiri (ditugaskan admin vendor
+ * Catatan penamaan: stage_key & permission lama DIPERTAHANKAN supaya
+ * roles.permissions dan stage_assignments yang sudah ada tidak perlu
+ * dimigrasi — hanya artinya yang berubah:
+ *   jsa.hse_vendor    (baru)  = HSE Vendor
+ *   jsa.review_vendor         = PM Vendor   (dulu "Review Internal Vendor")
+ *   jsa.hse_pgsol             = HSE PGSOL   (sekarang tahap PGSOL PERTAMA)
+ *   jsa.review_pgsol          = PM PGSOL    (dulu "Reviewer PGSOL", sekarang KEDUA)
+ *
+ * Review HSE/PM Vendor : staff vendor sendiri (ditugaskan admin vendor
  *                   per proyek, lihat Fase 3) harus menyetujui dulu
  *                   sebelum JSA nyampe PGSOL.
- * Review PGSOL    : verifikasi teknis oleh Satker Pemberi Kerja (PGSOL).
+ * Review HSE PGSOL : verifikasi aspek keselamatan kerja oleh HSE PGSOL.
+ * Review PM PGSOL : verifikasi akhir sisi PGSOL oleh PM PGSOL (Satker
+ *                   Pemberi Kerja), orang yang berbeda dari HSE PGSOL.
  *                   Mengecek bahaya sudah teridentifikasi, mitigasi memadai,
  *                   dan nilai risiko wajar. Blok "Direview Oleh" pada form.
- * Review HSE PGSOL : verifikasi aspek keselamatan kerja oleh orang PGSOL yang berbeda dari Reviewer, sebelum diteruskan ke PGN.
  * Review HSSE PGN : verifikasi keselamatan oleh HSSE PGN — menyamakan pola
  *                   dua-tahap PGSOL (Reviewer -> HSE) di sisi PGN, sebelum
  *                   diteruskan ke PM Zona untuk persetujuan akhir.
@@ -22,9 +32,10 @@
 
 export const JSA_STATUS = {
   draft: 'Draft',
-  reviewInternalVendor: 'Review Internal Vendor',
-  reviewPgsol: 'Review PGSOL',
+  reviewHseVendor: 'Review HSE Vendor',
+  reviewPmVendor: 'Review PM Vendor',
   reviewHsePgsol: 'Review HSE PGSOL',
+  reviewPmPgsol: 'Review PM PGSOL',
   reviewHssePgn: 'Review HSSE PGN',
   approvalPgn: 'Persetujuan PGN',
   approved: 'JSA Disetujui',
@@ -32,12 +43,12 @@ export const JSA_STATUS = {
 
 /**
  * Status yang berarti JSA sedang menunggu tindakan pihak INTERNAL
- * (PGN/PGSOL) — dipakai untuk /dashboard/my-task. `reviewInternalVendor`
+ * (PGN/PGSOL) — dipakai untuk /dashboard/my-task. `reviewHseVendor`/`reviewPmVendor`
  * SENGAJA tidak masuk sini: tahap itu menunggu staff vendor sendiri.
  */
 export const JSA_PENDING_STATUSES: string[] = [
-  JSA_STATUS.reviewPgsol,
   JSA_STATUS.reviewHsePgsol,
+  JSA_STATUS.reviewPmPgsol,
   JSA_STATUS.reviewHssePgn,
   JSA_STATUS.approvalPgn,
 ];
@@ -53,20 +64,21 @@ export function isJsaPending(status: string | null | undefined): boolean {
  * Role & Permission otomatis bisa bertindak di tahap tersebut.
  */
 export const JSA_STAGE_PERMISSION: Record<string, { module: string; action: string }> = {
-  [JSA_STATUS.reviewPgsol]: { module: 'jsa', action: 'review_pgsol' },
   [JSA_STATUS.reviewHsePgsol]: { module: 'jsa', action: 'hse_pgsol' },
+  [JSA_STATUS.reviewPmPgsol]: { module: 'jsa', action: 'review_pgsol' },
   [JSA_STATUS.reviewHssePgn]: { module: 'jsa', action: 'hsse_pgn' },
   [JSA_STATUS.approvalPgn]: { module: 'jsa', action: 'approve_pgn' },
 };
 
 /**
- * Urutan lengkap tahap JSA (termasuk review internal vendor) — satu-satunya
+ * Urutan lengkap tahap JSA (termasuk dua tahap review vendor) — satu-satunya
  * sumber kebenaran urutan tahap untuk timeline approval (lihat DocStageTimeline).
  */
 export const JSA_STAGE_SEQUENCE = [
-  { key: 'jsa.review_vendor', label: 'Review Internal Vendor', status: JSA_STATUS.reviewInternalVendor },
-  { key: 'jsa.review_pgsol', label: 'Review PGSOL', status: JSA_STATUS.reviewPgsol },
+  { key: 'jsa.hse_vendor', label: 'Review HSE Vendor', status: JSA_STATUS.reviewHseVendor },
+  { key: 'jsa.review_vendor', label: 'Review PM Vendor', status: JSA_STATUS.reviewPmVendor },
   { key: 'jsa.hse_pgsol', label: 'Review HSE PGSOL', status: JSA_STATUS.reviewHsePgsol },
+  { key: 'jsa.review_pgsol', label: 'Review PM PGSOL', status: JSA_STATUS.reviewPmPgsol },
   { key: 'jsa.hsse_pgn', label: 'Review HSSE PGN', status: JSA_STATUS.reviewHssePgn },
   { key: 'jsa.approve_pgn', label: 'Persetujuan PM Zona (PGN)', status: JSA_STATUS.approvalPgn },
 ] as const;

@@ -73,7 +73,7 @@ export async function savePgsolAssignment(
     notes: `${docType} / ${stageKey}`,
     metadata: {
       changes: names(beforeIds) === names(assigneeIds) ? [] : [
-        { field: 'assignees', label: 'Reviewer', before: names(beforeIds), after: names(assigneeIds) },
+        { field: 'assignees', label: 'HSE/PM PGSOL', before: names(beforeIds), after: names(assigneeIds) },
       ],
     },
   });

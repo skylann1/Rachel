@@ -151,7 +151,7 @@ export async function savePtw(
         apd,
         gas_tests: gasTests,
         ...formDetails,
-        status: PTW_STATUS.reviewInternalVendor,
+        status: PTW_STATUS.reviewHseVendor,
         rejection_note: null
       })
       .eq('id', existing.id)
@@ -176,7 +176,7 @@ export async function savePtw(
         apd,
         gas_tests: gasTests,
         ...formDetails,
-        status: PTW_STATUS.reviewInternalVendor
+        status: PTW_STATUS.reviewHseVendor
       })
       .select('id')
       .single();
@@ -201,6 +201,7 @@ export async function savePtw(
   // sudah ada di tahap approve_pm. Reset di sini benar untuk pengajuan yang
   // berurutan; perbaikan penuhnya butuh perubahan skema (kolom identitas
   // dokumen) — lihat catatan di supabase/README_stage_assignment_migration_order.md.
+  await resetStageAssignments(supabase, projectId, 'ptw', 'ptw.hse_vendor');
   await resetStageAssignments(supabase, projectId, 'ptw', 'ptw.review_vendor');
 
   if (ptwId) {
@@ -214,9 +215,9 @@ export async function savePtw(
   await notifyAssignees({
     projectId,
     docType: 'ptw',
-    stageKey: 'ptw.review_vendor',
+    stageKey: 'ptw.hse_vendor',
     type: 'action_required',
-    title: 'PTW Menunggu Review Internal',
+    title: 'PTW Menunggu Review HSE Vendor',
     message: `PTW untuk proyek "${project?.name}" telah diajukan dan menunggu review internal Anda sebelum diteruskan ke persetujuan.`,
     link: `/vendor/dashboard/ptw/create/${projectId}/${ptwType}`,
   });

@@ -36,7 +36,7 @@ export async function saveJsa(projectId: string, jsaData: any) {
       .from('jsa')
       .insert({
         project_id: projectId,
-        status: JSA_STATUS.reviewInternalVendor
+        status: JSA_STATUS.reviewHseVendor
       })
       .select('id')
       .single();
@@ -55,14 +55,14 @@ export async function saveJsa(projectId: string, jsaData: any) {
       .eq('id', jsaId)
       .single();
     if (!current) throw new Error('JSA tidak ditemukan.');
-    const resubmittable = [JSA_STATUS.draft, JSA_STATUS.reviewInternalVendor];
+    const resubmittable = [JSA_STATUS.draft, JSA_STATUS.reviewHseVendor, JSA_STATUS.reviewPmVendor];
     if (!resubmittable.includes(current.status)) {
       throw new Error('JSA tidak bisa diajukan ulang karena sudah berjalan ke tahap berikutnya.');
     }
 
     const { data: updated, error } = await supabase
       .from('jsa')
-      .update({ status: JSA_STATUS.reviewInternalVendor, rejection_note: null })
+      .update({ status: JSA_STATUS.reviewHseVendor, rejection_note: null })
       .eq('id', jsaId)
       .eq('status', current.status)
       .select('id');
@@ -81,6 +81,7 @@ export async function saveJsa(projectId: string, jsaData: any) {
   // `jsa.review_pgsol` sengaja TIDAK direset di sini — tahap itu memang
   // belum dimulai untuk ronde ini (baru dimulai kalau review internal
   // vendor selesai, lihat approveVendorInternalReview).
+  await resetStageAssignments(supabase, projectId, 'jsa', 'jsa.hse_vendor');
   await resetStageAssignments(supabase, projectId, 'jsa', 'jsa.review_vendor');
 
   // Delete existing steps
@@ -121,9 +122,9 @@ export async function saveJsa(projectId: string, jsaData: any) {
   await notifyAssignees({
     projectId,
     docType: 'jsa',
-    stageKey: 'jsa.review_vendor',
+    stageKey: 'jsa.hse_vendor',
     type: 'action_required',
-    title: 'JSA Menunggu Review Internal',
+    title: 'JSA Menunggu Review HSE Vendor',
     message: `JSA untuk proyek "${project?.name}" telah diajukan dan menunggu review internal Anda sebelum diteruskan ke PGSOL.`,
     link: `/vendor/dashboard/jsa/create/${projectId}`,
   });

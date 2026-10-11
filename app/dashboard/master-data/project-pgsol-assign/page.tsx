@@ -7,7 +7,7 @@ export default async function ProjectPgsolAssignListPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Kelola Reviewer PGSOL</h1>
+        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Kelola HSE & PM PGSOL</h1>
         <p className="text-sm text-slate-500 mt-1">Kelola siapa yang mereview Prosedur Kerja, JSA, & PTW tahap PGSOL untuk tiap proyek.</p>
       </div>
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -28,7 +28,7 @@ export default async function ProjectPgsolAssignListPage() {
                   <td className="px-6 py-4 text-sm text-slate-600">{vendor?.company_name || '-'}</td>
                   <td className="px-6 py-4 text-right">
                     <Link href={`/dashboard/master-data/project-pgsol-assign/${p.id}`} className="text-primary text-sm font-semibold hover:underline">
-                      Kelola Reviewer
+                      Kelola HSE & PM
                     </Link>
                   </td>
                 </tr>

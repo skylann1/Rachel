@@ -65,7 +65,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   role: 'Role',
   project: 'Proyek',
   announcement: 'Pengumuman',
-  pgsol_assignment: 'Reviewer PGSOL',
+  pgsol_assignment: 'HSE & PM PGSOL',
   procedure: 'Prosedur Kerja',
   jsa: 'JSA',
   ptw: 'PTW',

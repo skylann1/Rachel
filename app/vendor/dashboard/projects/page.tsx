@@ -102,10 +102,10 @@ export default function VendorProjectsPage() {
     if (ptws.length > 0 && effectivePtwStatuses.every(s => s === PTW_STATUS.aktif)) return PTW_STATUS.aktif;
     if (jsa?.status === JSA_STATUS.approved) return JSA_STATUS.approved;
     if (prosedur?.status === PROCEDURE_STATUS.approved) return PROCEDURE_STATUS.approved;
-    // "Review Internal Vendor" tidak masuk isProcedurePending (itu buat task
+    // "Review HSE/PM Vendor" tidak masuk isProcedurePending (itu buat task
     // list internal) — tapi di sisi vendor dokumennya sedang direview, jadi
     // tetap tampilkan sebagai menunggu review, bukan jatuh ke status proyek.
-    if (isProcedurePending(prosedur?.status) || prosedur?.status === PROCEDURE_STATUS.reviewInternalVendor) return PROCEDURE_STATUS.menungguReviewPM;
+    if (isProcedurePending(prosedur?.status) || prosedur?.status === PROCEDURE_STATUS.reviewHseVendor || prosedur?.status === PROCEDURE_STATUS.reviewPmVendor) return PROCEDURE_STATUS.menungguReviewPM;
     if (prosedur?.status === PROCEDURE_STATUS.draft) return 'Revisi Prosedur';
     return project.status;
   };

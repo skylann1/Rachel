@@ -31,14 +31,22 @@ export const PGN_STAGE_KEYS = [
   'ptw.numbering_hsse',
 ] as const;
 
-/** Ketiga stage_key yang ditugaskan admin vendor — dipakai untuk membatasi apa yang boleh disimpan lewat saveVendorStageAssignment (masterData.manage_org_staff). */
+/**
+ * Keenam stage_key yang ditugaskan admin vendor (HSE Vendor lalu PM Vendor,
+ * untuk Prosedur/JSA/PTW) — dipakai untuk membatasi apa yang boleh disimpan
+ * lewat saveVendorStageAssignment (masterData.manage_org_staff).
+ * `*.review_vendor` = PM Vendor (nama lama dipertahankan, lihat lib/jsa-status.ts).
+ */
 export const VENDOR_STAGE_KEYS = [
+  'procedure.hse_vendor',
   'procedure.review_vendor',
+  'jsa.hse_vendor',
   'jsa.review_vendor',
+  'ptw.hse_vendor',
   'ptw.review_vendor',
 ] as const;
 
-/** Keenam stage_key yang ditugaskan admin PGSOL (Reviewer + HSE, untuk Prosedur/JSA/PTW) — dipakai untuk membatasi apa yang boleh disimpan lewat savePgsolAssignment (jsa.manage_assignment_pgsol). */
+/** Keenam stage_key yang ditugaskan admin PGSOL (HSE + PM, untuk Prosedur/JSA/PTW; `*.review_pgsol` = PM PGSOL) — dipakai untuk membatasi apa yang boleh disimpan lewat savePgsolAssignment (jsa.manage_assignment_pgsol). */
 export const PGSOL_STAGE_KEYS = [
   'procedure.review_pgsol',
   'procedure.hse_pgsol',
@@ -122,16 +130,19 @@ export async function getEligibleAssignees(
  * memakai ini alih-alih menyalin tabelnya sendiri.
  */
 export const STAGE_KEY_PERMISSION: Record<string, { module: string; action: string }> = {
+  'procedure.hse_vendor': { module: 'procedure', action: 'hse_vendor' },
   'procedure.review_vendor': { module: 'procedure', action: 'review_vendor' },
   'procedure.review_pgsol': { module: 'procedure', action: 'review_pgsol' },
   'procedure.hse_pgsol': { module: 'procedure', action: 'hse_pgsol' },
   'procedure.hsse_pgn': { module: 'procedure', action: 'hsse_pgn' },
   'procedure.review': { module: 'procedure', action: 'review' },
+  'jsa.hse_vendor': { module: 'jsa', action: 'hse_vendor' },
   'jsa.review_vendor': { module: 'jsa', action: 'review_vendor' },
   'jsa.review_pgsol': { module: 'jsa', action: 'review_pgsol' },
   'jsa.hse_pgsol': { module: 'jsa', action: 'hse_pgsol' },
   'jsa.hsse_pgn': { module: 'jsa', action: 'hsse_pgn' },
   'jsa.approve_pgn': { module: 'jsa', action: 'approve_pgn' },
+  'ptw.hse_vendor': { module: 'ptw', action: 'hse_vendor' },
   'ptw.review_vendor': { module: 'ptw', action: 'review_vendor' },
   'ptw.review_pgsol': { module: 'ptw', action: 'review_pgsol' },
   'ptw.hse_pgsol': { module: 'ptw', action: 'hse_pgsol' },

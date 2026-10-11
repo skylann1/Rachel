@@ -159,3 +159,17 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
     `actor_id = auth.uid()` (login gagal ditulis server pakai service role).
     Aman dijalankan ulang. Sudah diterapkan di project Supabase live lewat
     MCP pada 2026-10-10.
+11. `schema_vendor_pgsol_two_stage_review.sql` — alur approval baru: vendor
+    **HSE Vendor → PM Vendor**, PGSOL **HSE PGSOL → PM PGSOL** (menggantikan
+    Reviewer → HSE), untuk Prosedur/JSA/PTW. Satu transaksi. Memigrasikan
+    dokumen yang sedang berjalan (status lama `Review Internal Vendor` →
+    `Review HSE Vendor`, `Review PGSOL` → `Review HSE PGSOL`, assignment
+    tahap terkait di-reset ke pending), memberi izin `*.hse_vendor` ke role
+    yang sudah punya `*.review_vendor`, dan mengganti whitelist status RLS
+    vendor. **WAJIB dijalankan SEBELUM deploy kode** — kode baru memakai
+    status `Review HSE Vendor`/`Review PM Vendor`/`Review PM PGSOL`, dan RLS
+    lama menolak update ke status itu. **Jalankan SEKALI** (bagian 1 tidak
+    idempoten). Setelah itu admin vendor mengisi slot HSE Vendor per proyek
+    dan admin PGSOL meninjau ulang HSE/PM PGSOL.
+    Sudah diterapkan di project Supabase live lewat MCP pada 2026-10-11
+    (3 Prosedur berjalan dipindahkan; belum ada JSA/PTW berjalan).

@@ -109,14 +109,14 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   const prosedurRevisions = prosedur?.content?.revisions || [];
   const prosedurLastNote = prosedurRevisions.length > 0 ? prosedurRevisions[prosedurRevisions.length - 1].note : null;
 
-  // Normalize statuses for UI logic. Sisi vendor: tahap "Review Internal
+  // Normalize statuses for UI logic. Sisi vendor: tahap "Review HSE/PM
   // Vendor" juga dihitung 'Pending' — isProcedurePending/isJsaPending
   // SENGAJA mengecualikannya (buat task list internal), tapi di layar vendor
   // ini dokumennya memang sedang direview, jadi jangan tampil sebagai Draft.
-  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : (isProcedurePending(prosedur?.status) || prosedur?.status === PROCEDURE_STATUS.reviewInternalVendor) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
+  const prosedurStatus = prosedur?.status === PROCEDURE_STATUS.approved ? 'Approved' : (isProcedurePending(prosedur?.status) || prosedur?.status === PROCEDURE_STATUS.reviewHseVendor || prosedur?.status === PROCEDURE_STATUS.reviewPmVendor) ? 'Pending' : (prosedur?.status === PROCEDURE_STATUS.draft && prosedurLastNote) ? 'Rejected' : prosedur ? 'Draft' : 'Draft';
   const jsaStatus = jsa?.rejection_note ? 'Rejected'
     : jsa?.status === JSA_STATUS.approved ? 'Approved'
-    : (isJsaPending(jsa?.status) || jsa?.status === JSA_STATUS.reviewInternalVendor) ? 'Pending'
+    : (isJsaPending(jsa?.status) || jsa?.status === JSA_STATUS.reviewHseVendor || jsa?.status === JSA_STATUS.reviewPmVendor) ? 'Pending'
     : jsa ? 'Draft' : 'Draft';
 
   // PTW tahap proyek: hijau hanya kalau SEMUA tipe PTW yang diajukan sudah Aktif.
@@ -807,7 +807,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5">
             <h3 className="text-blue-800 font-bold mb-1 flex items-center gap-2">
-              <Users className="w-4 h-4" /> Assignment Reviewer Internal
+              <Users className="w-4 h-4" /> Assignment HSE & PM Vendor
             </h3>
             <p className="text-sm text-blue-600/80">
               Tunjuk staff perusahaan Anda untuk mereview setiap dokumen K3 sebelum diajukan ke PGSOL/PGN.

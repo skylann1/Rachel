@@ -21,7 +21,7 @@ export function VendorInternalReviewActions({ projectId, docType, docId }: {
     let cancelled = false;
     async function load() {
       if (!docId) { setLoading(false); return; }
-      const assignment = await getMyVendorReviewAssignment(projectId, docType);
+      const assignment = await getMyVendorReviewAssignment(projectId, docType, docId);
       if (!cancelled) {
         setAssignmentId(assignment?.id ?? null);
         setLoading(false);
@@ -65,7 +65,7 @@ export function VendorInternalReviewActions({ projectId, docType, docId }: {
     return (
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-3 text-emerald-700">
         <CheckCircle2 className="w-5 h-5 shrink-0" />
-        <p className="text-sm font-semibold">Anda telah menyetujui dokumen ini di tahap Review Internal Vendor.</p>
+        <p className="text-sm font-semibold">Anda telah menyetujui dokumen ini di tahap review vendor.</p>
       </div>
     );
   }
@@ -84,7 +84,7 @@ export function VendorInternalReviewActions({ projectId, docType, docId }: {
         <ShieldQuestion className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-bold text-amber-800">Menunggu Review Internal Anda</p>
-          <p className="text-xs text-amber-700 mt-1">Anda ditugaskan sebagai reviewer internal vendor untuk dokumen ini sebelum diajukan ke PGSOL/PGN.</p>
+          <p className="text-xs text-amber-700 mt-1">Anda ditugaskan sebagai reviewer (HSE/PM Vendor) untuk dokumen ini sebelum diajukan ke PGSOL/PGN.</p>
         </div>
       </div>
 
