@@ -156,7 +156,7 @@ export async function addVendor(formData: FormData) {
       email_confirm: true,
       user_metadata: {
         full_name: pic,
-        role: 'vendor',
+        role: 'vendor_admin',
         type: 'vendor',
         company_name: companyName,
       }
