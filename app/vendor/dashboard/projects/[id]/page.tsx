@@ -34,10 +34,26 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       getEligibleAssignees(supabase, permission.module, permission.action, actorOrgId),
       getStageAssignments(supabase, projectId, docType, stageKey),
     ]);
+    // Penugas yang rolenya sudah berubah (tak lagi punya izin tahap ini) tidak
+    // ada di `candidates`, tapi barisnya masih ada. Tetap tampilkan supaya
+    // hitungan "N ditugaskan" cocok dengan daftar yang terlihat.
+    const candidateIds = new Set(candidates.map((c: { id: string }) => c.id));
+    const orphanIds = assignments.map(a => a.assignee_id).filter(id => !candidateIds.has(id));
+    let allCandidates = candidates;
+    if (orphanIds.length > 0) {
+      const { data: orphans } = await supabase.from('profiles').select('id, full_name').in('id', orphanIds);
+      allCandidates = [
+        ...candidates,
+        ...(orphans || []).map((o: { id: string; full_name: string | null }) => ({
+          id: o.id,
+          full_name: `${o.full_name || 'Tanpa nama'} (role tidak lagi berwenang)`,
+        })),
+      ];
+    }
     return {
       stageKey,
       label: VENDOR_STAGE_LABELS[stageKey],
-      candidates,
+      candidates: allCandidates,
       currentAssigneeIds: assignments.map(a => a.assignee_id),
       locked: assignments.some(a => a.status !== 'pending'),
     };
