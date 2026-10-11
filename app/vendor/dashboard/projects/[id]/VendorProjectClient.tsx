@@ -814,9 +814,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
               Kalau lebih dari satu orang ditugaskan pada satu tahap, semuanya harus menyetujui sebelum dokumen lanjut.
             </p>
           </div>
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <VendorAssignmentPanel projectId={project.id} slots={assignmentSlots} />
-          </div>
+          <VendorAssignmentPanel projectId={project.id} slots={assignmentSlots} />
         </div>
       )}
 

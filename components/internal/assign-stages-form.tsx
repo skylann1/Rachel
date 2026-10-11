@@ -124,7 +124,7 @@ export default function AssignStagesForm({
   const q = query.trim().toLowerCase();
 
   return (
-    <div className="space-y-6 pb-28">
+    <div className="space-y-6">
       {/* Ringkasan kelengkapan */}
       <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${
         emptyCount === 0
@@ -271,8 +271,8 @@ export default function AssignStagesForm({
       })}
 
       {/* Bar simpan — satu tombol untuk semua perubahan */}
-      <div className="fixed bottom-0 inset-x-0 z-30 pointer-events-none">
-        <div className="max-w-4xl mx-auto px-4 pb-4">
+      <div className="sticky bottom-4 z-30 pointer-events-none">
+        <div>
           <div className="pointer-events-auto flex items-center justify-between gap-3 bg-white border border-slate-200 shadow-lg rounded-2xl px-4 py-3">
             <p className="text-sm text-slate-600 min-w-0">
               {savedFlash ? (
