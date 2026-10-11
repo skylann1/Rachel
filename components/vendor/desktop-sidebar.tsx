@@ -5,11 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight, BookOpen, UserCog, ShieldCheck } from "lucide-react";
 import { logout } from "@/app/vendor/login/actions";
+import type { VendorSidebarBadges } from "@/app/vendor/dashboard/sidebar-badges";
 
 const menuUtama = [
   { name: 'Dashboard Mitra Kerja', href: '/vendor/dashboard', icon: LayoutDashboard },
-  { name: 'My Task', href: '/vendor/dashboard/my-task', icon: ClipboardList },
-  { name: 'Proyek Saya', href: '/vendor/dashboard/projects', icon: Briefcase },
+  { name: 'My Task', href: '/vendor/dashboard/my-task', icon: ClipboardList, badgeKey: 'myTask' as const },
+  { name: 'Proyek Saya', href: '/vendor/dashboard/projects', icon: Briefcase, badgeKey: 'projects' as const },
   { name: 'Inbox Temuan K3', href: '/vendor/dashboard/inspection', icon: AlertTriangle },
   { name: 'Laporan Insiden', href: '/vendor/dashboard/incident', icon: AlertTriangle, danger: true },
   { name: 'Panduan Alur K3', href: '/vendor/dashboard/panduan', icon: BookOpen },
@@ -24,7 +25,7 @@ const masterData = [
   { name: 'Role & Permission', href: '/vendor/dashboard/role', icon: ShieldCheck },
 ];
 
-export function VendorDesktopSidebar() {
+export function VendorDesktopSidebar({ badges }: { badges?: VendorSidebarBadges }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 
@@ -69,6 +70,7 @@ export function VendorDesktopSidebar() {
           {menuUtama.map(item => {
             const active = isActive(item.href);
             const Icon = item.icon;
+            const count = ('badgeKey' in item && item.badgeKey && badges) ? badges[item.badgeKey] || 0 : 0;
             return (
               <li key={item.href}>
                 <Link
@@ -86,8 +88,18 @@ export function VendorDesktopSidebar() {
                         : 'text-slate-400 hover:bg-white/5 hover:text-white'
                   }`}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {!isCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
+                  <span className="relative shrink-0">
+                    <Icon className="h-4 w-4" />
+                    {isCollapsed && count > 0 && (
+                      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-slate-900" />
+                    )}
+                  </span>
+                  {!isCollapsed && <span className="whitespace-nowrap flex-1">{item.name}</span>}
+                  {!isCollapsed && count > 0 && (
+                    <span className="shrink-0 min-w-[1.25rem] h-5 flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold px-1.5">
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
                 </Link>
               </li>
             );

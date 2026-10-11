@@ -5,11 +5,12 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Menu, X, LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, BookOpen, UserCog, ShieldCheck } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import type { VendorSidebarBadges } from '@/app/vendor/dashboard/sidebar-badges';
 
 const menuUtama = [
   { name: 'Dashboard Mitra Kerja', href: '/vendor/dashboard', icon: LayoutDashboard },
-  { name: 'My Task', href: '/vendor/dashboard/my-task', icon: ClipboardList },
-  { name: 'Proyek Saya', href: '/vendor/dashboard/projects', icon: Briefcase },
+  { name: 'My Task', href: '/vendor/dashboard/my-task', icon: ClipboardList, badgeKey: 'myTask' as const },
+  { name: 'Proyek Saya', href: '/vendor/dashboard/projects', icon: Briefcase, badgeKey: 'projects' as const },
   { name: 'Inbox Temuan K3', href: '/vendor/dashboard/inspection', icon: AlertTriangle },
   { name: 'Laporan Insiden', href: '/vendor/dashboard/incident', icon: AlertTriangle, danger: true },
   { name: 'Panduan Alur K3', href: '/vendor/dashboard/panduan', icon: BookOpen },
@@ -24,7 +25,7 @@ const masterData = [
   { name: 'Role & Permission', href: '/vendor/dashboard/role', icon: ShieldCheck },
 ];
 
-export function VendorMobileSidebar() {
+export function VendorMobileSidebar({ badges }: { badges?: VendorSidebarBadges }) {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
@@ -82,6 +83,7 @@ export function VendorMobileSidebar() {
             {menuUtama.map(item => {
               const active = isActive(item.href);
               const Icon = item.icon;
+              const count = ('badgeKey' in item && item.badgeKey && badges) ? badges[item.badgeKey] || 0 : 0;
               return (
                 <li key={item.href}>
                   <Link
@@ -98,7 +100,12 @@ export function VendorMobileSidebar() {
                     }`}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
-                    {item.name}
+                    <span className="flex-1">{item.name}</span>
+                    {count > 0 && (
+                      <span className="shrink-0 min-w-[1.25rem] h-5 flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold px-1.5">
+                        {count > 99 ? '99+' : count}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
