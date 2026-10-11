@@ -10,6 +10,7 @@ interface StageSlot {
   candidates: Candidate[];
   currentAssigneeIds: string[];
   locked: boolean; // true kalau ada baris non-pending, tidak bisa diedit
+  passed?: boolean; // dokumen sudah melewati tahap ini
 }
 
 const DOC_TITLES: { docType: AssignGroup['docType']; title: string }[] = [
@@ -43,6 +44,7 @@ export default function VendorAssignmentPanel({ projectId, slots }: { projectId:
           candidates: s.candidates,
           currentIds: s.currentAssigneeIds,
           locked: s.locked,
+          passed: s.passed,
           order: meta?.order ?? 9,
         };
       })

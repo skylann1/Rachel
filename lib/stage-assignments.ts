@@ -8,6 +8,9 @@
 // "use server" di sini) — dipanggil dari dalam file yang sudah "use server".
 
 import { getRoleNamesWithPermission } from '@/utils/permissions';
+import { PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
+import { JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
+import { PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
 
 export interface StageAssignmentRow {
   id: string;
@@ -174,6 +177,11 @@ export async function writeStageAssignment(
     return { error: 'Tahap ini sudah mulai diproses — assignment tidak bisa diubah sampai ditolak dan diajukan ulang.' };
   }
 
+  const passed = (await getPassedStageKeys(supabase, [projectId])).get(projectId);
+  if (passed?.has(stageKey)) {
+    return { error: 'Dokumen sudah melewati tahap ini — penugasan tidak bisa diubah.' };
+  }
+
   const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', actorId).single();
   if (!actorProfile?.org_id) return { error: 'Organisasi Anda tidak ditemukan.' };
 
@@ -221,6 +229,43 @@ export async function writeStageAssignment(
   }
 
   return {};
+}
+
+const DOC_TABLE: Record<string, { table: string; seq: readonly { key: string }[]; index: (s: string | null) => number }> = {
+  procedure: { table: 'procedures', seq: PROCEDURE_STAGE_SEQUENCE, index: procedureStageIndex },
+  jsa: { table: 'jsa', seq: JSA_STAGE_SEQUENCE, index: jsaStageIndex },
+  ptw: { table: 'ptw', seq: PTW_STAGE_SEQUENCE, index: ptwStageIndex },
+};
+
+/**
+ * Tahap yang SUDAH DILEWATI dokumennya, per proyek: dokumen sudah berada di
+ * tahap setelahnya (atau sudah final). Penugasan tahap seperti ini tidak
+ * bermakna lagi dan tidak boleh diubah — kalau dokumen ditolak (kembali ke
+ * Draft) tahapnya otomatis terbuka lagi. Untuk PTW (bisa banyak per proyek)
+ * tahap dianggap lewat hanya kalau SEMUA PTW-nya sudah melewatinya; proyek
+ * tanpa dokumen jenis itu tidak punya tahap yang lewat.
+ */
+export async function getPassedStageKeys(
+  supabase: any, projectIds: string[],
+): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>();
+  projectIds.forEach(id => result.set(id, new Set()));
+  if (projectIds.length === 0) return result;
+
+  await Promise.all(Object.entries(DOC_TABLE).map(async ([, cfg]) => {
+    const { data } = await supabase.from(cfg.table).select('project_id, status').in('project_id', projectIds);
+    const byProject = new Map<string, string[]>();
+    (data || []).forEach((r: any) => {
+      if (!byProject.has(r.project_id)) byProject.set(r.project_id, []);
+      byProject.get(r.project_id)!.push(r.status);
+    });
+    byProject.forEach((statuses, projectId) => {
+      cfg.seq.forEach((stage, i) => {
+        if (statuses.every(st => cfg.index(st) > i)) result.get(projectId)?.add(stage.key);
+      });
+    });
+  }));
+  return result;
 }
 
 /** True hanya kalau ADA minimal satu baris dan SEMUA baris untuk tahap ini berstatus 'approved'. */

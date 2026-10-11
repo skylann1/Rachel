@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { getJsaSignatories } from '@/lib/jsa-signatories';
 import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { hasPermission } from '@/utils/permissions';
-import { getStageAssignments, getEligibleAssignees, VENDOR_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
+import { getStageAssignments, getEligibleAssignees, getPassedStageKeys, VENDOR_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
 import { getDocumentLogs } from '@/app/dashboard/approval/actions';
 
 export default async function ProjectDetailTrackerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,6 +26,10 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
     'ptw.hse_vendor': 'HSE Vendor — PTW',
     'ptw.review_vendor': 'PM Vendor — PTW',
   };
+
+  const passedStages = canManageAssignments
+    ? ((await getPassedStageKeys(supabase, [projectId])).get(projectId) ?? new Set<string>())
+    : new Set<string>();
 
   const assignmentSlots = canManageAssignments ? await Promise.all(VENDOR_STAGE_KEYS.map(async (stageKey) => {
     const docType = stageKey.split('.')[0];
@@ -55,7 +59,8 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       label: VENDOR_STAGE_LABELS[stageKey],
       candidates: allCandidates,
       currentAssigneeIds: assignments.map(a => a.assignee_id),
-      locked: assignments.some(a => a.status !== 'pending'),
+      locked: assignments.some(a => a.status !== 'pending') || passedStages.has(stageKey),
+      passed: passedStages.has(stageKey),
     };
   })) : [];
 

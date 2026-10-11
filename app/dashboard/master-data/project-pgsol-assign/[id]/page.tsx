@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermission } from '@/utils/permissions';
-import { getStageAssignments, getEligibleAssignees } from '@/lib/stage-assignments';
+import { getStageAssignments, getEligibleAssignees, getPassedStageKeys } from '@/lib/stage-assignments';
 import AssignStagesForm, { type AssignGroup, type AssignStage } from '@/components/internal/assign-stages-form';
 import { savePgsolAssignment } from '../actions';
 
@@ -33,6 +33,8 @@ export default async function ProjectPgsolAssignDetailPage({ params }: { params:
 
   const { data: project } = await supabase.from('projects').select('id, name').eq('id', projectId).single();
 
+  const passed = (await getPassedStageKeys(supabase, [projectId])).get(projectId) ?? new Set<string>();
+
   const groups: AssignGroup[] = await Promise.all(
     DOC_TYPES.map(async ({ docType, title }) => {
       const stages: AssignStage[] = await Promise.all(
@@ -48,7 +50,8 @@ export default async function ProjectPgsolAssignDetailPage({ params }: { params:
             hint,
             candidates,
             currentIds: assignments.map(a => a.assignee_id),
-            locked: assignments.some(a => a.status !== 'pending'),
+            locked: assignments.some(a => a.status !== 'pending') || passed.has(stageKey),
+            passed: passed.has(stageKey),
           };
         }),
       );

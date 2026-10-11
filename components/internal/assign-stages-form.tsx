@@ -19,6 +19,8 @@ export interface AssignStage {
   candidates: AssignCandidate[];
   currentIds: string[];
   locked: boolean;
+  /** Dokumen sudah melewati tahap ini (bukan sekadar sedang diproses). */
+  passed?: boolean;
 }
 
 export interface AssignGroup {
@@ -80,8 +82,10 @@ export default function AssignStagesForm({
     [groups],
   );
   const dirtyStages = allStages.filter(s => !s.locked && !sameSet(selected[s.stageKey] ?? [], baseline[s.stageKey] ?? []));
-  const emptyCount = allStages.filter(s => (selected[s.stageKey] ?? []).length === 0).length;
-  const filledCount = allStages.length - emptyCount;
+  // Tahap yang sudah dilewati dokumennya tidak dihitung sebagai "kosong".
+  const relevantStages = allStages.filter(s => !s.passed);
+  const emptyCount = relevantStages.filter(s => (selected[s.stageKey] ?? []).length === 0).length;
+  const filledCount = relevantStages.length - emptyCount;
   const showSearch = allStages.some(s => s.candidates.length > 8);
 
   function toggle(stageKey: string, id: string) {
@@ -136,7 +140,7 @@ export default function AssignStagesForm({
           : <AlertCircle className="w-5 h-5 shrink-0" />}
         <p className="font-medium">
           {emptyCount === 0
-            ? <>Semua tahap sudah punya penanggung jawab ({filledCount}/{allStages.length}).</>
+            ? <>Semua tahap yang aktif sudah punya penanggung jawab ({filledCount}/{relevantStages.length}).</>
             : <><span className="font-bold">{emptyCount} tahap belum ditugaskan</span> — dokumen yang sampai di tahap itu tidak bisa diproses sampai ada yang ditunjuk.</>}
         </p>
       </div>
@@ -171,7 +175,7 @@ export default function AssignStagesForm({
                 const sel = selected[stage.stageKey] ?? [];
                 const dirty = !stage.locked && !sameSet(sel, baseline[stage.stageKey] ?? []);
                 const allOn = stage.candidates.length > 0 && sel.length === stage.candidates.length;
-                const empty = sel.length === 0;
+                const empty = sel.length === 0 && !stage.passed;
                 const visible = q
                   ? stage.candidates.filter(c => c.full_name.toLowerCase().includes(q))
                   : stage.candidates;
@@ -202,11 +206,15 @@ export default function AssignStagesForm({
 
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border ${
-                        empty
-                          ? 'text-amber-700 bg-amber-50 border-amber-200'
-                          : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                        stage.passed
+                          ? 'text-slate-600 bg-slate-100 border-slate-200'
+                          : empty
+                            ? 'text-amber-700 bg-amber-50 border-amber-200'
+                            : 'text-emerald-700 bg-emerald-50 border-emerald-200'
                       }`}>
-                        {empty ? 'Belum ditugaskan' : `${sel.length} ditugaskan`}
+                        {stage.passed
+                          ? (sel.length === 0 ? 'Sudah dilewati' : `${sel.length} ditugaskan · selesai`)
+                          : empty ? 'Belum ditugaskan' : `${sel.length} ditugaskan`}
                       </span>
                       {dirty && (
                         <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5">
@@ -216,9 +224,17 @@ export default function AssignStagesForm({
                     </div>
 
                     {stage.locked && (
-                      <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                      <div className={`flex items-start gap-2 p-3 border rounded-xl text-xs ${
+                        stage.passed
+                          ? 'bg-slate-50 border-slate-200 text-slate-600'
+                          : 'bg-amber-50 border-amber-200 text-amber-700'
+                      }`}>
                         <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-                        <span>Tahap ini sedang diproses — terkunci sampai ditolak/diajukan ulang.</span>
+                        <span>
+                          {stage.passed
+                            ? 'Dokumen sudah melewati tahap ini — penugasan terkunci. Terbuka lagi kalau dokumen ditolak dan diajukan ulang.'
+                            : 'Tahap ini sedang diproses — terkunci sampai ditolak/diajukan ulang.'}
+                        </span>
                       </div>
                     )}
 

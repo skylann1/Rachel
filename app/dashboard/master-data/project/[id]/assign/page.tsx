@@ -3,7 +3,7 @@ import { redirect, notFound } from 'next/navigation';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermission } from '@/utils/permissions';
-import { getStageAssignments, getEligibleAssignees, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
+import { getStageAssignments, getEligibleAssignees, getPassedStageKeys, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
 import AssignStagesForm, { type AssignGroup } from '@/components/internal/assign-stages-form';
 import { savePgnAssignment } from '../../actions';
 
@@ -53,6 +53,8 @@ export default async function AssignPgnPage({ params }: { params: Promise<{ id: 
   if (!project) return notFound();
   const vendor: any = Array.isArray(project.vendor_profiles) ? project.vendor_profiles[0] : project.vendor_profiles;
 
+  const passed = (await getPassedStageKeys(supabase, [projectId])).get(projectId) ?? new Set<string>();
+
   const groups: AssignGroup[] = await Promise.all(
     GROUPS.map(async ({ docType, title, stages }) => ({
       docType,
@@ -67,7 +69,8 @@ export default async function AssignPgnPage({ params }: { params: Promise<{ id: 
           return {
             stageKey, label, hint, candidates,
             currentIds: assignments.map(a => a.assignee_id),
-            locked: assignments.some(a => a.status !== 'pending'),
+            locked: assignments.some(a => a.status !== 'pending') || passed.has(stageKey),
+            passed: passed.has(stageKey),
           };
         }),
       ),

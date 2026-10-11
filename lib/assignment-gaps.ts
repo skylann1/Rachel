@@ -11,7 +11,7 @@
 // dalam file yang sudah "use server".
 
 import { hasPermissionForUser } from '@/utils/permissions';
-import { PGN_STAGE_KEYS, PGSOL_STAGE_KEYS, VENDOR_STAGE_KEYS } from '@/lib/stage-assignments';
+import { PGN_STAGE_KEYS, PGSOL_STAGE_KEYS, VENDOR_STAGE_KEYS, getPassedStageKeys } from '@/lib/stage-assignments';
 
 export type AssignmentParty = 'pgn' | 'pgsol' | 'vendor';
 
@@ -125,6 +125,9 @@ export async function getAssignmentGaps(supabase: any, userId: string): Promise<
     .in('project_id', active.map((p: any) => p.id))
     .in('stage_key', keys as string[]);
 
+  // Tahap yang sudah dilewati dokumennya tidak lagi butuh penugasan.
+  const passedByProject = await getPassedStageKeys(supabase, active.map((p: any) => p.id));
+
   const filled = new Map<string, Set<string>>();
   (rows || []).forEach((r: any) => {
     if (!filled.has(r.project_id)) filled.set(r.project_id, new Set());
@@ -134,7 +137,8 @@ export async function getAssignmentGaps(supabase: any, userId: string): Promise<
   const gaps: AssignmentGap[] = [];
   for (const p of active) {
     const have = filled.get(p.id) ?? new Set<string>();
-    const missing = keys.filter(k => !have.has(k));
+    const passed = passedByProject.get(p.id) ?? new Set<string>();
+    const missing = keys.filter(k => !have.has(k) && !passed.has(k));
     if (missing.length === 0) continue;
     const vendor = Array.isArray(p.vendor_profiles) ? p.vendor_profiles[0] : p.vendor_profiles;
     gaps.push({
