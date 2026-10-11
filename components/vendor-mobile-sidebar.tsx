@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Menu, X, LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, BookOpen, UserCog, ShieldCheck } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import type { VendorSidebarBadges } from '@/app/vendor/dashboard/sidebar-badges';
+import { useVendorBadges } from '@/components/vendor/badges-provider';
 
 const menuUtama = [
   { name: 'Dashboard Mitra Kerja', href: '/vendor/dashboard', icon: LayoutDashboard },
@@ -25,7 +25,8 @@ const masterData = [
   { name: 'Role & Permission', href: '/vendor/dashboard/role', icon: ShieldCheck },
 ];
 
-export function VendorMobileSidebar({ badges }: { badges?: VendorSidebarBadges }) {
+export function VendorMobileSidebar() {
+  const badges = useVendorBadges();
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();

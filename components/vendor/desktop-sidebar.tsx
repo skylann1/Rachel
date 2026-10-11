@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight, BookOpen, UserCog, ShieldCheck } from "lucide-react";
 import { logout } from "@/app/vendor/login/actions";
-import type { VendorSidebarBadges } from "@/app/vendor/dashboard/sidebar-badges";
+import { useVendorBadges } from "@/components/vendor/badges-provider";
 
 const menuUtama = [
   { name: 'Dashboard Mitra Kerja', href: '/vendor/dashboard', icon: LayoutDashboard },
@@ -25,7 +25,8 @@ const masterData = [
   { name: 'Role & Permission', href: '/vendor/dashboard/role', icon: ShieldCheck },
 ];
 
-export function VendorDesktopSidebar({ badges }: { badges?: VendorSidebarBadges }) {
+export function VendorDesktopSidebar() {
+  const badges = useVendorBadges();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 

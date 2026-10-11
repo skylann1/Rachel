@@ -6,6 +6,7 @@ import { getUnreadCount, getNotificationPreferences } from "@/app/dashboard/inbo
 import { PresenceHeartbeat } from "@/components/internal/presence-heartbeat";
 import { SessionGuard } from "@/components/session-guard";
 import { getVendorSidebarBadges } from "./sidebar-badges";
+import { VendorBadgesProvider } from "@/components/vendor/badges-provider";
 import Link from "next/link";
 
 export default async function VendorDashboardLayout({
@@ -20,15 +21,16 @@ export default async function VendorDashboardLayout({
   const badges = await getVendorSidebarBadges();
 
   return (
+    <VendorBadgesProvider initial={badges}>
     <div className="flex h-screen w-full bg-slate-50">
       <PresenceHeartbeat />
       {user && <SessionGuard userId={user.id} loginUrl="/vendor/login" />}
-      <VendorDesktopSidebar badges={badges} />
+      <VendorDesktopSidebar />
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-30 shrink-0">
           <div className="flex items-center">
-            <VendorMobileSidebar badges={badges} />
+            <VendorMobileSidebar />
             <div className="hidden md:block leading-tight">
               <p className="text-xs font-bold text-slate-800">Portal Mitra Kerja</p>
               <p className="text-[11px] text-slate-400">
@@ -55,5 +57,6 @@ export default async function VendorDashboardLayout({
         </div>
       </main>
     </div>
+    </VendorBadgesProvider>
   );
 }
