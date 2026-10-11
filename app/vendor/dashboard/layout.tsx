@@ -21,7 +21,7 @@ export default async function VendorDashboardLayout({
   const badges = await getVendorSidebarBadges();
 
   return (
-    <VendorBadgesProvider initial={badges}>
+    <VendorBadgesProvider initial={badges} userId={user?.id}>
     <div className="flex h-screen w-full bg-slate-50">
       <PresenceHeartbeat />
       {user && <SessionGuard userId={user.id} loginUrl="/vendor/login" />}

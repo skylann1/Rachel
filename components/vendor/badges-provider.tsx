@@ -3,8 +3,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { getVendorSidebarBadges, type VendorSidebarBadges } from "@/app/vendor/dashboard/sidebar-badges";
+import { useNotificationsRealtime } from "@/hooks/useNotificationsRealtime";
 
-const POLL_MS = 30_000;
+// Realtime (notifikasi masuk) jadi pemicu utama; polling hanya cadangan kalau socket putus.
+const POLL_MS = 60_000;
 const EMPTY: VendorSidebarBadges = { myTask: 0, projects: 0 };
 
 const BadgesContext = createContext<VendorSidebarBadges>(EMPTY);
@@ -15,14 +17,17 @@ export function useVendorBadges() {
 
 /**
  * Satu sumber angka badge untuk sidebar desktop & mobile. Nilai awal dari
- * server (layout), lalu dihitung ulang: tiap 30 detik, saat pindah halaman,
- * dan saat tab kembali fokus — jadi tidak perlu refresh manual.
+ * server (layout), lalu dihitung ulang: seketika saat notifikasi baru masuk
+ * (Supabase Realtime), saat pindah halaman, saat tab kembali fokus, dan tiap
+ * 60 detik sebagai cadangan.
  */
 export function VendorBadgesProvider({
   initial,
+  userId,
   children,
 }: {
   initial: VendorSidebarBadges;
+  userId?: string;
   children: React.ReactNode;
 }) {
   const [badges, setBadges] = useState(initial);
@@ -43,6 +48,15 @@ export function VendorBadgesProvider({
       inFlight.current = false;
     }
   }, []);
+
+  // Tugas/penugasan baru selalu disertai notifikasi -> hitung ulang segera.
+  // Digabung 400ms supaya beberapa notifikasi beruntun jadi satu query.
+  const debounce = useRef<number | undefined>(undefined);
+  useNotificationsRealtime(userId, () => {
+    window.clearTimeout(debounce.current);
+    debounce.current = window.setTimeout(() => void refresh(), 400);
+  });
+  useEffect(() => () => window.clearTimeout(debounce.current), []);
 
   // Pindah halaman: aksi seperti submit/approve biasanya mengubah angka.
   useEffect(() => {
