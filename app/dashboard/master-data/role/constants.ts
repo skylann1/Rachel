@@ -18,10 +18,10 @@ export const allPermissionModules = [
   },
   {
     id: 'activityLog',
-    title: 'Log Aktivitas',
-    description: 'Riwayat aktivitas sistem (login, perubahan Master Data, approval dokumen) dan daftar pengguna yang sedang online.',
+    title: 'Sistem — Log Aktivitas & Monitoring',
+    description: 'Riwayat aktivitas sistem (login, perubahan Master Data, approval dokumen), daftar pengguna online, monitor dokumen macet, serta log email & notifikasi.',
     items: [
-      { key: 'view', label: 'Melihat Log Aktivitas & Pengguna Online', allowedTypes: ['pgn'] },
+      { key: 'view', label: 'Melihat Log Aktivitas, Pengguna Online, Dokumen Macet & Log Email/Notifikasi', allowedTypes: ['pgn'] },
     ]
   },
   {

@@ -18,21 +18,54 @@ export async function sendEmail(params: { to: string; subject: string; html: str
   const resend = getClient();
   if (!resend) {
     console.warn(`[email] RESEND_API_KEY not set — skipping email to ${params.to}: "${params.subject}"`);
+    await recordEmail({ to: params.to, subject: params.subject, status: 'skipped', error: 'RESEND_API_KEY belum diset' });
     return { error: null };
   }
 
-  const { error } = await resend.emails.send({
-    from: FROM_ADDRESS,
-    to: params.to,
-    subject: params.subject,
-    html: params.html,
-  });
+  let error: { message: string } | null = null;
+  let providerId: string | null = null;
+  try {
+    const res = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+    });
+    error = res.error;
+    providerId = res.data?.id ?? null;
+  } catch (e: any) {
+    error = { message: e?.message || 'Gagal mengirim email' };
+  }
 
   if (error) {
     console.error('[email] Resend send failed:', error);
+    await recordEmail({ to: params.to, subject: params.subject, status: 'failed', error: error.message });
     return { error: error.message };
   }
+  await recordEmail({ to: params.to, subject: params.subject, status: 'sent', providerId });
   return { error: null };
+}
+
+/**
+ * Mencatat percobaan kirim ke email_logs (lihat supabase/schema_email_logs.sql).
+ * Best-effort: kegagalan mencatat TIDAK boleh menggagalkan alur pemanggil, dan
+ * sebelum migrasi dijalankan insert-nya gagal diam-diam.
+ */
+async function recordEmail(entry: {
+  to: string; subject: string; status: 'sent' | 'failed' | 'skipped'; error?: string | null; providerId?: string | null;
+}) {
+  try {
+    const { createAdminClient } = await import('@/utils/supabase/admin');
+    await createAdminClient().from('email_logs').insert({
+      to_email: entry.to,
+      subject: entry.subject,
+      status: entry.status,
+      error: entry.error ?? null,
+      provider_id: entry.providerId ?? null,
+    });
+  } catch {
+    // diabaikan — pencatatan hanya pelengkap.
+  }
 }
 
 export function passwordResetEmailHtml(params: { name: string; password: string }) {

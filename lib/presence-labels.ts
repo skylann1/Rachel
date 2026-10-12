@@ -6,6 +6,8 @@
  */
 const PRESENCE_PATH_LABELS: Array<[string, string]> = [
   ['/dashboard/system/activity-log', 'Sistem — Log Aktivitas'],
+  ['/dashboard/system/stuck-documents', 'Sistem — Dokumen Macet'],
+  ['/dashboard/system/communication-log', 'Sistem — Log Email & Notifikasi'],
   ['/dashboard/master-data/activity-log', 'Sistem — Log Aktivitas'],
   ['/dashboard/master-data/vendor', 'Master Data — Vendor'],
   ['/dashboard/master-data/account', 'Master Data — Akun'],

@@ -173,3 +173,9 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
     dan admin PGSOL meninjau ulang HSE/PM PGSOL.
     Sudah diterapkan di project Supabase live lewat MCP pada 2026-10-11
     (3 Prosedur berjalan dipindahkan; belum ada JSA/PTW berjalan).
+12. `schema_email_logs.sql` — tabel `email_logs` untuk halaman Sistem → Log
+    Email & Notifikasi (setiap percobaan kirim email dicatat: terkirim / gagal /
+    dilewati). Idempoten. RLS aktif tanpa policy — hanya service role yang
+    membaca/menulis. Kode tetap jalan tanpa tabel ini (pencatatan gagal diam-
+    diam dan halaman menampilkan petunjuk), jadi boleh dijalankan sebelum atau
+    sesudah deploy.

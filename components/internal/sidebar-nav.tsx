@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen, Megaphone, Activity } from 'lucide-react';
+import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen, Megaphone, Activity, AlertOctagon, Mail } from 'lucide-react';
 import type { SidebarBadges } from '@/app/dashboard/actions/sidebar-badges';
 
 const menuUtama = [
@@ -42,6 +42,8 @@ const masterData = [
 // Modul sistem (bukan data master): pemantauan aktivitas & pengguna online.
 const sistem = [
   { name: 'Log Aktivitas', href: '/dashboard/system/activity-log', icon: Activity, permission: { module: 'activityLog', action: 'view' } },
+  { name: 'Dokumen Macet', href: '/dashboard/system/stuck-documents', icon: AlertOctagon, permission: { module: 'activityLog', action: 'view' } },
+  { name: 'Log Email & Notifikasi', href: '/dashboard/system/communication-log', icon: Mail, permission: { module: 'activityLog', action: 'view' } },
 ];
 
 export function SidebarNav({
