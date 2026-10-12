@@ -184,6 +184,8 @@ interface PtwPDFProps {
   signatories?: PtwSignatories | null;
   /** Isian Sudah/Belum/Keterangan per hari, kosong kalau belum pernah diisi. */
   checklistData?: PtwSafetyChecklistData;
+  /** true kalau PTW sudah disetujui penuh & bernomor (Aktif/Expired) — cap APPROVED. */
+  approved?: boolean;
 }
 
 const formatDate = (value?: string | null) => {
@@ -218,6 +220,7 @@ export default function PtwPDF({
   siblings = [],
   signatories,
   checklistData = {},
+  approved = false,
 }: PtwPDFProps) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const typeDef = PTW_TYPES.find(t => t.id === ptwType) || PTW_TYPES[0];
@@ -655,6 +658,13 @@ export default function PtwPDF({
           </View>
 
         </View>
+
+        {approved && (
+          <Image
+            src="/assets/approved.png"
+            style={{ position: 'absolute', right: 30, bottom: 24, width: 90, opacity: 0.9 }}
+          />
+        )}
 
       </Page>
 

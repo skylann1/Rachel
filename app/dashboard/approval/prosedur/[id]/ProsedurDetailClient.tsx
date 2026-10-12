@@ -77,7 +77,8 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
     tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
     penyelesaianAkhir: prosedur.content.penyelesaianAkhir || [],
     revisions: prosedur.content.revisions || [],
-    vendorSignature: prosedur.content.vendorSignature || null
+    vendorSignature: prosedur.content.vendorSignature || null,
+    approved: prosedur.status === PROCEDURE_STATUS.approved,
   } : null;
 
   const handleApprove = async () => {

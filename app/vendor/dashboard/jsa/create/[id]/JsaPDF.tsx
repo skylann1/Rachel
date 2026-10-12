@@ -608,8 +608,8 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
 
         {/* ttd note */}
         {finalApproved && (
-          <View style={{ alignItems: 'flex-end', marginTop: 3 }}>
-            <Text style={{ fontSize: 4, fontStyle: 'italic' }}>APPROVED</Text>
+          <View style={{ alignItems: 'flex-end', marginTop: 3 }} wrap={false}>
+            <Image src="/assets/approved.png" style={{ width: 70, opacity: 0.9 }} />
           </View>
         )}
 

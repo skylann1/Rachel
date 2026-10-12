@@ -419,6 +419,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                           perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
                           tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
                           revisions: prosedur.content.revisions || [],
+                          approved: prosedur.status === 'Prosedur Disetujui',
                         }} />}>
                           {({ url, loading }) => (
                             <button 
@@ -621,6 +622,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                                   hotWorkTypes={row.hot_work_types || []}
                                   gasTestFrequency={row.gas_test_frequency || {}}
                                   checklistData={row.safety_checklist || {}}
+                                  approved={row.status === 'PTW Aktif' || row.status === 'Expired'}
                                   jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                   siblings={ptws}
                                   signatories={ptwSignatories?.[row.id]}

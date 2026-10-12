@@ -1014,6 +1014,7 @@ export default function AdminProjectClient({
                             perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
                             tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
                             revisions: prosedur.content.revisions || [],
+                            approved: prosedur.status === 'Prosedur Disetujui',
                           }} />
                        </PDFViewer>
                      ) : (
@@ -1258,6 +1259,7 @@ export default function AdminProjectClient({
                             hotWorkTypes={row.hot_work_types || []}
                             gasTestFrequency={row.gas_test_frequency || {}}
                             checklistData={row.safety_checklist || {}}
+                            approved={row.status === 'PTW Aktif' || row.status === 'Expired'}
                             jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                             siblings={ptws}
                             signatories={ptwSignatories?.[row.id]}
@@ -1329,6 +1331,7 @@ export default function AdminProjectClient({
                             perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
                             tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
                             revisions: prosedur.content.revisions || [],
+                            approved: prosedur.status === 'Prosedur Disetujui',
                           }} />}>
                             {({ url, loading }) => (
                               <button 
@@ -1474,6 +1477,7 @@ export default function AdminProjectClient({
                                  hotWorkTypes={row.hot_work_types || []}
                                  gasTestFrequency={row.gas_test_frequency || {}}
                                  checklistData={row.safety_checklist || {}}
+                                 approved={row.status === 'PTW Aktif' || row.status === 'Expired'}
                                  jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                  siblings={ptws}
                                  signatories={ptwSignatories?.[row.id]}

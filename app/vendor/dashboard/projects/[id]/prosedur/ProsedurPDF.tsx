@@ -147,6 +147,8 @@ interface ProsedurPDFProps {
     penyelesaianAkhir: string[];
     revisions?: { revNo: number; date: string; note: string }[];
     vendorSignature?: string | null;
+    /** true kalau Prosedur sudah disetujui penuh — cap APPROVED di halaman kontrol. */
+    approved?: boolean;
   };
 }
 
@@ -254,6 +256,12 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
             </View>
           </View>
         </View>
+        {data.approved && (
+          <Image
+            src="/assets/approved.png"
+            style={{ position: 'absolute', right: 40, bottom: 120, width: 130, opacity: 0.9 }}
+          />
+        )}
       </Page>
 
       {/* PAGE 2: TAHAPAN REVISI */}
