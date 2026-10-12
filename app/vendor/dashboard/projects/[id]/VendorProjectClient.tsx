@@ -474,7 +474,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                   {(jsaStatus === 'Pending' || jsaStatus === 'Approved' || jsaStatus === 'Rejected') && (
                     <div className="flex-1">
                       <BlobProvider document={
-                        <JsaPDF projectId={project.id} signatories={jsaSignatories} preparerSigned={!!jsa && jsa.status !== 'Draft'} preparer={{ satker: vendorProfile?.company_name }} steps={jsa?.jsa_steps?.map((step: any) => {
+                        <JsaPDF projectId={project.id} projectInfo={{ name: project.name, contract_number: project.contract_number, location: project.location, companyName: vendorProfile?.company_name }} signatories={jsaSignatories} preparerSigned={!!jsa && jsa.status !== 'Draft'} preparer={{ satker: vendorProfile?.company_name }} steps={jsa?.jsa_steps?.map((step: any) => {
                           let bahayaObj: any = {}; let risikoObj: any = {}; let tindakanObj: any = {};
                           try { bahayaObj = typeof step.bahaya === 'string' ? JSON.parse(step.bahaya) : step.bahaya || {}; } catch(e) {}
                           try { risikoObj = typeof step.risiko === 'string' ? JSON.parse(step.risiko) : step.risiko || {}; } catch(e) {}

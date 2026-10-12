@@ -438,7 +438,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
             </View>
             <View style={styles.titleCenter}>
               <View style={styles.companyNameRow}>
-                <Text style={styles.companyName}>{projectInfo?.companyName || 'CV. JAYA PUTRA BAHARI'}</Text>
+                <Text style={styles.companyName}>{projectInfo?.companyName || preparer?.satker || ''}</Text>
               </View>
               <View style={styles.titleRow}>
                 <Text style={styles.title}>FORMULIR ANALISA KESELAMATAN KERJA / JOB SAFETY ANALYSIS FORM</Text>

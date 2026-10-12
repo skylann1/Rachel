@@ -272,9 +272,11 @@ export default function PtwPDF({
           <Text style={[styles.signNameLabel, ink as any]}>Jabatan</Text>
           <Text style={styles.signNameVal}>{orang?.jabatan || ''}</Text>
         </View>
-        <View style={[styles.signNameRow, { height: 10 }]}>
-          <Text style={[styles.signNameLabel, ink as any]}>Tanda Tangan</Text>
-          <View style={[styles.signNameVal, { alignItems: 'center', justifyContent: 'center' }]}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
+        <View style={[styles.signNameRow, { height: 22 }]}>
+          <Text style={[styles.signNameLabel, ink as any, { alignSelf: 'center' }]}>Tanda Tangan</Text>
+          <View style={[styles.signNameVal, { alignItems: 'center', justifyContent: 'center' }]}>
+            {orang?.nama ? <Image src="/assets/approved.png" style={{ height: 19, objectFit: 'contain' }} /> : null}
+          </View>
         </View>
         <View style={styles.signNameRow}>
           <Text style={[styles.signNameLabel, ink as any]}>Tanggal</Text>
@@ -475,20 +477,24 @@ export default function PtwPDF({
             <View style={styles.sectionBox}>
               <Text style={styles.sectionHeader}>E. SAFETY CHECKLIST</Text>
 
-              {/* Table Header */}
-              <View style={styles.tHeaderRow}>
-                <View style={[styles.tCell, { width: '4%' }]}><Text style={{ textAlign: 'center', fontSize: 4 }}>Ceklist</Text></View>
-                <View style={[styles.tCell, { width: '31%' }]}><Text style={{ textAlign: 'center' }}>Item</Text></View>
-                {['Hari ke-1', 'Hari ke-2', 'Hari ke-3', 'Hari ke-4', 'Hari ke-5', 'Hari ke-6', 'Hari ke-7'].map((d, i) => (
-                  <View key={i} style={[styles.tCell, { width: '8%', padding: 0 }]}>
-                    <Text style={{ textAlign: 'center', borderBottomWidth: 1, borderColor: B, paddingVertical: 1, fontSize: 4 }}>{d}</Text>
+              {/* Table Header — tinggi tetap; "Hari ke-N" dan Sudah/Belum ditumpuk
+                  di dalam sel, sisanya (Ceklist/Item/Keterangan) di tengah
+                  vertikal, seperti sel yang di-merge 2 baris pada form asli. */}
+              <View style={[styles.tHeaderRow, { height: 15 }]}>
+                <View style={[styles.tCell, { width: '4%', alignItems: 'center' }]}><Text style={{ fontSize: 4 }}>Ceklist</Text></View>
+                <View style={[styles.tCell, { width: '31%', alignItems: 'center' }]}><Text>Item</Text></View>
+                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                  <View key={d} style={[styles.tCell, { width: '8%', padding: 0 }]}>
+                    <View style={{ height: 7.5, borderBottomWidth: 1, borderColor: B, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 4 }}>Hari ke-{d}</Text>
+                    </View>
                     <View style={{ flexDirection: 'row', flex: 1 }}>
-                      <View style={{ flex: 1, borderRightWidth: 1, borderColor: B, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 3 }}>Sudah</Text></View>
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 3 }}>Belum</Text></View>
+                      <View style={{ flex: 1, borderRightWidth: 1, borderColor: B, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 3.5 }}>Sudah</Text></View>
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 3.5 }}>Belum</Text></View>
                     </View>
                   </View>
                 ))}
-                <View style={[styles.tCell, { width: '9%', borderRightWidth: 0 }]}><Text style={{ textAlign: 'center', fontSize: 4 }}>Keterangan</Text></View>
+                <View style={[styles.tCell, { width: '9%', borderRightWidth: 0, alignItems: 'center' }]}><Text style={{ fontSize: 4 }}>Keterangan</Text></View>
               </View>
 
               {/* Table Body — sub-item jadi baris tersendiri karena pada form
@@ -531,27 +537,37 @@ export default function PtwPDF({
                 </View>
               )}
 
-              {/* Verifikasi Section */}
-              <View style={styles.verifRow} wrap={false}>
-                <View style={[styles.verifLabel, { backgroundColor: SECTION_BG }]}><Text>Verifikasi</Text></View>
-                <View style={styles.verifContent}>
-                  <View style={styles.verifSubRow}><Text style={styles.verifSubLabel}>Tanggal (DD/MM)</Text><Text style={styles.verifSubVal}></Text></View>
-                  <View style={styles.verifSubRow}><Text style={styles.verifSubLabel}>Waktu</Text><Text style={styles.verifSubVal}></Text></View>
-                  <View style={styles.verifSubRow}>
-                    <Text style={styles.verifSubLabel}>Pemegang PTW</Text>
-                    <View style={[styles.verifSubVal, { flexDirection: 'column', padding: 0 }]}>
-                      <View style={{ flex: 1, borderBottomWidth: 1, borderColor: B, flexDirection: 'row' }}><Text style={{ width: '30%', borderRightWidth: 1, borderColor: B, padding: 1 }}>Nama Inisial</Text><Text></Text></View>
-                      <View style={{ flex: 1, flexDirection: 'row' }}><Text style={{ width: '30%', borderRightWidth: 1, borderColor: B, padding: 1 }}>Paraf</Text><Text></Text></View>
-                    </View>
-                  </View>
-                  <View style={[styles.verifSubRow, { borderBottomWidth: 0 }]}>
-                    <Text style={styles.verifSubLabel}>Pengawas / Penerbit PTW</Text>
-                    <View style={[styles.verifSubVal, { flexDirection: 'column', padding: 0 }]}>
-                      <View style={{ flex: 1, borderBottomWidth: 1, borderColor: B, flexDirection: 'row' }}><Text style={{ width: '30%', borderRightWidth: 1, borderColor: B, padding: 1 }}>Nama Inisial</Text><Text></Text></View>
-                      <View style={{ flex: 1, flexDirection: 'row' }}><Text style={{ width: '30%', borderRightWidth: 1, borderColor: B, padding: 1 }}>Paraf</Text><Text></Text></View>
-                    </View>
-                  </View>
+              {/* Verifikasi — sejajar dengan kolom Hari ke-1..7 di atas, sama dengan
+                  form asli: tanggal, waktu, lalu nama inisial + paraf per hari. */}
+              <View style={{ borderTopWidth: 1, borderColor: B }} wrap={false}>
+                <View style={{ flexDirection: 'row', backgroundColor: SECTION_BG, borderBottomWidth: 1, borderColor: B }}>
+                  <Text style={{ width: '35%', fontWeight: 'bold', fontSize: fs_header, paddingVertical: 1, paddingHorizontal: 4 }}>Verifikasi</Text>
                 </View>
+
+                {/* Tanggal & Waktu */}
+                {['Tanggal (DD/MM)', 'Waktu'].map((label) => (
+                  <View key={label} style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: B, height: 10 }}>
+                    <View style={{ width: '35%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}><Text>{label}</Text></View>
+                    {[1, 2, 3, 4, 5, 6, 7].map((d) => <View key={d} style={{ width: '8%', borderRightWidth: 1, borderColor: B }} />)}
+                    <View style={{ width: '9%' }} />
+                  </View>
+                ))}
+
+                {/* Pemegang PTW / Pengawas-Penerbit PTW: dua baris (Nama Inisial, Paraf) */}
+                {['Pemegang PTW', 'Pengawas / Penerbit PTW'].map((label, gi) => (
+                  <View key={label} style={{ flexDirection: 'row', borderBottomWidth: gi === 1 ? 0 : 1, borderColor: B }}>
+                    <View style={{ width: '22%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}><Text>{label}</Text></View>
+                    <View style={{ width: '78%' }}>
+                      {['Nama Inisial', 'Paraf'].map((sub, si) => (
+                        <View key={sub} style={{ flexDirection: 'row', height: 12, borderBottomWidth: si === 0 ? 1 : 0, borderColor: B }}>
+                          <View style={{ width: '16.67%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 3 }}><Text style={{ fontSize: 4 }}>{sub}</Text></View>
+                          {[1, 2, 3, 4, 5, 6, 7].map((d) => <View key={d} style={{ width: '10.26%', borderRightWidth: 1, borderColor: B }} />)}
+                          <View style={{ width: '11.5%' }} />
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ))}
               </View>
 
             </View>
@@ -611,11 +627,11 @@ export default function PtwPDF({
                    <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
-                   <View style={styles.tableCell}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
+                   <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
-                   <View style={styles.tableCell}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
+                   <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                 </View>
 
               </View>
@@ -644,7 +660,7 @@ export default function PtwPDF({
                          <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text></Text></View>
                          <View style={styles.tableCell}><Text></Text></View>
                          <View style={styles.tableCell}><Text></Text></View>
-                         <View style={styles.tableCell}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
+                         <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
                       </View>
                   </View>
                 </View>
@@ -707,7 +723,7 @@ export default function PtwPDF({
                 <Text style={[styles.gasLogCell, { width: '12%' }]}>{row.combustibleHasil || '-'} / {row.combustibleSesuai ? 'Sesuai' : 'Tidak Sesuai'}</Text>
                 <Text style={[styles.gasLogCell, { width: '17%' }]}>{row.keterangan || '-'}</Text>
                 <Text style={[styles.gasLogCell, { width: '15%' }]}>{row.namaPelaksana || '-'}</Text>
-                <View style={[styles.gasLogCell, { width: '17%', borderRightWidth: 0, alignItems: 'center', justifyContent: 'center' }]}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
+                <Text style={[styles.gasLogCell, { width: '17%', borderRightWidth: 0, textAlign: 'center', fontWeight: 'bold', fontSize: 4 }]}>APPROVED</Text>
               </View>
             ))
           )}

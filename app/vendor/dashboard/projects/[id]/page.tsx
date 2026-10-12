@@ -71,7 +71,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   const { data: project, error } = await supabase
     .from('projects')
     .select(`
-      id, name, location, start_date, end_date, description, status,
+      id, name, location, start_date, end_date, description, status, contract_number,
       vendor_profiles ( company_name, organizations ( profiles ( full_name ) ) ),
       jsa ( id, status, rejection_note, reviewer_id, reviewed_at, approver_id, approved_at, jsa_steps ( id, step_number, pekerjaan, bahaya, risiko, tindakan ) ),
       ptw ( id, status, rejection_note, ptw_number, workers, equipment, ptw_type, hazards, apd, gas_tests,
