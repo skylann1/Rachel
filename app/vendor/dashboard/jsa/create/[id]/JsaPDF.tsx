@@ -409,7 +409,9 @@ const renderControlCell = (control: any) => {
 const SignatureStamp = ({ signed, label }: { signed: boolean; label: string }) => (
   <View style={styles.signatureArea}>
     {signed
-      ? <Text style={styles.signatureStamp}>{label}</Text>
+      ? (label === 'APPROVED'
+          ? <Image src="/assets/approved.png" style={{ height: 24, objectFit: 'contain' }} />
+          : <Text style={styles.signatureStamp}>{label}</Text>)
       : <Text style={{ fontSize: 5, fontStyle: 'italic', color: '#94a3b8' }}>Menunggu</Text>}
   </View>
 );
@@ -600,7 +602,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
 
               <RiskBlockData risk={step.residualRisk} rpnStyle={getRpnStyle(step.residualRisk?.rpn || 0)} variant="residual" />
 
-              <View style={[styles.tCell, styles.colParaf]}><Text style={{ fontSize: 5, textAlign: 'center', fontWeight: 'bold', color: '#16a34a' }}>{finalApproved ? 'APPROVED' : ''}</Text></View>
+              <View style={[styles.tCell, styles.colParaf]}>{finalApproved && <Image src="/assets/approved.png" style={{ width: '90%', objectFit: 'contain' }} />}</View>
             </View>
           ))}
           

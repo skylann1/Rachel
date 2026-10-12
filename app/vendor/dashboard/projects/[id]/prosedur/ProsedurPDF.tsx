@@ -152,6 +152,11 @@ interface ProsedurPDFProps {
   };
 }
 
+/** Cap APPROVED di satu kotak tanda tangan. */
+const ApprovedStamp = () => (
+  <Image src="/assets/approved.png" style={{ width: '90%', height: 36, objectFit: 'contain' }} />
+);
+
 export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
   const sowBullets = data.scopeOfWork.split('\n').filter(line => line.trim() !== '');
 
@@ -230,10 +235,12 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
           <View style={styles.tableRow}>
             <View style={[styles.cell, styles.revCol1, styles.revDataRow]}><Text style={styles.textCenter}>A</Text></View>
             <View style={[styles.cellLeftAlign, styles.revCol2, styles.revDataRow, { justifyContent: 'center' }]}><Text style={styles.textNormal}>Issued for Review</Text></View>
-            <View style={[styles.cell, styles.revCol3, styles.revDataRow]}><Text style={styles.textBoldCenter}>APPROVED</Text></View>
-            <View style={[styles.cell, styles.revCol4, styles.revDataRow]}></View>
-            <View style={[styles.cell, styles.revCol5, styles.revDataRow]}></View>
-            <View style={[styles.cell, styles.revCol6, styles.revDataRow]}></View>
+            <View style={[styles.cell, styles.revCol3, styles.revDataRow]}>
+              {data.approved ? <ApprovedStamp /> : <Text style={styles.textBoldCenter}>APPROVED</Text>}
+            </View>
+            <View style={[styles.cell, styles.revCol4, styles.revDataRow]}>{data.approved && <ApprovedStamp />}</View>
+            <View style={[styles.cell, styles.revCol5, styles.revDataRow]}>{data.approved && <ApprovedStamp />}</View>
+            <View style={[styles.cell, styles.revCol6, styles.revDataRow]}>{data.approved && <ApprovedStamp />}</View>
           </View>
           <View style={styles.tableRow}>
             <View style={[styles.cell, styles.revCol1]}>
@@ -256,12 +263,6 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
             </View>
           </View>
         </View>
-        {data.approved && (
-          <Image
-            src="/assets/approved.png"
-            style={{ position: 'absolute', right: 40, bottom: 120, width: 130, opacity: 0.9 }}
-          />
-        )}
       </Page>
 
       {/* PAGE 2: TAHAPAN REVISI */}

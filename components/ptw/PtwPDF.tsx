@@ -184,8 +184,6 @@ interface PtwPDFProps {
   signatories?: PtwSignatories | null;
   /** Isian Sudah/Belum/Keterangan per hari, kosong kalau belum pernah diisi. */
   checklistData?: PtwSafetyChecklistData;
-  /** true kalau PTW sudah disetujui penuh & bernomor (Aktif/Expired) — cap APPROVED. */
-  approved?: boolean;
 }
 
 const formatDate = (value?: string | null) => {
@@ -220,7 +218,6 @@ export default function PtwPDF({
   siblings = [],
   signatories,
   checklistData = {},
-  approved = false,
 }: PtwPDFProps) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const typeDef = PTW_TYPES.find(t => t.id === ptwType) || PTW_TYPES[0];
@@ -277,7 +274,7 @@ export default function PtwPDF({
         </View>
         <View style={[styles.signNameRow, { height: 10 }]}>
           <Text style={[styles.signNameLabel, ink as any]}>Tanda Tangan</Text>
-          <Text style={[styles.signNameVal, { textAlign: 'center', fontWeight: 'bold', fontSize: fs }]}>APPROVED</Text>
+          <View style={[styles.signNameVal, { alignItems: 'center', justifyContent: 'center' }]}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
         </View>
         <View style={styles.signNameRow}>
           <Text style={[styles.signNameLabel, ink as any]}>Tanggal</Text>
@@ -614,11 +611,11 @@ export default function PtwPDF({
                    <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
-                   <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
+                   <View style={styles.tableCell}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
                    <View style={styles.tableCell}><Text></Text></View>
-                   <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
+                   <View style={styles.tableCell}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
                 </View>
 
               </View>
@@ -647,7 +644,7 @@ export default function PtwPDF({
                          <View style={[styles.tableCell, { borderLeftWidth: 1 }]}><Text></Text></View>
                          <View style={styles.tableCell}><Text></Text></View>
                          <View style={styles.tableCell}><Text></Text></View>
-                         <View style={styles.tableCell}><Text style={{ fontSize: 4, textAlign: 'center', fontWeight: 'bold' }}>APPROVED</Text></View>
+                         <View style={styles.tableCell}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
                       </View>
                   </View>
                 </View>
@@ -658,13 +655,6 @@ export default function PtwPDF({
           </View>
 
         </View>
-
-        {approved && (
-          <Image
-            src="/assets/approved.png"
-            style={{ position: 'absolute', right: 30, bottom: 24, width: 90, opacity: 0.9 }}
-          />
-        )}
 
       </Page>
 
@@ -717,7 +707,7 @@ export default function PtwPDF({
                 <Text style={[styles.gasLogCell, { width: '12%' }]}>{row.combustibleHasil || '-'} / {row.combustibleSesuai ? 'Sesuai' : 'Tidak Sesuai'}</Text>
                 <Text style={[styles.gasLogCell, { width: '17%' }]}>{row.keterangan || '-'}</Text>
                 <Text style={[styles.gasLogCell, { width: '15%' }]}>{row.namaPelaksana || '-'}</Text>
-                <Text style={[styles.gasLogCell, { width: '17%', borderRightWidth: 0, textAlign: 'center', fontWeight: 'bold', fontSize: 4 }]}>APPROVED</Text>
+                <View style={[styles.gasLogCell, { width: '17%', borderRightWidth: 0, alignItems: 'center', justifyContent: 'center' }]}><Image src="/assets/approved.png" style={{ height: 9, objectFit: 'contain' }} /></View>
               </View>
             ))
           )}
