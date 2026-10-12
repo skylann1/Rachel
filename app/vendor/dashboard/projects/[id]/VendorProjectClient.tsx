@@ -83,7 +83,7 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
   );
 }
 
-export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs }: {
+export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, myReviews }: {
   project: any; currentUserId: string; jsaSignatories?: any; ptwSignatories?: Record<string, any>;
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
   siteCheckins?: any[];
@@ -96,6 +96,8 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   assignmentSlots: any[];
   /** Jejak audit Prosedur/JSA/PTW proyek ini, terbaru dulu — sama persis yang dilihat PGN/PGSOL di tab Riwayat internal (lihat document_logs). */
   documentLogs?: any[];
+  /** Dokumen yang sedang menunggu review user ini (HSE/PM Vendor) — tombol langsung ke halaman review. */
+  myReviews?: { key: string; label: string; href: string }[];
 }) {
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [qrModalToken, setQrModalToken] = useState<string | null>(null);
@@ -236,6 +238,27 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
           </div>
         </div>
       </div>
+
+      {/* Tugas review saya — tampil di semua tab supaya reviewer tidak perlu lewat My Task */}
+      {myReviews && myReviews.length > 0 && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 ring-4 ring-amber-50 p-5">
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800">
+            <CheckCircle2 className="w-4 h-4" /> Menunggu review Anda
+          </div>
+          <p className="text-sm text-slate-600 mt-1">
+            Anda ditugaskan mereview dokumen di bawah. Buka dokumennya, baca, lalu tekan <strong>Setujui</strong> atau <strong>Tolak</strong>.
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            {myReviews.map(r => (
+              <Link key={r.key} href={r.href}
+                className="inline-flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-white border border-amber-200 hover:border-primary hover:bg-primary/5 text-sm font-bold text-slate-800 transition-colors">
+                <span>{r.label}</span>
+                <span className="inline-flex items-center gap-1 text-primary">Buka &amp; Review <ArrowRight className="w-4 h-4" /></span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* TABS NAVIGATION */}
       <div className="flex gap-1 sm:gap-2 bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200 overflow-x-auto hide-scrollbar">

@@ -6,6 +6,9 @@ import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { hasPermission } from '@/utils/permissions';
 import { getStageAssignments, getEligibleAssignees, getPassedStageKeys, VENDOR_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
 import { getDocumentLogs } from '@/app/dashboard/approval/actions';
+import { PROCEDURE_STATUS } from '@/lib/procedure-status';
+import { JSA_STATUS } from '@/lib/jsa-status';
+import { PTW_STATUS } from '@/lib/ptw-status';
 
 export default async function ProjectDetailTrackerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -112,6 +115,36 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       : Promise.resolve({ data: [] as any[] }),
   ]);
 
+  // Dokumen yang SEDANG menunggu review saya (HSE/PM Vendor) di proyek ini —
+  // supaya reviewer bisa langsung membukanya dari halaman proyek, tidak harus
+  // lewat My Task.
+  const myReviews: { key: string; label: string; href: string }[] = [];
+  if (user) {
+    const { data: mine } = await supabase
+      .from('stage_assignments')
+      .select('doc_type, stage_key')
+      .eq('project_id', projectId)
+      .eq('assignee_id', user.id)
+      .eq('status', 'pending')
+      .in('stage_key', VENDOR_STAGE_KEYS as unknown as string[]);
+    const ptwDocs = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+    const procDoc: any = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
+    for (const a of mine || []) {
+      const isHse = String(a.stage_key).endsWith('.hse_vendor');
+      const tahap = isHse ? 'HSE Vendor' : 'PM Vendor';
+      if (a.doc_type === 'procedure' && procDoc?.status === (isHse ? PROCEDURE_STATUS.reviewHseVendor : PROCEDURE_STATUS.reviewPmVendor)) {
+        myReviews.push({ key: a.stage_key, label: `Review ${tahap} — Prosedur Kerja`, href: `/vendor/dashboard/projects/${projectId}/prosedur` });
+      } else if (a.doc_type === 'jsa' && jsa?.status === (isHse ? JSA_STATUS.reviewHseVendor : JSA_STATUS.reviewPmVendor)) {
+        myReviews.push({ key: a.stage_key, label: `Review ${tahap} — JSA`, href: `/vendor/dashboard/jsa/create/${projectId}` });
+      } else if (a.doc_type === 'ptw') {
+        const target = ptwDocs.find((p: any) => p.status === (isHse ? PTW_STATUS.reviewHseVendor : PTW_STATUS.reviewPmVendor));
+        if (target) {
+          myReviews.push({ key: `${a.stage_key}-${target.id}`, label: `Review ${tahap} — PTW`, href: `/vendor/dashboard/ptw/create/${projectId}/${target.ptw_type}` });
+        }
+      }
+    }
+  }
+
   return (
     <VendorProjectClient
       project={project}
@@ -124,6 +157,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       canEditSafetyChecklist={canEditSafetyChecklist}
       assignmentSlots={assignmentSlots}
       documentLogs={documentLogs}
+      myReviews={myReviews}
     />
   );
 }
