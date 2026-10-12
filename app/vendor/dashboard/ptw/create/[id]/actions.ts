@@ -6,7 +6,7 @@ import { APPROVED_JSA } from "@/lib/project-stage";
 import { PTW_STATUS } from "@/lib/ptw-status";
 import type { PtwFormDetails, PtwType } from "@/lib/ptw-types";
 import { logDocumentEvent } from "@/lib/document-logs";
-import { resetStageAssignments } from "@/lib/stage-assignments";
+import { resetStageAssignments, getStageAssignments } from "@/lib/stage-assignments";
 import { aggregateStepNeeds, StepKebutuhan } from "@/lib/procedure-kebutuhan";
 
 /** Tanggal proyek, dipakai sebagai nilai awal masa berlaku PTW di form. */
@@ -130,7 +130,7 @@ export async function savePtw(
 
   const { data: existing } = await supabase
     .from('ptw')
-    .select('id')
+    .select('id, status')
     .eq('project_id', projectId)
     .eq('ptw_type', ptwType)
     .maybeSingle();
@@ -138,6 +138,22 @@ export async function savePtw(
   let ptwId = existing?.id;
 
   if (existing) {
+    // Hanya PTW yang masih di Draft / review vendor yang boleh diajukan ulang;
+    // yang sudah lewat tidak boleh di-reset ke awal dari form ini.
+    const resubmittable: string[] = [PTW_STATUS.draft, PTW_STATUS.reviewHseVendor, PTW_STATUS.reviewPmVendor];
+    if (!resubmittable.includes(existing.status)) {
+      throw new Error('PTW ini sudah berjalan ke tahap berikutnya dan tidak bisa diajukan ulang.');
+    }
+    // Reviewer yang sedang ditugaskan menilai lewat Setujui/Tolak, bukan
+    // mengajukan ulang (resubmit mereset penugasan tahap review).
+    if (user) {
+      for (const stageKey of ['ptw.hse_vendor', 'ptw.review_vendor']) {
+        const rows = await getStageAssignments(supabase, projectId, 'ptw', stageKey);
+        if (rows.some(r => r.assignee_id === user.id && r.status === 'pending')) {
+          throw new Error('Anda ditugaskan sebagai reviewer PTW ini. Gunakan Setujui / Tolak, bukan mengajukan ulang.');
+        }
+      }
+    }
     // .select() dipakai supaya update yang tidak mengenai baris (ditolak RLS,
     // atau PTW sudah lewat tahap yang boleh disunting vendor) ketahuan —
     // tanpa itu Postgres tidak mengembalikan error dan alur di bawah tetap

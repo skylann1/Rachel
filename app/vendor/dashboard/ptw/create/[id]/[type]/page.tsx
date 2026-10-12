@@ -8,6 +8,8 @@ import dynamic from 'next/dynamic';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import { savePtw, getPtw, getPtwList, getProjectPeriod, getJsaPrefillNeeds } from '../actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
+import { getMyVendorReviewAssignment } from '@/app/vendor/dashboard/approval/actions';
+import { PTW_STATUS } from '@/lib/ptw-status';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
@@ -73,6 +75,9 @@ export default function PTWCreatePage() {
   const [rosterPeralatan, setRosterPeralatan] = useState<EquipmentItem[]>([]);
   const [isLoadingRoster, setIsLoadingRoster] = useState(true);
   const [docId, setDocId] = useState<string | null>(null);
+  // Alasan tombol Ajukan disembunyikan: reviewer yang sedang ditugaskan, atau
+  // PTW sudah lewat tahap review vendor. null = penyusun boleh mengajukan.
+  const [submitBlock, setSubmitBlock] = useState<string | null>(null);
 
   // Baris yang ter-prefill otomatis dari kebutuhan langkah JSA yang disetujui —
   // dipakai untuk badge "dari JSA" pada selector pekerja & peralatan, dan
@@ -141,6 +146,14 @@ export default function PTWCreatePage() {
 
       if (data) {
         setDocId(data.id);
+        const resubmittable: string[] = [PTW_STATUS.draft, PTW_STATUS.reviewHseVendor, PTW_STATUS.reviewPmVendor];
+        if (!resubmittable.includes(data.status)) {
+          setSubmitBlock(`PTW ini sudah berada di tahap "${data.status}" dan tidak bisa diajukan ulang dari sini.`);
+        } else {
+          getMyVendorReviewAssignment(projectId as string, 'ptw', data.id)
+            .then(a => { if (a) setSubmitBlock('Anda reviewer untuk PTW ini — gunakan Setujui atau Tolak di kotak review. Tombol ajukan hanya untuk penyusun.'); })
+            .catch(() => {});
+        }
         // Merevisi PTW tipe ini yang sudah pernah diajukan.
         if (data.workers) setSelectedPekerja(data.workers.map((w: any) => w.id).filter(Boolean));
         if (data.equipment) setSelectedPeralatan(data.equipment.map((e: any) => e.id).filter(Boolean));
@@ -328,13 +341,17 @@ export default function PTWCreatePage() {
               <div className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-wider">Project ID: {projectId}</div>
             </div>
           </div>
+          {submitBlock ? (
+            <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 max-w-xs">{submitBlock}</p>
+          ) : (
           <button onClick={handleAjukan} disabled={isSubmitting || !!masaBerlakuError || (selectedPekerja.length === 0 && selectedPeralatan.length === 0)} className="px-6 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm shadow-emerald-600/30 flex items-center gap-2">
             {isSubmitting ? (
               <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Mengajukan...</span>
             ) : (
-              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Ajukan PTW</span>
+              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> {docId ? 'Ajukan Ulang PTW' : 'Ajukan PTW'}</span>
             )}
           </button>
+          )}
         </div>
       </div>
 
