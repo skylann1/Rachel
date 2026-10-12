@@ -33,6 +33,8 @@ export default function PtwSafetyChecklistForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  /** Hari yang sedang dibuka di tampilan HP (indeks kolom hari). */
+  const [mobileDay, setMobileDay] = useState(0);
 
   const dayDates = ptwValidDayDates(validFrom, validTo);
   const typeDef = PTW_TYPES.find(t => t.id === ptwType) || PTW_TYPES[0];
@@ -80,7 +82,7 @@ export default function PtwSafetyChecklistForm({
         Safety Checklist Harian {editable ? '' : '(hanya lihat — PTW tidak aktif)'}
       </summary>
       <div className="p-4 space-y-3">
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-xs text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
@@ -141,6 +143,71 @@ export default function PtwSafetyChecklistForm({
           </table>
         </div>
 
+        {/* Tampilan HP: satu hari per layar, satu kartu per item */}
+        <div className="md:hidden space-y-3">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
+            {dayDates.map((d, i) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setMobileDay(i)}
+                aria-pressed={mobileDay === i}
+                className={`shrink-0 px-3 py-2 rounded-xl border text-xs font-bold text-left transition-colors ${
+                  mobileDay === i ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200'
+                }`}
+              >
+                Hari {i + 1}
+                <span className={`block font-normal ${mobileDay === i ? 'text-white/80' : 'text-slate-400'}`}>{formatDayLabel(d)}</span>
+              </button>
+            ))}
+          </div>
+
+          <ul className="space-y-2">
+            {rows.map((row, i) => {
+              if (!row.checkable) {
+                return (
+                  <li key={row.key ?? `hdr-${i}`} className="pt-2 text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    {row.marker ? `${row.marker} ` : ''}{row.label}
+                  </li>
+                );
+              }
+              const entry = entryFor(row.key!);
+              const state = entry.days[mobileDay] ?? null;
+              return (
+                <li key={row.key!} className={`rounded-xl border p-3 space-y-2.5 ${
+                  state === false ? 'border-rose-200 bg-rose-50/50' : state === true ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-white'
+                } ${row.indent ? 'ml-3' : ''}`}>
+                  <p className="text-sm text-slate-800 leading-snug">{row.marker ? `${row.marker} ` : ''}{row.label}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={!editable}
+                      onClick={() => toggleDay(row.key!, mobileDay, true)}
+                      aria-pressed={state === true}
+                      className={`h-11 rounded-lg border text-sm font-bold disabled:opacity-60 ${state === true ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-500 border-slate-200'}`}
+                    >Sudah</button>
+                    <button
+                      type="button"
+                      disabled={!editable}
+                      onClick={() => toggleDay(row.key!, mobileDay, false)}
+                      aria-pressed={state === false}
+                      className={`h-11 rounded-lg border text-sm font-bold disabled:opacity-60 ${state === false ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-500 border-slate-200'}`}
+                    >Belum</button>
+                  </div>
+                  <input
+                    type="text"
+                    disabled={!editable}
+                    value={entry.keterangan}
+                    onChange={e => setKeterangan(row.key!, e.target.value)}
+                    placeholder="Keterangan (jika ada)"
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 disabled:opacity-60 disabled:bg-slate-50"
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
         {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
 
         {editable && (
@@ -149,7 +216,7 @@ export default function PtwSafetyChecklistForm({
               type="button"
               disabled={saving}
               onClick={handleSave}
-              className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              className="w-full sm:w-auto justify-center px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
               {saving ? 'Menyimpan...' : 'Simpan Checklist'}
