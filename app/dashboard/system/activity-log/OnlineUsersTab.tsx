@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Users, Clock, ChevronRight } from 'lucide-react';
+import { Users, Clock, ChevronRight, Briefcase } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { getRoleLabel } from '@/lib/roles';
-import { labelForPath } from '@/lib/presence-labels';
+import { labelForPath, projectRefOf } from '@/lib/presence-labels';
 import { isOnline } from '@/lib/presence';
 import { getOnlineUsers } from './actions';
 import type { OnlineUser } from './types';
@@ -38,11 +38,16 @@ export default function OnlineUsersTab({
   const [live, setLive] = useState(false);
   const [, setTick] = useState(0);
   const knownIds = useRef(new Set(initialUsers.map(u => u.userId)));
+  // Cache nama proyek (kind:id → nama) supaya pindah halaman terlihat seketika.
+  const projectNames = useRef(new Map<string, string>(
+    initialUsers.filter(u => u.projectKey && u.projectName).map(u => [u.projectKey!, u.projectName!] as [string, string]),
+  ));
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refetch = useCallback(async () => {
     const fresh = await getOnlineUsers();
     knownIds.current = new Set(fresh.map(u => u.userId));
+    fresh.forEach(u => { if (u.projectKey && u.projectName) projectNames.current.set(u.projectKey, u.projectName); });
     setUsers(fresh);
   }, []);
 
@@ -93,9 +98,19 @@ export default function OnlineUsersTab({
             return;
           }
           if (knownIds.current.has(userId)) {
+            const ref = projectRefOf(row.current_path);
+            const cachedName = ref ? (projectNames.current.get(ref.key) ?? null) : null;
             setUsers(prev => prev.map(u => u.userId === userId
-              ? { ...u, currentPath: row.current_path ?? null, lastSeenAt: row.last_seen_at! }
+              ? {
+                  ...u,
+                  currentPath: row.current_path ?? null,
+                  lastSeenAt: row.last_seen_at!,
+                  projectKey: ref?.key ?? null,
+                  projectName: cachedName,
+                }
               : u));
+            // Proyek yang belum dikenal client — ambil namanya dari server.
+            if (ref && !cachedName) scheduleRefetch();
           } else {
             // Pengguna yang belum ada di daftar — profilnya tidak ikut di event, ambil ulang.
             scheduleRefetch();
@@ -177,6 +192,12 @@ export default function OnlineUsersTab({
                       <TypeBadge type={u.type} />
                     </div>
                     <p className="text-xs text-slate-500 truncate">{u.jabatan || getRoleLabel(u.role)}</p>
+                    {u.projectName && (
+                      <p className="mt-1 inline-flex items-center gap-1 max-w-full text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-1.5 py-0.5">
+                        <Briefcase className="w-3 h-3 shrink-0" />
+                        <span className="truncate">Proyek: {u.projectName}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-4 sm:justify-end text-xs">

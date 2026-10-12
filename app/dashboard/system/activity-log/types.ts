@@ -14,6 +14,10 @@ export interface OnlineUser {
   jabatan: string | null;
   currentPath: string | null;
   lastSeenAt: string;
+  /** Acuan proyek dari path (kind:id) — kunci cache nama di client. */
+  projectKey: string | null;
+  /** Nama proyek yang sedang dibuka, kalau path-nya halaman proyek. */
+  projectName: string | null;
 }
 
 export interface ActivityFeedRow {
@@ -75,11 +79,13 @@ export interface UserDetail {
   online: boolean;
   lastSeenAt: string | null;
   currentPath: string | null;
+  /** Proyek yang sedang dibuka saat ini (kalau online di halaman proyek). */
+  projectName: string | null;
   loginCount30d: number;
   logins: Array<{ at: string; ip: string | null; userAgent: string | null; newDevice: boolean }>;
   sessions: UserSession[];
   /** Waktu di tiap modul, 7 hari terakhir, terbesar dulu. */
   moduleTime: Array<{ label: string; minutes: number }>;
-  recentVisits: Array<{ label: string; at: string; seconds: number }>;
+  recentVisits: Array<{ label: string; at: string; seconds: number; project: string | null }>;
   activity: ActivityFeedRow[];
 }

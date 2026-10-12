@@ -35,9 +35,13 @@ const masterData = [
   { name: 'Kelola HSE & PM PGSOL', href: '/dashboard/master-data/project-pgsol-assign', icon: Users, permission: { module: 'jsa', action: 'manage_assignment_pgsol' }, requiresOrgType: 'pgsol' as const },
   { name: 'Role & Permission', href: '/dashboard/master-data/role', icon: Shield, permission: { module: 'masterData', action: 'manage_role' } },
   { name: 'News & Pengumuman', href: '/dashboard/master-data/announcement', icon: Megaphone, permission: { module: 'announcement', action: 'manage' } },
-  { name: 'Log Aktivitas', href: '/dashboard/master-data/activity-log', icon: Activity, permission: { module: 'activityLog', action: 'view' } },
   { name: 'Data Vendor', href: '/dashboard/master-data/vendor', icon: Building2, permission: { module: 'masterData', action: 'view_vendor' } },
   { name: 'Data Proyek', href: '/dashboard/master-data/project', icon: Briefcase, permission: { module: 'masterData', action: 'view_project' } },
+];
+
+// Modul sistem (bukan data master): pemantauan aktivitas & pengguna online.
+const sistem = [
+  { name: 'Log Aktivitas', href: '/dashboard/system/activity-log', icon: Activity, permission: { module: 'activityLog', action: 'view' } },
 ];
 
 export function SidebarNav({
@@ -83,6 +87,12 @@ export function SidebarNav({
     // kedua permission (keeps the first match, i.e. "Manajemen Akun").
     .filter((item, idx, arr) => arr.findIndex(i => i.href === item.href) === idx);
 
+  const filteredSistem = sistem.filter(item => hasAccess(item.permission.module, item.permission.action));
+  const groups = [
+    { title: 'Master Data', items: filteredMasterData },
+    { title: 'Sistem', items: filteredSistem },
+  ].filter(g => g.items.length > 0);
+
   return (
     <nav className="flex-1 overflow-y-auto py-6 px-4 overflow-x-hidden hide-scrollbar">
       {!isCollapsed && <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-500 uppercase whitespace-nowrap">Menu Utama</div>}
@@ -126,11 +136,11 @@ export function SidebarNav({
         })}
       </ul>
 
-      {filteredMasterData.length > 0 && (
-        <>
-          {!isCollapsed && <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-500 uppercase whitespace-nowrap">Master Data</div>}
+      {groups.map((group, gIdx) => (
+        <div key={group.title} className={gIdx < groups.length - 1 ? 'mb-6' : undefined}>
+          {!isCollapsed && <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-500 uppercase whitespace-nowrap">{group.title}</div>}
           <ul className="space-y-1">
-            {filteredMasterData.map((item) => {
+            {group.items.map((item) => {
               const active = isActive(item.href);
               const Icon = item.icon;
               return (
@@ -153,8 +163,8 @@ export function SidebarNav({
               );
             })}
           </ul>
-        </>
-      )}
+        </div>
+      ))}
     </nav>
   );
 }

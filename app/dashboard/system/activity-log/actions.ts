@@ -3,7 +3,8 @@
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
 import { isOnline } from '@/lib/presence';
-import { labelForPath } from '@/lib/presence-labels';
+import { labelForPath, projectRefOf } from '@/lib/presence-labels';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { describeUserAgent } from '@/lib/user-agent';
 import type { ActivityMetadata } from '@/lib/activity-diff';
 import type {
@@ -42,6 +43,32 @@ function dayEnd(d: string) { return `${d}T23:59:59.999+07:00`; }
 // Pengguna online
 // ---------------------------------------------------------------------------
 
+/**
+ * Nama proyek untuk sekumpulan path halaman. Pemanggilnya sudah lolos gerbang
+ * activityLog.view, jadi pencarian nama memakai service role (RLS proyek tidak
+ * perlu dilewati satu per satu).
+ */
+async function resolveProjectNames(paths: Array<string | null | undefined>): Promise<Map<string, string>> {
+  const refs = paths.map(p => projectRefOf(p)).filter((r): r is NonNullable<typeof r> => !!r);
+  const names = new Map<string, string>();
+  if (refs.length === 0) return names;
+  const projectIds = [...new Set(refs.filter(r => r.kind === 'project').map(r => r.id))];
+  const procIds = [...new Set(refs.filter(r => r.kind === 'procedure').map(r => r.id))];
+  const admin = createAdminClient();
+  if (projectIds.length > 0) {
+    const { data } = await admin.from('projects').select('id, name').in('id', projectIds);
+    (data || []).forEach((p: any) => names.set(`project:${p.id}`, p.name));
+  }
+  if (procIds.length > 0) {
+    const { data } = await admin.from('procedures').select('id, projects ( name )').in('id', procIds);
+    (data || []).forEach((p: any) => {
+      const proj: any = Array.isArray(p.projects) ? p.projects[0] : p.projects;
+      if (proj?.name) names.set(`procedure:${p.id}`, proj.name);
+    });
+  }
+  return names;
+}
+
 export async function getOnlineUsers(): Promise<OnlineUser[]> {
   const supabase = await requireActivityLogAccess();
   if (!supabase) return [];
@@ -52,11 +79,16 @@ export async function getOnlineUsers(): Promise<OnlineUser[]> {
     .order('last_seen_at', { ascending: false });
   if (error) { console.error('getOnlineUsers error:', error.message); return []; }
 
-  return (data || [])
-    .filter((r: any) => isOnline(r.last_seen_at))
+  const onlineRows = (data || []).filter((r: any) => isOnline(r.last_seen_at));
+  const projectNames = await resolveProjectNames(onlineRows.map((r: any) => r.current_path));
+
+  return onlineRows
     .map((r: any) => {
       const p: any = one(r.profiles);
+      const ref = projectRefOf(r.current_path);
       return {
+        projectKey: ref?.key ?? null,
+        projectName: ref ? (projectNames.get(ref.key) ?? null) : null,
         userId: r.user_id,
         fullName: p?.full_name ?? null,
         type: p?.type ?? null,
@@ -373,6 +405,15 @@ export async function getUserDetail(userId: string): Promise<UserDetail | null> 
     perModule.set(label, (perModule.get(label) ?? 0) + visitMs(h));
   }
 
+  const visitNames = await resolveProjectNames([
+    presenceRes.data ? (presenceRes.data as any).current_path : null,
+    ...history.slice(0, 15).map(h => h.path),
+  ]);
+  const nameOf = (path: string | null | undefined) => {
+    const ref = projectRefOf(path);
+    return ref ? (visitNames.get(ref.key) ?? null) : null;
+  };
+
   const p = profileRes.data as { full_name: string | null; type: string | null; role: string | null; jabatan: string | null };
   const presence = presenceRes.data as { current_path: string | null; last_seen_at: string } | null;
 
@@ -382,6 +423,7 @@ export async function getUserDetail(userId: string): Promise<UserDetail | null> 
     online: isOnline(presence?.last_seen_at),
     lastSeenAt: presence?.last_seen_at ?? null,
     currentPath: presence?.current_path ?? null,
+    projectName: nameOf(presence?.current_path),
     loginCount30d: loginCountRes.count ?? 0,
     logins: ((loginsRes.data || []) as any[]).map(l => ({
       at: l.created_at, ip: l.ip_address ?? null, userAgent: l.user_agent ?? null,
@@ -393,7 +435,7 @@ export async function getUserDetail(userId: string): Promise<UserDetail | null> 
       .sort((a, b) => b.minutes - a.minutes)
       .slice(0, 6),
     recentVisits: history.slice(0, 15).map(h => ({
-      label: labelForPath(h.path), at: h.entered_at, seconds: Math.round(visitMs(h) / 1000),
+      label: labelForPath(h.path), at: h.entered_at, seconds: Math.round(visitMs(h) / 1000), project: nameOf(h.path),
     })),
     activity: feed.rows,
   };

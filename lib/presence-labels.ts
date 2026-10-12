@@ -5,7 +5,8 @@
  * '/dashboard/master-data/vendor' harus ketemu sebelum '/dashboard').
  */
 const PRESENCE_PATH_LABELS: Array<[string, string]> = [
-  ['/dashboard/master-data/activity-log', 'Log Aktivitas'],
+  ['/dashboard/system/activity-log', 'Sistem — Log Aktivitas'],
+  ['/dashboard/master-data/activity-log', 'Sistem — Log Aktivitas'],
   ['/dashboard/master-data/vendor', 'Master Data — Vendor'],
   ['/dashboard/master-data/account', 'Master Data — Akun'],
   ['/dashboard/master-data/role', 'Master Data — Role & Permission'],
@@ -47,4 +48,31 @@ export function labelForPath(path: string | null | undefined): string {
   // pernah kosong.
   const seg = path.split('/').filter(Boolean).pop() || path;
   return seg.replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
+}
+
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const PROJECT_PATTERNS: Array<[RegExp, 'project' | 'procedure']> = [
+  [new RegExp(`^/(?:vendor/)?dashboard/projects/(${UUID})`, 'i'), 'project'],
+  [new RegExp(`^/vendor/dashboard/jsa/create/(${UUID})`, 'i'), 'project'],
+  [new RegExp(`^/vendor/dashboard/ptw/create/(${UUID})`, 'i'), 'project'],
+  [new RegExp(`^/dashboard/master-data/project/(${UUID})`, 'i'), 'project'],
+  [new RegExp(`^/dashboard/master-data/project-pgsol-assign/(${UUID})`, 'i'), 'project'],
+  // Halaman review prosedur internal memakai id PROSEDUR, bukan id proyek.
+  [new RegExp(`^/dashboard/approval/prosedur/(${UUID})`, 'i'), 'procedure'],
+];
+
+export interface ProjectRef { kind: 'project' | 'procedure'; id: string; key: string }
+
+/**
+ * Kalau path menunjuk halaman milik satu proyek, kembalikan acuan proyeknya
+ * (id proyek, atau id prosedur untuk halaman approval prosedur) — dipakai
+ * untuk menampilkan "sedang mengerjakan proyek apa" di daftar online.
+ */
+export function projectRefOf(path: string | null | undefined): ProjectRef | null {
+  if (!path) return null;
+  for (const [re, kind] of PROJECT_PATTERNS) {
+    const m = path.match(re);
+    if (m) return { kind, id: m[1].toLowerCase(), key: `${kind}:${m[1].toLowerCase()}` };
+  }
+  return null;
 }

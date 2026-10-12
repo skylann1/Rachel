@@ -85,7 +85,7 @@ export default function UserDetailDrawer({ userId, onClose }: { userId: string |
                 <p className="text-xs mt-1 flex items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${detail.online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                   {detail.online
-                    ? <span className="font-semibold text-emerald-700">Online · {labelForPath(detail.currentPath)}</span>
+                    ? <span className="font-semibold text-emerald-700">Online · {labelForPath(detail.currentPath)}{detail.projectName ? ` · ${detail.projectName}` : ''}</span>
                     : <span className="text-slate-500">{detail.lastSeenAt ? `Terakhir terlihat ${timeAgo(detail.lastSeenAt)}` : 'Belum pernah terlihat'}</span>}
                 </p>
               </div>
@@ -174,7 +174,7 @@ export default function UserDetailDrawer({ userId, onClose }: { userId: string |
                   <ul className="space-y-1.5">
                     {detail.recentVisits.map(v => (
                       <li key={v.at} className="flex items-center justify-between gap-3 text-xs">
-                        <span className="font-semibold text-slate-700 truncate">{v.label}</span>
+                        <span className="font-semibold text-slate-700 truncate">{v.label}{v.project && <span className="font-medium text-indigo-600"> · {v.project}</span>}</span>
                         <span className="text-slate-400 shrink-0">{timeAgo(v.at)} · {formatDuration(Math.max(Math.round(v.seconds / 60), 0))}</span>
                       </li>
                     ))}
