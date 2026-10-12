@@ -16,7 +16,7 @@ const PDFViewer = dynamic(
 import {
   PTW_TYPES, APD_ITEMS, PtwType, PTW_GAS_TEST_TYPES, PtwGasTestEntry,
   HOT_WORK_JOB_TYPES, PTW_MAX_VALID_DAYS, PtwGasTestFrequency,
-  hazardSourcesFor, APD_CATEGORY_LABELS,
+  hazardSourcesFor, hazardLabel, APD_CATEGORY_LABELS,
 } from '@/lib/ptw-types';
 import { getWorkers, WorkerItem } from '@/app/vendor/dashboard/pekerja/actions';
 import { worstExpiry } from '@/lib/document-expiry';
@@ -452,7 +452,7 @@ export default function PTWCreatePage() {
               {visibleHazards.map((hz, i) => (
                 <label key={i} className="flex items-center gap-2 text-xs bg-white border border-slate-200 px-2 py-1 rounded shadow-sm cursor-pointer hover:bg-slate-50">
                   <input type="checkbox" checked={selectedHazards.includes(hz)} onChange={() => toggleHazard(hz)} className="rounded-sm" />
-                  <span>{hz}</span>
+                  <span>{hazardLabel(hz)}</span>
                 </label>
               ))}
             </div>

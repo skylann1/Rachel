@@ -413,6 +413,15 @@ export function hazardColumnsFor(type: PtwType): string[][] {
   return type === 'panas' ? HAZARD_COLUMNS_PANAS : HAZARD_COLUMNS;
 }
 
+/**
+ * Label tampilan sumber bahaya. Nilai yang DISIMPAN tetap string aslinya
+ * (lihat peringatan di atas) — ini hanya merapikan titik/elipsis isian
+ * formulir kertas, mis. 'Gas, …………' tampil sebagai 'Gas'.
+ */
+export function hazardLabel(hz: string): string {
+  return hz.replace(/[\s,.…]+$/u, '').trim() || hz;
+}
+
 export function hazardSourcesFor(type: PtwType): string[] {
   return hazardColumnsFor(type).flat();
 }

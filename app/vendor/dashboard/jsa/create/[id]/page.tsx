@@ -1,5 +1,6 @@
 'use client';
 
+import { hazardLabel } from '@/lib/ptw-types';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -289,7 +290,7 @@ export default function JSACreatePage() {
                             {cand.hazards.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
                                 {cand.hazards.map(hz => chip(
-                                  cur.hazards.includes(hz), `h-${hz}`, hz,
+                                  cur.hazards.includes(hz), `h-${hz}`, hazardLabel(hz),
                                   () => toggleStepKebutuhan(index, k => ({ ...k, hazards: k.hazards.includes(hz) ? k.hazards.filter(x => x !== hz) : [...k.hazards, hz] }))
                                 ))}
                               </div>

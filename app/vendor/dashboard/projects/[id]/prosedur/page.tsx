@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   FileText, ArrowRight, Hammer,
-  UploadCloud, CheckCircle2, X, Info, Download, Plus, Trash2, GripVertical, Boxes, History
+  UploadCloud, CheckCircle2, X, Info, Download, Plus, Trash2, GripVertical, Boxes, History,
+  Check, Users, Wrench, Package, HardHat, AlertTriangle
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
@@ -14,11 +15,50 @@ import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalR
 import { getWorkers, WorkerItem } from '@/app/vendor/dashboard/pekerja/actions';
 import { getEquipment, EquipmentItem } from '@/app/vendor/dashboard/peralatan/actions';
 import { getMaterials, MaterialItem } from '@/app/vendor/dashboard/material/actions';
-import { APD_ITEMS, APD_CATEGORY_LABELS, HAZARD_COLUMNS, PTW_TYPES, PtwType } from '@/lib/ptw-types';
+import { APD_ITEMS, APD_CATEGORY_LABELS, HAZARD_SOURCES, hazardLabel, PTW_TYPES, PtwType } from '@/lib/ptw-types';
 import {
   normalizeTahapanPekerjaan, emptyKebutuhan, deriveDocumentSections,
   TahapanSection, StepKebutuhan,
 } from '@/lib/procedure-kebutuhan';
+
+function KebutuhanChip({ on, tone = 'primary', onClick, children }: {
+  on: boolean; tone?: 'primary' | 'rose'; onClick: () => void; children: React.ReactNode;
+}) {
+  const onCls = tone === 'rose' ? 'bg-rose-500 text-white border-rose-500' : 'bg-primary text-white border-primary';
+  const offCls = tone === 'rose'
+    ? 'bg-white text-slate-600 border-slate-200 hover:border-rose-400'
+    : 'bg-white text-slate-600 border-slate-200 hover:border-primary';
+  return (
+    <button type="button" aria-pressed={on} onClick={onClick}
+      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${on ? onCls : offCls}`}>
+      {on && <Check className="w-3 h-3" />}
+      {children}
+    </button>
+  );
+}
+
+function KebutuhanGroup({ icon, title, hint, count, children }: {
+  icon: React.ReactNode; title: string; hint: string; count: number; children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-3.5">
+      <div className="flex items-start gap-2.5 mb-2.5">
+        <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600 shrink-0">{icon}</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-slate-800 leading-tight">{title}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{hint}</p>
+        </div>
+        {count > 0 && (
+          <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">{count} dipilih</span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Daftar sumber bahaya datar & unik ('Lainnya' muncul dua kali di formulir kertas).
+const HAZARD_LIST = Array.from(new Set(HAZARD_SOURCES));
 
 export default function ProsedurKerjaForm() {
   const router = useRouter();
@@ -592,108 +632,101 @@ export default function ProsedurKerjaForm() {
                             </div>
 
                             {kebutuhanOpen && (
-                              <div className="ml-9 mt-2 w-[calc(100%-2rem)] border border-slate-200 rounded-lg bg-slate-50 p-3 space-y-3">
-                                <p className="text-[11px] font-bold text-slate-700">
-                                  Kebutuhan — pekerja, peralatan, material, APD & sumber bahaya (dibawa ke JSA &amp; prefill PTW)
-                                </p>
+                              <div className="ml-9 mt-2 w-[calc(100%-2rem)] border border-primary/20 rounded-xl bg-slate-50 p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-bold text-slate-800">Apa yang dibutuhkan untuk langkah ini?</p>
+                                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                      Klik untuk memilih, klik lagi untuk membatalkan. Cukup isi di sini sekali — pilihan ini otomatis terbawa ke
+                                      <strong> JSA</strong> dan terisi di <strong>PTW</strong>. Boleh dikosongkan kalau tidak ada.
+                                    </p>
+                                  </div>
+                                  <button type="button" onClick={() => setOpenKebutuhan(null)}
+                                    className="text-[11px] font-bold text-primary hover:text-primary/80 shrink-0">
+                                    Selesai
+                                  </button>
+                                </div>
 
-                                <div>
-                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Pekerja</p>
+                                <KebutuhanGroup icon={<Users className="w-4 h-4" />} title="Pekerja"
+                                  hint="Siapa yang mengerjakan langkah ini?" count={pointKebutuhan?.workers.length || 0}>
                                   {rosterPekerja.length === 0 ? (
-                                    <p className="text-[11px] text-slate-400 italic">Belum ada data pekerja. Tambahkan di menu Pekerja.</p>
+                                    <p className="text-[11px] text-slate-400 italic">Belum ada data pekerja. Tambahkan dulu di menu Pekerja.</p>
                                   ) : (
                                     <div className="flex flex-wrap gap-1.5">
-                                      {rosterPekerja.map(w => {
-                                        const on = pointKebutuhan?.workers.some(x => x.id === w.id);
-                                        return (
-                                          <button key={w.id} type="button" onClick={() => toggleKebutuhanWorker(sIdx, pIdx, w)}
-                                            className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary'}`}>
-                                            {w.full_name}
-                                          </button>
-                                        );
-                                      })}
+                                      {rosterPekerja.map(w => (
+                                        <KebutuhanChip key={w.id} on={!!pointKebutuhan?.workers.some(x => x.id === w.id)}
+                                          onClick={() => toggleKebutuhanWorker(sIdx, pIdx, w)}>
+                                          {w.full_name}
+                                        </KebutuhanChip>
+                                      ))}
                                     </div>
                                   )}
-                                </div>
+                                </KebutuhanGroup>
 
-                                <div>
-                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Peralatan</p>
+                                <KebutuhanGroup icon={<Wrench className="w-4 h-4" />} title="Peralatan"
+                                  hint="Alat atau mesin apa yang dipakai?" count={pointKebutuhan?.equipment.length || 0}>
                                   {rosterPeralatan.length === 0 ? (
-                                    <p className="text-[11px] text-slate-400 italic">Belum ada data peralatan. Tambahkan di menu Peralatan.</p>
+                                    <p className="text-[11px] text-slate-400 italic">Belum ada data peralatan. Tambahkan dulu di menu Peralatan.</p>
                                   ) : (
                                     <div className="flex flex-wrap gap-1.5">
-                                      {rosterPeralatan.map(equipment => {
-                                        const on = pointKebutuhan?.equipment.some(e => e.id === equipment.id);
-                                        return (
-                                          <button key={equipment.id} type="button" onClick={() => toggleKebutuhanEquipment(sIdx, pIdx, equipment)}
-                                            className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary'}`}>
-                                            {equipment.name}
-                                          </button>
-                                        );
-                                      })}
+                                      {rosterPeralatan.map(equipment => (
+                                        <KebutuhanChip key={equipment.id} on={!!pointKebutuhan?.equipment.some(e => e.id === equipment.id)}
+                                          onClick={() => toggleKebutuhanEquipment(sIdx, pIdx, equipment)}>
+                                          {equipment.name}
+                                        </KebutuhanChip>
+                                      ))}
                                     </div>
                                   )}
-                                </div>
+                                </KebutuhanGroup>
 
-                                <div>
-                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Material</p>
+                                <KebutuhanGroup icon={<Package className="w-4 h-4" />} title="Material"
+                                  hint="Bahan apa yang dipakai atau habis terpakai?" count={pointKebutuhan?.materials.length || 0}>
                                   {rosterMaterial.length === 0 ? (
-                                    <p className="text-[11px] text-slate-400 italic">Belum ada data material. Tambahkan di menu Material.</p>
+                                    <p className="text-[11px] text-slate-400 italic">Belum ada data material. Tambahkan dulu di menu Material.</p>
                                   ) : (
                                     <div className="flex flex-wrap gap-1.5">
-                                      {rosterMaterial.map(material => {
-                                        const on = pointKebutuhan?.materials.some(m => m.id === material.id);
-                                        return (
-                                          <button key={material.id} type="button" onClick={() => toggleKebutuhanMaterial(sIdx, pIdx, material)}
-                                            className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary'}`}>
-                                            {material.name}
-                                          </button>
-                                        );
-                                      })}
+                                      {rosterMaterial.map(material => (
+                                        <KebutuhanChip key={material.id} on={!!pointKebutuhan?.materials.some(m => m.id === material.id)}
+                                          onClick={() => toggleKebutuhanMaterial(sIdx, pIdx, material)}>
+                                          {material.name}
+                                        </KebutuhanChip>
+                                      ))}
                                     </div>
                                   )}
-                                </div>
+                                </KebutuhanGroup>
 
-                                <div>
-                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">APD</p>
-                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                <KebutuhanGroup icon={<HardHat className="w-4 h-4" />} title="Alat Pelindung Diri (APD)"
+                                  hint="APD apa yang wajib dipakai pekerja pada langkah ini?"
+                                  count={Object.values(pointKebutuhan?.apd || {}).reduce((n, list) => n + list.length, 0)}>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                                     {Object.entries(APD_ITEMS).map(([cat, items]) => (
                                       <div key={cat}>
-                                        <p className="text-[11px] text-slate-500 mb-1">{APD_CATEGORY_LABELS[cat]}</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">{APD_CATEGORY_LABELS[cat]}</p>
                                         <div className="flex flex-wrap gap-1.5">
-                                          {items.map(item => {
-                                            const on = pointKebutuhan?.apd[cat]?.includes(item);
-                                            return (
-                                              <button key={item} type="button" onClick={() => toggleKebutuhanApd(sIdx, pIdx, cat, item)}
-                                                className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-primary'}`}>
-                                                {item}
-                                              </button>
-                                            );
-                                          })}
+                                          {items.map(item => (
+                                            <KebutuhanChip key={item} on={!!pointKebutuhan?.apd[cat]?.includes(item)}
+                                              onClick={() => toggleKebutuhanApd(sIdx, pIdx, cat, item)}>
+                                              {item}
+                                            </KebutuhanChip>
+                                          ))}
                                         </div>
                                       </div>
                                     ))}
                                   </div>
-                                </div>
+                                </KebutuhanGroup>
 
-                                <div>
-                                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Sumber Bahaya</p>
-                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                    {HAZARD_COLUMNS.map((column, cIdx) => (
-                                      <div key={cIdx} className="flex flex-wrap gap-1.5 content-start">
-                                        {column.map((hz) => {
-                                          const on = pointKebutuhan?.hazards.includes(hz);
-                                          return (
-                                            <button key={hz} type="button" onClick={() => toggleKebutuhanHazard(sIdx, pIdx, hz)}
-                                              className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${on ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-600 border-slate-200 hover:border-rose-400'}`}>
-                                              {hz}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
+                                <KebutuhanGroup icon={<AlertTriangle className="w-4 h-4" />} title="Sumber Bahaya"
+                                  hint="Bahaya apa yang ada pada langkah ini? Pilih semua yang relevan."
+                                  count={pointKebutuhan?.hazards.length || 0}>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {HAZARD_LIST.map(hz => (
+                                      <KebutuhanChip key={hz} tone="rose" on={!!pointKebutuhan?.hazards.includes(hz)}
+                                        onClick={() => toggleKebutuhanHazard(sIdx, pIdx, hz)}>
+                                        {hazardLabel(hz)}
+                                      </KebutuhanChip>
                                     ))}
                                   </div>
-                                </div>
+                                </KebutuhanGroup>
                               </div>
                             )}
                           </div>
