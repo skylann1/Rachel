@@ -406,12 +406,10 @@ const renderControlCell = (control: any) => {
 };
 
 /** Stempel tanda tangan: hanya tampil kalau memang sudah ditandatangani. */
-const SignatureStamp = ({ signed, label }: { signed: boolean; label: string }) => (
+const SignatureStamp = ({ signed }: { signed: boolean }) => (
   <View style={styles.signatureArea}>
     {signed
-      ? (label === 'APPROVED'
-          ? <Image src="/assets/approved.png" style={{ height: 24, objectFit: 'contain' }} />
-          : <Text style={styles.signatureStamp}>{label}</Text>)
+      ? <Image src="/assets/approved.png" style={{ height: 24, objectFit: 'contain' }} />
       : <Text style={{ fontSize: 5, fontStyle: 'italic', color: '#94a3b8' }}>Menunggu</Text>}
   </View>
 );
@@ -477,7 +475,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
             </View>
             <View style={styles.signatureBox}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
-              <SignatureStamp signed={!!preparerSigned} label="DISIAJUKAN" />
+              <SignatureStamp signed={!!preparerSigned} />
             </View>
           </View>
           <View style={styles.approvalCol}>
@@ -490,7 +488,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
             </View>
             <View style={styles.signatureBox}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
-              <SignatureStamp signed={!!reviewer} label="APPROVED" />
+              <SignatureStamp signed={!!reviewer} />
             </View>
           </View>
           <View style={[styles.approvalCol, { borderRightWidth: 0 }]}>
@@ -504,7 +502,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
             </View>
             <View style={[styles.signatureBox, { borderLeftWidth: 0 }]}>
               <Text style={styles.signatureLabel}>Tanda Tangan</Text>
-              <SignatureStamp signed={!!approver} label="APPROVED" />
+              <SignatureStamp signed={!!approver} />
             </View>
           </View>
         </View>
@@ -602,18 +600,11 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
 
               <RiskBlockData risk={step.residualRisk} rpnStyle={getRpnStyle(step.residualRisk?.rpn || 0)} variant="residual" />
 
-              <View style={[styles.tCell, styles.colParaf]}>{finalApproved && <Image src="/assets/approved.png" style={{ width: '90%', objectFit: 'contain' }} />}</View>
+              <View style={[styles.tCell, styles.colParaf]}><Text style={{ fontSize: 5, textAlign: 'center', fontWeight: 'bold', color: '#16a34a' }}>{finalApproved ? 'APPROVED' : ''}</Text></View>
             </View>
           ))}
           
         </View>
-
-        {/* ttd note */}
-        {finalApproved && (
-          <View style={{ alignItems: 'flex-end', marginTop: 3 }} wrap={false}>
-            <Image src="/assets/approved.png" style={{ width: 70, opacity: 0.9 }} />
-          </View>
-        )}
 
         {/* Team Penyusun JSA */}
         <View style={[styles.teamSection, { marginTop: 6 }]} wrap={false}>
@@ -653,12 +644,16 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
                 <View style={[styles.teamCell, { width: '24%' }]}><Text>{t.label}</Text></View>
                 <View style={[styles.teamCell, { width: '40%' }]}><Text>{t.nama || '-'}</Text></View>
                 <View style={[styles.teamCell, { width: '14%', alignItems: 'center' }]}>
-                  <Text style={{
-                    fontWeight: 'bold',
-                    color: t.status === 'approved' ? '#16a34a' : t.status === 'rejected' ? '#dc2626' : '#94a3b8',
-                  }}>
-                    {t.status === 'approved' ? 'Disetujui' : t.status === 'rejected' ? 'Ditolak' : t.status === 'pending' ? 'Menunggu' : 'Belum ditugaskan'}
-                  </Text>
+                  {t.status === 'approved' ? (
+                    <Image src="/assets/signed-by.png" style={{ height: 14, objectFit: 'contain' }} />
+                  ) : (
+                    <Text style={{
+                      fontWeight: 'bold',
+                      color: t.status === 'rejected' ? '#dc2626' : '#94a3b8',
+                    }}>
+                      {t.status === 'rejected' ? 'Ditolak' : t.status === 'pending' ? 'Menunggu' : 'Belum ditugaskan'}
+                    </Text>
+                  )}
                 </View>
                 <View style={[styles.teamCell, { width: '16%', borderRightWidth: 0 }]}><Text>{t.tanggal || ''}</Text></View>
               </View>
