@@ -7,7 +7,7 @@ import {
   Briefcase, MapPin, Calendar, AlertTriangle, Building2,
   FileSignature, ShieldAlert, Stamp, ArrowLeft, CheckCircle2, XCircle, X, Loader2, Check,
   Users, Activity, FileText, MessageSquare, ChevronDown, ChevronUp, History, Sparkles, QrCode, Siren,
-  ClipboardList, LogIn, Clock, Undo2
+  ClipboardList, LogIn, Clock, Undo2, ClipboardCheck
 } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import { ProjectDiscussion } from '@/components/project-discussion';
@@ -17,7 +17,7 @@ import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
-import PtwSafetyChecklistForm from '@/components/ptw/PtwSafetyChecklistForm';
+import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION, PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, isProcedurePending, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
@@ -805,6 +805,9 @@ export default function AdminProjectClient({
         <button onClick={() => setActiveTab('tim')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'tim' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
            <Users className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Tim Lapangan</span>
         </button>
+        <button onClick={() => setActiveTab('safety')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'safety' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <ClipboardCheck className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Safety Check</span>
+        </button>
         <button onClick={() => setActiveTab('lapangan')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'lapangan' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
            <Siren className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Status Lapangan</span>
            {openCheckinsCount > 0 && <span className="ml-0.5 text-[10px] font-black bg-emerald-500 text-white rounded-full w-4 h-4 flex items-center justify-center">{openCheckinsCount}</span>}
@@ -1445,14 +1448,6 @@ export default function AdminProjectClient({
                                  <QrCode className="w-4 h-4" /> QR Check-in Lapangan
                                </button>
                              )}
-                             <PtwSafetyChecklistForm
-                               ptwId={row.id}
-                               ptwType={row.ptw_type || 'dingin'}
-                               validFrom={row.valid_from}
-                               validTo={row.valid_to}
-                               initialChecklist={row.safety_checklist || {}}
-                               editable={rowEffective === PTW_STATUS.aktif && canEditSafetyChecklist}
-                             />
                              <BlobProvider document={
                                <PtwPDF
                                  projectId={project.id}
@@ -1542,6 +1537,23 @@ export default function AdminProjectClient({
       )}
 
       {/* --- TAB CONTENT: STATUS LAPANGAN --- */}
+      {activeTab === 'safety' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <PtwSafetyCheckTab
+            canEdit={canEditSafetyChecklist}
+            ptws={ptws.map((p, i) => ({
+              id: p.id,
+              ptw_type: p.ptw_type,
+              ptw_number: p.ptw_number,
+              status: ptwEffectiveStatuses[i],
+              valid_from: p.valid_from,
+              valid_to: p.valid_to,
+              safety_checklist: p.safety_checklist,
+            }))}
+          />
+        </div>
+      )}
+
       {activeTab === 'lapangan' && (
          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {ptws.filter(p => p.field_token).length === 0 ? (

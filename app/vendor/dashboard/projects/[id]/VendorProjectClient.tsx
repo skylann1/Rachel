@@ -6,14 +6,14 @@ import {
   Briefcase, MapPin, Calendar, AlertTriangle,
   FileSignature, ShieldAlert, Stamp, ArrowRight, ArrowLeft,
   FileText, MessageSquare, CheckCircle2, XCircle, ChevronDown, ChevronUp, Loader2, QrCode, Siren,
-  ClipboardList, LogIn, Clock, Users, History
+  ClipboardList, LogIn, Clock, Users, History, ClipboardCheck
 } from 'lucide-react';
 import { ProjectDiscussion } from '@/components/project-discussion';
 import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
-import PtwSafetyChecklistForm from '@/components/ptw/PtwSafetyChecklistForm';
+import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
 import { isJsaPending, JSA_STATUS, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
@@ -159,6 +159,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   const tabs = [
     { id: 'ringkasan', label: 'Ringkasan Proyek', icon: <Briefcase className="w-4 h-4" /> },
     { id: 'dokumen', label: 'Dokumen K3', icon: <FileText className="w-4 h-4" /> },
+    { id: 'safety', label: 'Safety Check', icon: <ClipboardCheck className="w-4 h-4" /> },
     { id: 'lapangan', label: 'Status Lapangan', icon: <Siren className="w-4 h-4" /> },
     { id: 'diskusi', label: 'Diskusi & Notes', icon: <MessageSquare className="w-4 h-4" /> },
     { id: 'riwayat', label: 'Riwayat', icon: <History className="w-4 h-4" /> },
@@ -588,15 +589,6 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                             </button>
                           )}
 
-                          <PtwSafetyChecklistForm
-                            ptwId={row.id}
-                            ptwType={row.ptw_type || 'dingin'}
-                            validFrom={row.valid_from}
-                            validTo={row.valid_to}
-                            initialChecklist={row.safety_checklist || {}}
-                            editable={rowStatus === 'Approved' && canEditSafetyChecklist}
-                          />
-
                           <div className="flex gap-3">
                             <div className="flex-1">
                               <BlobProvider document={
@@ -667,6 +659,24 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
       )}
 
       {/* --- TAB CONTENT: STATUS LAPANGAN --- */}
+      {/* --- TAB: SAFETY CHECK --- */}
+      {activeTab === 'safety' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <PtwSafetyCheckTab
+            canEdit={canEditSafetyChecklist}
+            ptws={ptws.map((p, i) => ({
+              id: p.id,
+              ptw_type: p.ptw_type,
+              ptw_number: p.ptw_number,
+              status: ptwEffectiveStatuses[i],
+              valid_from: p.valid_from,
+              valid_to: p.valid_to,
+              safety_checklist: p.safety_checklist,
+            }))}
+          />
+        </div>
+      )}
+
       {activeTab === 'lapangan' && (
          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {ptws.filter((p: any) => p.field_token).length === 0 ? (

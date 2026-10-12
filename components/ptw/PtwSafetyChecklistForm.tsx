@@ -15,6 +15,8 @@ export interface PtwSafetyChecklistFormProps {
   validTo?: string | null;
   initialChecklist?: PtwSafetyChecklistData;
   editable: boolean;
+  /** true = panel langsung terbuka (dipakai tab Safety Check). */
+  defaultOpen?: boolean;
 }
 
 const formatDayLabel = (iso: string) => {
@@ -24,7 +26,7 @@ const formatDayLabel = (iso: string) => {
 };
 
 export default function PtwSafetyChecklistForm({
-  ptwId, ptwType, validFrom, validTo, initialChecklist, editable,
+  ptwId, ptwType, validFrom, validTo, initialChecklist, editable, defaultOpen = false,
 }: PtwSafetyChecklistFormProps) {
   const router = useRouter();
   const [checklist, setChecklist] = useState<PtwSafetyChecklistData>(initialChecklist || {});
@@ -73,7 +75,7 @@ export default function PtwSafetyChecklistForm({
   };
 
   return (
-    <details className="mt-2 border border-slate-200 rounded-xl overflow-hidden">
+    <details open={defaultOpen} className="mt-2 border border-slate-200 rounded-xl overflow-hidden">
       <summary className="cursor-pointer px-4 py-3 bg-slate-50 text-sm font-bold text-slate-700 hover:bg-slate-100">
         Safety Checklist Harian {editable ? '' : '(hanya lihat — PTW tidak aktif)'}
       </summary>
