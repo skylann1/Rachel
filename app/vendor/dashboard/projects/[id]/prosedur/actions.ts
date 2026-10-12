@@ -4,7 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { notifyAssignees } from "@/app/dashboard/inbox/actions";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { logDocumentEvent } from "@/lib/document-logs";
-import { resetStageAssignments } from "@/lib/stage-assignments";
+import { resetStageAssignments, getStageAssignments } from "@/lib/stage-assignments";
 
 export async function saveProsedur(projectId: string, payload: any) {
   // "Jenis PTW yang Dibutuhkan" wajib minimal 1 — sebelumnya cuma dicek di
@@ -39,6 +39,17 @@ export async function saveProsedur(projectId: string, payload: any) {
       .eq('id', existing.id)
       .single();
     if (!current) throw new Error('Prosedur Kerja tidak ditemukan.');
+
+    // Reviewer yang sedang ditugaskan menilai lewat Setujui/Tolak, bukan
+    // mengajukan ulang (resubmit mereset penugasan tahap review).
+    if (user) {
+      for (const stageKey of ['procedure.hse_vendor', 'procedure.review_vendor']) {
+        const rows = await getStageAssignments(supabase, projectId, 'procedure', stageKey);
+        if (rows.some(r => r.assignee_id === user.id && r.status === 'pending')) {
+          throw new Error('Anda ditugaskan sebagai reviewer dokumen ini. Gunakan Setujui / Tolak, bukan mengajukan ulang.');
+        }
+      }
+    }
     const resubmittable = [PROCEDURE_STATUS.draft, PROCEDURE_STATUS.reviewHseVendor, PROCEDURE_STATUS.reviewPmVendor];
     if (!resubmittable.includes(current.status)) {
       throw new Error('Prosedur Kerja tidak bisa diajukan ulang karena sudah berjalan ke tahap berikutnya.');

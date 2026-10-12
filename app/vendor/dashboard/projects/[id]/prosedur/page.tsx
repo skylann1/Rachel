@@ -9,6 +9,7 @@ import {
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
 import { saveProsedur, getProsedur } from './actions';
+import { getMyVendorReviewAssignment } from '@/app/vendor/dashboard/approval/actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
 import { getWorkers, WorkerItem } from '@/app/vendor/dashboard/pekerja/actions';
 import { getEquipment, EquipmentItem } from '@/app/vendor/dashboard/peralatan/actions';
@@ -55,6 +56,10 @@ export default function ProsedurKerjaForm() {
   const [scopeOfWork, setScopeOfWork] = useState('- Mobilisasi dan demobilisasi peralatan serta material.\n- Pembongkaran keramik lantai existing.\n- Pembongkaran dinding existing.\n- Pengikisan lapisan cat existing.\n- Pekerjaan pasangan dinding bata.\n- Pekerjaan plesteran dan acian dinding.\n- Pemasangan keramik lantai.\n- Pengecatan dinding.\n- Pengecatan lisplang.\n- Pengecatan plafon.\n- Pemasangan built in railing tangga.\n- Pembersihan area kerja (housekeeping).\n- Demobilisasi peralatan dan penyelesaian pekerjaan.');
   
   const [docId, setDocId] = useState<string | null>(null);
+  // True kalau user ini sedang ditugaskan mereview dokumen (HSE/PM Vendor).
+  // Reviewer menilai lewat Setujui/Tolak — tombol Simpan/Ajukan disembunyikan
+  // supaya tidak tidak sengaja mengajukan ulang dokumen dan mereset penugasan.
+  const [isReviewing, setIsReviewing] = useState(false);
 
   // Jenis PTW yang Dibutuhkan — checklist level DOKUMEN (bukan per
   // sub-langkah seperti panel "Kebutuhan"), dikonsumsi halaman PTW list
@@ -74,6 +79,9 @@ export default function ProsedurKerjaForm() {
         const data = await getProsedur(params.id as string);
         if (data && data.content) {
           setDocId(data.id);
+          getMyVendorReviewAssignment(params.id as string, 'procedure', data.id)
+            .then(a => setIsReviewing(!!a))
+            .catch(() => {});
           const content = data.content;
           setDocNo(content.docNo || '');
           setContractNo(content.contractNo || '');
@@ -781,7 +789,12 @@ export default function ProsedurKerjaForm() {
             </div>
           )}
 
-          <button 
+          {isReviewing ? (
+            <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 md:max-w-sm">
+              Anda reviewer untuk dokumen ini — gunakan <strong>Setujui</strong> atau <strong>Tolak</strong> di kotak review di atas. Tombol ajukan hanya untuk penyusun dokumen.
+            </p>
+          ) : (
+          <button
             disabled={isSaving}
             type="submit"
             className="flex w-full md:w-auto items-center justify-center gap-2 bg-primary hover:bg-primary/90 disabled:bg-primary/60 disabled:cursor-wait text-white px-8 py-4 rounded-2xl font-bold text-base transition-all shadow-lg shadow-primary/30 active:scale-[0.98]"
@@ -793,11 +806,12 @@ export default function ProsedurKerjaForm() {
               </>
             ) : (
               <>
-                Simpan & Lanjut ke Pengisian JSA
+                {docId ? 'Simpan & Ajukan Ulang Prosedur' : 'Simpan & Ajukan Prosedur'}
                 <ArrowRight className="w-5 h-5" />
               </>
             )}
           </button>
+          )}
         </div>
 
       </form>
