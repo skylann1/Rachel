@@ -8,7 +8,7 @@ import type { Announcement } from '@/app/dashboard/master-data/announcement/acti
 
 const AUTOPLAY_MS = 5000;
 
-export function AnnouncementCarousel({ announcements }: { announcements: Announcement[] }) {
+export function AnnouncementCarousel({ announcements, compact = false }: { announcements: Announcement[]; compact?: boolean }) {
   const [index, setIndex] = useState(0);
   const [detail, setDetail] = useState<Announcement | null>(null);
 
@@ -27,8 +27,8 @@ export function AnnouncementCarousel({ announcements }: { announcements: Announc
 
   return (
     <>
-      <div className="relative overflow-hidden rounded-3xl shadow-lg group">
-        <div className="relative h-48 sm:h-56 lg:h-64 w-full bg-slate-900">
+      <div className={`relative overflow-hidden shadow-lg group ${compact ? 'rounded-2xl' : 'rounded-3xl'}`}>
+        <div className={`relative w-full bg-slate-900 ${compact ? 'h-40' : 'h-48 sm:h-56 lg:h-64'}`}>
           {announcements.map((a, i) => (
             <button
               key={a.id}
@@ -41,10 +41,10 @@ export function AnnouncementCarousel({ announcements }: { announcements: Announc
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={a.image_url} alt={a.title} className="w-full h-full object-contain" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/10 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6 text-left">
-                <h2 className="text-white font-bold text-lg sm:text-xl drop-shadow-sm">{a.title}</h2>
+              <div className={`absolute bottom-0 left-0 right-0 text-left ${compact ? 'p-4' : 'p-5 sm:p-6'}`}>
+                <h2 className={`text-white font-bold drop-shadow-sm ${compact ? 'text-base' : 'text-lg sm:text-xl'}`}>{a.title}</h2>
                 {a.description && (
-                  <p className="text-white/85 text-sm mt-1 line-clamp-2 max-w-2xl">{a.description}</p>
+                  <p className={`text-white/85 mt-1 max-w-2xl ${compact ? 'text-xs line-clamp-1' : 'text-sm line-clamp-2'}`}>{a.description}</p>
                 )}
               </div>
             </button>

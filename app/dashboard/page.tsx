@@ -1,5 +1,5 @@
 import React from 'react';
-import { Briefcase, Building2, ShieldCheck, ArrowUpRight, ClipboardList } from 'lucide-react';
+import { Briefcase, Building2, ShieldCheck, ArrowUpRight, ClipboardList, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/server';
 import { InteractiveDashboard, DashboardData } from '@/components/internal/interactive-dashboard';
@@ -10,6 +10,8 @@ import { PTW_TYPES } from '@/lib/ptw-types';
 import { PeriodSwitcher } from '@/components/internal/period-switcher';
 import { AnnouncementCarousel } from '@/components/announcement-carousel';
 import { getActiveAnnouncements } from '@/app/dashboard/master-data/announcement/actions';
+import { getNotifications } from '@/app/dashboard/inbox/actions';
+import { timeAgo } from '@/lib/time-ago';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const MONTH_LONG = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -104,6 +106,16 @@ export default async function DashboardOverviewPage({
    const supabase = await createClient();
    const now = new Date();
    const announcements = await getActiveAnnouncements();
+
+   const notifications = await getNotifications();
+   const recentActivity = notifications.slice(0, 6).map((n) => ({
+     id: n.id,
+     title: n.title,
+     desc: n.message,
+     time: timeAgo(n.created_at),
+     type: n.type === 'approval' ? 'success' as const : n.type === 'warning' ? 'danger' as const : 'info' as const,
+     link: n.link,
+   }));
 
    const { periode: periodeParam } = await searchParams;
    const period = resolvePeriod(periodeParam, now);
@@ -610,7 +622,6 @@ export default async function DashboardOverviewPage({
 
    return (
       <div className="space-y-6">
-         {announcements.length > 0 && <AnnouncementCarousel announcements={announcements} />}
          <div className="flex flex-col gap-4">
            {/* Welcome Header */}
            <div className="relative overflow-hidden bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-up">
@@ -697,6 +708,52 @@ export default async function DashboardOverviewPage({
          </div>
 
          <InteractiveDashboard data={dashboardData} />
+
+         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 h-fit">
+             <h3 className="text-sm font-bold text-slate-800 mb-5 flex items-center gap-2">
+               <Activity className="w-4 h-4 text-primary" /> Aktivitas Terakhir
+             </h3>
+             {recentActivity.length === 0 ? (
+               <div className="flex flex-col items-center justify-center py-10 text-center">
+                 <Activity className="w-8 h-8 text-slate-300 mb-2" />
+                 <p className="text-sm font-medium text-slate-500">Belum ada aktivitas terbaru.</p>
+               </div>
+             ) : (
+               <ul className="space-y-1">
+                 {recentActivity.map((item) => {
+                   const dotCls = item.type === 'success' ? 'bg-emerald-500' : item.type === 'danger' ? 'bg-rose-500' : 'bg-blue-500';
+                   const rowClass = 'flex gap-3 py-2.5 px-2 -mx-2 rounded-xl hover:bg-slate-50 transition-colors';
+                   const body = (
+                     <>
+                       <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
+                       <div className="min-w-0">
+                         <div className="flex items-center justify-between gap-2">
+                           <h4 className="font-bold text-slate-800 text-xs truncate">{item.title}</h4>
+                           <span className="text-[10px] font-bold text-slate-400 shrink-0">{item.time}</span>
+                         </div>
+                         <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5 line-clamp-2">{item.desc}</p>
+                       </div>
+                     </>
+                   );
+                   return (
+                     <li key={item.id}>
+                       {item.link
+                         ? <Link href={item.link} className={rowClass}>{body}</Link>
+                         : <div className={rowClass}>{body}</div>}
+                     </li>
+                   );
+                 })}
+               </ul>
+             )}
+           </div>
+
+           {announcements.length > 0 && (
+             <div className="lg:col-span-2">
+               <AnnouncementCarousel announcements={announcements} />
+             </div>
+           )}
+         </div>
       </div>
    );
 }

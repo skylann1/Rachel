@@ -7,6 +7,7 @@ import { JSA_STATUS, isJsaPending } from "@/lib/jsa-status";
 import { PROCEDURE_STATUS, isProcedurePending } from "@/lib/procedure-status";
 import { getVendorIncidents } from "@/app/vendor/dashboard/incident/actions";
 import { getExpiry } from "@/lib/document-expiry";
+import { timeAgo } from "@/lib/time-ago";
 
 // Mirrors the real status strings written by the approval workflow
 // (see app/dashboard/approval/actions.ts and app/vendor/dashboard/projects/[id]/VendorProjectClient.tsx)
@@ -111,18 +112,6 @@ export interface VendorActivityItem {
   time: string;
   type: 'success' | 'danger' | 'info';
   link: string | null;
-}
-
-function timeAgo(dateString: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
-  if (seconds < 60) return 'Baru saja';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} menit yang lalu`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} jam yang lalu`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} hari yang lalu`;
-  return new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export async function getVendorRecentActivity(): Promise<VendorActivityItem[]> {

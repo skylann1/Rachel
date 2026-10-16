@@ -57,8 +57,6 @@ export default async function VendorDashboardPage() {
   return (
     <div className="space-y-5 max-w-7xl mx-auto pb-12">
 
-      {announcements.length > 0 && <AnnouncementCarousel announcements={announcements} />}
-
       {/* ── Hero ────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-blue-800 p-6 sm:p-8 lg:p-10 text-white shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="pointer-events-none absolute top-0 right-0 -mr-20 -mt-20 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
@@ -239,6 +237,11 @@ export default async function VendorDashboardPage() {
            )}
         </div>
 
+        {announcements.length > 0 && (
+          <div className="lg:col-start-3 lg:col-span-1">
+            <AnnouncementCarousel announcements={announcements} compact />
+          </div>
+        )}
       </div>
     </div>
   );
