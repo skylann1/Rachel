@@ -112,14 +112,14 @@ export default function PtwSafetyChecklistForm({
                             type="button"
                             disabled={!editable}
                             onClick={() => toggleDay(row.key!, dayIndex, true)}
-                            className={`w-5 h-5 rounded text-[10px] font-bold border ${state === true ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-400 border-slate-200'} disabled:opacity-50`}
+                            className={`w-6 h-6 rounded text-[10px] font-bold border ${state === true ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-400 border-slate-200'} disabled:opacity-50`}
                             title="Sudah"
                           >S</button>
                           <button
                             type="button"
                             disabled={!editable}
                             onClick={() => toggleDay(row.key!, dayIndex, false)}
-                            className={`w-5 h-5 rounded text-[10px] font-bold border ${state === false ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-400 border-slate-200'} disabled:opacity-50`}
+                            className={`w-6 h-6 rounded text-[10px] font-bold border ${state === false ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-400 border-slate-200'} disabled:opacity-50`}
                             title="Belum"
                           >B</button>
                         </div>

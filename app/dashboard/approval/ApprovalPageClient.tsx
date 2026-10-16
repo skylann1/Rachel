@@ -39,6 +39,7 @@ export default function ApprovalPageClient({ userRole, projects }: ApprovalPageC
 
       {/* Project List */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
@@ -98,6 +99,7 @@ export default function ApprovalPageClient({ userRole, projects }: ApprovalPageC
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

@@ -412,7 +412,7 @@ export default function InspectionPage() {
                        <span className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB per foto</span>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {imageFiles.map((file, i) => (
                         <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -420,7 +420,7 @@ export default function InspectionPage() {
                           <button
                             type="button"
                             onClick={() => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                            className="absolute top-1 right-1 p-1 bg-slate-900/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-1 right-1 p-1 bg-slate-900/70 text-white rounded-full opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -437,7 +437,7 @@ export default function InspectionPage() {
                   )}
                </div>
                
-               <div className="grid grid-cols-2 gap-4">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Jenis Temuan <span className="text-rose-500">*</span></label>
                     <select name="finding_type" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
@@ -458,7 +458,7 @@ export default function InspectionPage() {
                  </div>
                </div>
 
-               <div className="grid grid-cols-2 gap-4">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Lokasi Temuan <span className="text-rose-500">*</span></label>
                     <input name="location" required type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Area Boiler 1 / Pantri Kantor" />

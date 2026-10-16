@@ -382,7 +382,7 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
                 {/* Kategori Risiko Proyek */}
                 <div>
                   <label className="text-sm font-semibold text-slate-700 block mb-3">Kategori Risiko Proyek</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <label className="cursor-pointer">
                       <input type="radio" name="risk" className="peer sr-only" value="low" />
                       <div className="text-center px-4 py-3 border border-slate-200 rounded-xl peer-checked:bg-emerald-50 peer-checked:border-emerald-500 peer-checked:text-emerald-700 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50">

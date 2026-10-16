@@ -384,7 +384,7 @@ export default function InboxClient({ notifications: initialNotifications, userI
                                 </div>
                              </div>
 
-                             <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                             <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

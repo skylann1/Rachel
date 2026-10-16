@@ -152,7 +152,7 @@ export default function RolePermissionPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className={`flex justify-end gap-2 transition-opacity ${selectedRoleId === role.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                      <div className={`flex justify-end gap-2 transition-opacity ${selectedRoleId === role.id ? 'opacity-100' : 'opacity-100 sm:opacity-0 group-hover:opacity-100'}`}>
                         <Link href={`/vendor/dashboard/role/${role.id}`} className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" title="Kelola Role & Permission" onClick={(e) => e.stopPropagation()}>
                           <Settings2 className="w-4 h-4" />
                         </Link>

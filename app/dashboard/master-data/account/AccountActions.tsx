@@ -71,7 +71,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
       <div className="flex justify-end gap-2">
         <button 
           onClick={() => setIsEditModalOpen(true)}
-          className="text-slate-400 hover:text-primary transition-colors p-1" 
+          className="text-slate-400 hover:text-primary transition-colors p-2" 
           title="Edit Akun"
         >
           <Edit2 className="w-4 h-4" />
@@ -79,7 +79,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
         
         <button
           onClick={() => setIsConfirmSuspendOpen(true)}
-          className={`transition-colors p-1 ${isSuspended ? 'text-amber-500 hover:text-amber-600' : 'text-slate-400 hover:text-rose-500'}`}
+          className={`transition-colors p-2 ${isSuspended ? 'text-amber-500 hover:text-amber-600' : 'text-slate-400 hover:text-rose-500'}`}
           title={isSuspended ? "Aktifkan Akun" : "Nonaktifkan Akun"}
         >
           {isSuspended ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
@@ -87,7 +87,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
 
         <button
           onClick={() => setIsConfirmResetOpen(true)}
-          className="text-slate-400 hover:text-amber-600 transition-colors p-1"
+          className="text-slate-400 hover:text-amber-600 transition-colors p-2"
           title="Reset Kata Sandi"
         >
           <KeyRound className="w-4 h-4" />
@@ -95,7 +95,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
 
         <button
           onClick={() => setIsConfirmDeleteOpen(true)}
-          className="text-slate-400 hover:text-rose-600 transition-colors p-1" 
+          className="text-slate-400 hover:text-rose-600 transition-colors p-2" 
           title="Hapus Akun"
         >
           <Trash2 className="w-4 h-4" />

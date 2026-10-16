@@ -55,14 +55,14 @@ export function AnnouncementCarousel({ announcements, compact = false }: { annou
           <>
             <button
               onClick={goPrev}
-              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
               aria-label="Sebelumnya"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <button
               onClick={goNext}
-              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
               aria-label="Berikutnya"
             >
               <ChevronRight className="w-5 h-5" />
@@ -72,9 +72,11 @@ export function AnnouncementCarousel({ announcements, compact = false }: { annou
                 <button
                   key={a.id}
                   onClick={() => setIndex(i)}
-                  className={`h-1.5 rounded-full transition-all ${i === index ? 'w-6 bg-white' : 'w-1.5 bg-white/50'}`}
+                  className="py-2.5 px-0.5"
                   aria-label={`Slide ${i + 1}`}
-                />
+                >
+                  <span className={`block h-1.5 rounded-full transition-all ${i === index ? 'w-6 bg-white' : 'w-1.5 bg-white/50'}`} />
+                </button>
               ))}
             </div>
           </>

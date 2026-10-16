@@ -11,6 +11,7 @@ export default async function ProjectPgsolAssignListPage() {
         <p className="text-sm text-slate-500 mt-1">Kelola siapa yang mereview Prosedur Kerja, JSA, & PTW tahap PGSOL untuk tiap proyek.</p>
       </div>
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50/50">
             <tr>
@@ -39,6 +40,7 @@ export default async function ProjectPgsolAssignListPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
