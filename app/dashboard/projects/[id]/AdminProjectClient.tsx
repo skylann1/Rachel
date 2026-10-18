@@ -10,6 +10,7 @@ import {
   ClipboardList, LogIn, Clock, Undo2, ClipboardCheck
 } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import { todayDateString } from '@/lib/site-ops';
 import { ProjectDiscussion } from '@/components/project-discussion';
 import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, rejectPtw, resumePtw, rollbackStage } from '@/app/dashboard/approval/actions';
 import dynamic from 'next/dynamic';
@@ -18,6 +19,9 @@ import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/Prose
 import PtwPDF from '@/components/ptw/PtwPDF';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
+import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel';
+import PtwDailyCheckTab from '@/components/ptw/PtwDailyCheckTab';
+import { assignFieldRole, submitDailyCheck } from '@/app/dashboard/projects/[id]/actions';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION, PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, isProcedurePending, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
@@ -410,6 +414,7 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
 export default function AdminProjectClient({
   project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, permissions,
   siteCheckins, toolboxMeetings, stageAssignments,
+  ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates,
 }: {
   project: any, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
   /** worker_id / equipment_id -> 'expired' | 'expiring' | 'valid' | 'unknown', computed server-side against live master data. */
@@ -425,6 +430,11 @@ export default function AdminProjectClient({
   toolboxMeetings?: any[],
   /** stage_assignments untuk SELURUH tahap pipeline dokumen proyek ini (plus nama), key = stage_key persis (mis. "procedure.review_pgsol"). Sumber kebenaran gerbang tombol Setujui/Tolak, indikator progress, dan timeline detail (DocStageTimeline). */
   stageAssignments?: Record<string, StageAssignmentRowWithName[]>,
+  ptwFieldAssignments?: any[],
+  ptwDailyChecks?: any[],
+  profileById?: Record<string, { full_name: string | null; email: string | null }>,
+  /** Kandidat yang boleh ditugaskan sebagai Pengawas (sesama staf PGN pemanggil). */
+  fieldCandidates?: { id: string; name: string }[],
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -807,6 +817,12 @@ export default function AdminProjectClient({
         </button>
         <button onClick={() => setActiveTab('safety')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'safety' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
            <ClipboardCheck className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Safety Check</span>
+        </button>
+        <button onClick={() => setActiveTab('penugasan')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'penugasan' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <Users className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Penugasan</span>
+        </button>
+        <button onClick={() => setActiveTab('dailycheck')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'dailycheck' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+           <ClipboardList className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Daily Check</span>
         </button>
         <button onClick={() => setActiveTab('lapangan')} className={`whitespace-nowrap flex-1 flex items-center justify-center gap-2 py-2.5 px-2 sm:px-4 text-sm font-bold rounded-lg transition-all ${activeTab === 'lapangan' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
            <Siren className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Status Lapangan</span>
@@ -1262,6 +1278,7 @@ export default function AdminProjectClient({
                             hotWorkTypes={row.hot_work_types || []}
                             gasTestFrequency={row.gas_test_frequency || {}}
                             checklistData={row.safety_checklist || {}}
+                            dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
                             jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                             siblings={ptws}
                             signatories={ptwSignatories?.[row.id]}
@@ -1471,6 +1488,7 @@ export default function AdminProjectClient({
                                  hotWorkTypes={row.hot_work_types || []}
                                  gasTestFrequency={row.gas_test_frequency || {}}
                                  checklistData={row.safety_checklist || {}}
+                                 dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
                                  jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                  siblings={ptws}
                                  signatories={ptwSignatories?.[row.id]}
@@ -1550,6 +1568,69 @@ export default function AdminProjectClient({
               valid_to: p.valid_to,
               safety_checklist: p.safety_checklist,
             }))}
+          />
+        </div>
+      )}
+
+      {/* --- TAB CONTENT: PENUGASAN LAPANGAN --- */}
+      {activeTab === 'penugasan' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <PtwFieldAssignmentsPanel
+            ptws={ptws.map((p) => ({
+              id: p.id,
+              ptw_type: p.ptw_type,
+              ptw_number: p.ptw_number,
+              status: ptwEffectiveStatuses[ptws.indexOf(p)],
+            }))}
+            assignments={ptwFieldAssignments ?? []}
+            profileById={profileById ?? {}}
+            candidates={(fieldCandidates ?? []).map((c) => ({ id: c.id, full_name: c.name }))}
+            canAssign={{
+              pemegang: !!permissions?.['ptw']?.includes('assign_holder'),
+              pengawas: !!permissions?.['ptw']?.includes('assign_pengawas'),
+            }}
+            onAssign={async ({ ptwId, peran, userId, alasan }) => {
+              const res = await assignFieldRole(ptwId, peran, userId, alasan);
+              if (!res.success) {
+                alert(res.error || 'Gagal menugaskan peran lapangan.');
+                return false;
+              }
+              // Re-render data: reload page
+              window.location.reload();
+              return true;
+            }}
+          />
+        </div>
+      )}
+
+      {/* --- TAB CONTENT: ISIAN RIKSA HARIAN --- */}
+      {activeTab === 'dailycheck' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <PtwDailyCheckTab
+            ptws={ptws.map((p, i) => ({
+              id: p.id,
+              ptw_type: p.ptw_type,
+              ptw_number: p.ptw_number,
+              status: ptwEffectiveStatuses[i],
+              valid_from: p.valid_from,
+              valid_to: p.valid_to,
+              safety_checklist: p.safety_checklist,
+            }))}
+            dailyChecks={ptwDailyChecks ?? []}
+            assignments={ptwFieldAssignments ?? []}
+            profileById={profileById ?? {}}
+            currentUserId={currentUserId}
+            today={todayDateString()}
+            canFill={!!permissions?.['ptw']?.includes('field_holder') || !!permissions?.['ptw']?.includes('field_pengawas')}
+            onSubmit={async ({ ptwId, uraian, requiredKeys }) => {
+              const res = await submitDailyCheck(ptwId, uraian, requiredKeys);
+              if (!res.success) {
+                alert(res.error || 'Gagal mengirim daily check.');
+                return false;
+              }
+              window.location.reload();
+              return true;
+            }}
           />
         </div>
       )}

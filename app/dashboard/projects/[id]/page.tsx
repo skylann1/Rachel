@@ -8,6 +8,7 @@ import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { worstExpiry } from '@/lib/document-expiry';
 import { getDocumentLogs } from '@/app/dashboard/approval/actions';
 import { getStageAssignmentsWithNames, StageAssignmentRowWithName } from '@/lib/stage-assignments';
+import { getFieldCandidates } from './actions';
 import { PROCEDURE_STAGE_SEQUENCE } from '@/lib/procedure-status';
 import { JSA_STAGE_SEQUENCE } from '@/lib/jsa-status';
 import { PTW_STAGE_SEQUENCE } from '@/lib/ptw-status';
@@ -125,14 +126,52 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
 
   // Tab "Status Lapangan": check-in dan toolbox meeting lintas semua tipe PTW proyek ini.
   const ptwIds = ptws.map((p: any) => p.id);
-  const [{ data: siteCheckins }, { data: toolboxMeetings }] = await Promise.all([
+  // Fetch PTW field assignments and daily checks for all PTWs in project
+  const [
+    { data: siteCheckins },
+    { data: toolboxMeetings },
+    { data: ptwFieldAssignments },
+    { data: ptwDailyChecks },
+  ] = await Promise.all([
     ptwIds.length > 0
       ? supabase.from('site_checkins').select('*').in('ptw_id', ptwIds).order('checked_in_at', { ascending: false })
       : Promise.resolve({ data: [] as any[] }),
     ptwIds.length > 0
       ? supabase.from('toolbox_meetings').select('*').in('ptw_id', ptwIds).order('meeting_date', { ascending: false }).order('created_at', { ascending: false })
       : Promise.resolve({ data: [] as any[] }),
+    ptwIds.length > 0
+      ? supabase.from('ptw_field_assignments').select('*').in('ptw_id', ptwIds).order('aktif_dari', { ascending: false })
+      : Promise.resolve({ data: [] as any[] }),
+    ptwIds.length > 0
+      ? supabase.from('ptw_daily_checks').select('*').in('ptw_id', ptwIds).order('diisi_pada', { ascending: false })
+      : Promise.resolve({ data: [] as any[] }),
   ]);
+
+  // Fetch profiles for assignment/check users
+  const fieldUserIds = Array.from(
+    new Set(
+      (ptwFieldAssignments || [])
+        .flatMap((a: any) => [a.user_id, a.ditugaskan_oleh])
+        .filter(Boolean)
+    )
+  );
+  const dailyUserIds = Array.from(
+    new Set((ptwDailyChecks || []).map((d: any) => d.user_id).filter(Boolean))
+  );
+  const profileIds = Array.from(new Set([...fieldUserIds, ...dailyUserIds]));
+  const { data: profiles } = profileIds.length > 0
+    ? await supabase.from('profiles').select('id, full_name, email').in('id', profileIds)
+    : { data: [] as any[] };
+
+  const profileById: Record<string, { full_name: string | null; email: string | null }> = {};
+  for (const p of profiles || []) {
+    profileById[p.id] = { full_name: p.full_name, email: p.email };
+  }
+
+  // Kandidat Pengawas: sesama staf PGN pemanggil dengan permission ptw.field_pengawas.
+  const pengawasCandidates = permissions?.['ptw']?.includes('assign_pengawas')
+    ? await getFieldCandidates('pengawas')
+    : [];
 
   return (
     <div className="p-8 pb-20 bg-slate-50 min-h-screen">
@@ -148,6 +187,10 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
         siteCheckins={siteCheckins ?? []}
         toolboxMeetings={toolboxMeetings ?? []}
         stageAssignments={stageAssignments}
+        ptwFieldAssignments={ptwFieldAssignments ?? []}
+        ptwDailyChecks={ptwDailyChecks ?? []}
+        profileById={profileById}
+        fieldCandidates={pengawasCandidates}
       />
     </div>
   );
