@@ -14,6 +14,10 @@ import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
+import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel';
+import PtwDailyCheckTab from '@/components/ptw/PtwDailyCheckTab';
+import { assignFieldRole, submitDailyCheck } from '@/app/dashboard/projects/[id]/actions';
+import { todayDateString } from '@/lib/site-ops';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
 import { isJsaPending, JSA_STATUS, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
@@ -83,7 +87,10 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
   );
 }
 
-export function VendorProjectClient({ project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, myReviews }: {
+export function VendorProjectClient({
+  project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, myReviews,
+  ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canAssignHolder, canFillFieldRole,
+}: {
   project: any; currentUserId: string; jsaSignatories?: any; ptwSignatories?: Record<string, any>;
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
   siteCheckins?: any[];
@@ -98,6 +105,15 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
   documentLogs?: any[];
   /** Dokumen yang sedang menunggu review user ini (HSE/PM Vendor) — tombol langsung ke halaman review. */
   myReviews?: { key: string; label: string; href: string }[];
+  ptwFieldAssignments?: any[];
+  ptwDailyChecks?: any[];
+  profileById?: Record<string, { full_name: string | null; email: string | null }>;
+  /** Kandidat yang boleh ditugaskan sebagai Pemegang (sesama staf vendor pemanggil). */
+  fieldCandidates?: { id: string; name: string }[];
+  /** true kalau caller punya ptw.assign_holder — menampilkan tombol Tugaskan/Ganti Pemegang. */
+  canAssignHolder?: boolean;
+  /** true kalau caller punya ptw.field_holder atau ptw.field_pengawas — boleh mengisi daily check bila sedang ditugaskan. */
+  canFillFieldRole?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [qrModalToken, setQrModalToken] = useState<string | null>(null);
@@ -160,6 +176,8 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
     { id: 'ringkasan', label: 'Ringkasan Proyek', icon: <Briefcase className="w-4 h-4" /> },
     { id: 'dokumen', label: 'Dokumen K3', icon: <FileText className="w-4 h-4" /> },
     { id: 'safety', label: 'Safety Check', icon: <ClipboardCheck className="w-4 h-4" /> },
+    { id: 'penugasan', label: 'Penugasan', icon: <Users className="w-4 h-4" /> },
+    { id: 'dailycheck', label: 'Daily Check', icon: <ClipboardList className="w-4 h-4" /> },
     { id: 'lapangan', label: 'Status Lapangan', icon: <Siren className="w-4 h-4" /> },
     { id: 'diskusi', label: 'Diskusi & Notes', icon: <MessageSquare className="w-4 h-4" /> },
     { id: 'riwayat', label: 'Riwayat', icon: <History className="w-4 h-4" /> },
@@ -614,6 +632,7 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
                                   hotWorkTypes={row.hot_work_types || []}
                                   gasTestFrequency={row.gas_test_frequency || {}}
                                   checklistData={row.safety_checklist || {}}
+                                  dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
                                   jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                   siblings={ptws}
                                   signatories={ptwSignatories?.[row.id]}
@@ -673,6 +692,65 @@ export function VendorProjectClient({ project, currentUserId, jsaSignatories, pt
               valid_to: p.valid_to,
               safety_checklist: p.safety_checklist,
             }))}
+          />
+        </div>
+      )}
+
+      {/* --- TAB CONTENT: PENUGASAN LAPANGAN --- */}
+      {activeTab === 'penugasan' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <PtwFieldAssignmentsPanel
+            ptws={ptws.map((p, i) => ({
+              id: p.id,
+              ptw_type: p.ptw_type,
+              ptw_number: p.ptw_number,
+              status: ptwEffectiveStatuses[i],
+            }))}
+            assignments={ptwFieldAssignments ?? []}
+            profileById={profileById ?? {}}
+            candidates={(fieldCandidates ?? []).map((c) => ({ id: c.id, full_name: c.name }))}
+            canAssign={{ pemegang: !!canAssignHolder }}
+            onAssign={async ({ ptwId, peran, userId, alasan }) => {
+              const res = await assignFieldRole(ptwId, peran, userId, alasan);
+              if (!res.success) {
+                alert(res.error || 'Gagal menugaskan peran lapangan.');
+                return false;
+              }
+              window.location.reload();
+              return true;
+            }}
+          />
+        </div>
+      )}
+
+      {/* --- TAB CONTENT: ISIAN RIKSA HARIAN --- */}
+      {activeTab === 'dailycheck' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <PtwDailyCheckTab
+            ptws={ptws.map((p, i) => ({
+              id: p.id,
+              ptw_type: p.ptw_type,
+              ptw_number: p.ptw_number,
+              status: ptwEffectiveStatuses[i],
+              valid_from: p.valid_from,
+              valid_to: p.valid_to,
+              safety_checklist: p.safety_checklist,
+            }))}
+            dailyChecks={ptwDailyChecks ?? []}
+            assignments={ptwFieldAssignments ?? []}
+            profileById={profileById ?? {}}
+            currentUserId={currentUserId}
+            today={todayDateString()}
+            canFill={!!canFillFieldRole}
+            onSubmit={async ({ ptwId, uraian, requiredKeys }) => {
+              const res = await submitDailyCheck(ptwId, uraian, requiredKeys);
+              if (!res.success) {
+                alert(res.error || 'Gagal mengirim daily check.');
+                return false;
+              }
+              window.location.reload();
+              return true;
+            }}
           />
         </div>
       )}

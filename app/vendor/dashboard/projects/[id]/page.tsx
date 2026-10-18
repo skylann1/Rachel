@@ -6,6 +6,7 @@ import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { hasPermission } from '@/utils/permissions';
 import { getStageAssignments, getEligibleAssignees, getPassedStageKeys, VENDOR_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
 import { getDocumentLogs } from '@/app/dashboard/approval/actions';
+import { getFieldCandidates } from '@/app/dashboard/projects/[id]/actions';
 import { PROCEDURE_STATUS } from '@/lib/procedure-status';
 import { JSA_STATUS } from '@/lib/jsa-status';
 import { PTW_STATUS } from '@/lib/ptw-status';
@@ -18,8 +19,11 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
 
   const canManageAssignments = await hasPermission('masterData', 'manage_org_staff');
   const canEditSafetyChecklist = await hasPermission('ptw', 'edit_safety_checklist');
+  const canAssignHolder = await hasPermission('ptw', 'assign_holder');
+  const canFillFieldRole = (await hasPermission('ptw', 'field_holder')) || (await hasPermission('ptw', 'field_pengawas'));
   const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', user?.id).single();
   const actorOrgId = actorProfile?.org_id ?? '';
+  const pemegangCandidates = canAssignHolder ? await getFieldCandidates('pemegang') : [];
 
   const VENDOR_STAGE_LABELS: Record<string, string> = {
     'procedure.hse_vendor': 'HSE Vendor — Prosedur Kerja',
@@ -106,14 +110,33 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
 
   // Tab "Status Lapangan": check-in dan toolbox meeting lintas semua tipe PTW proyek ini.
   const ptwIds = ptws.map(p => p.id);
-  const [{ data: siteCheckins }, { data: toolboxMeetings }] = await Promise.all([
+  const [{ data: siteCheckins }, { data: toolboxMeetings }, { data: ptwFieldAssignments }, { data: ptwDailyChecks }] = await Promise.all([
     ptwIds.length > 0
       ? supabase.from('site_checkins').select('*').in('ptw_id', ptwIds).order('checked_in_at', { ascending: false })
       : Promise.resolve({ data: [] as any[] }),
     ptwIds.length > 0
       ? supabase.from('toolbox_meetings').select('*').in('ptw_id', ptwIds).order('meeting_date', { ascending: false }).order('created_at', { ascending: false })
       : Promise.resolve({ data: [] as any[] }),
+    ptwIds.length > 0
+      ? supabase.from('ptw_field_assignments').select('*').in('ptw_id', ptwIds).order('aktif_dari', { ascending: false })
+      : Promise.resolve({ data: [] as any[] }),
+    ptwIds.length > 0
+      ? supabase.from('ptw_daily_checks').select('*').in('ptw_id', ptwIds).order('hari_ke', { ascending: true })
+      : Promise.resolve({ data: [] as any[] }),
   ]);
+
+  const fieldUserIds = Array.from(new Set(
+    (ptwFieldAssignments || []).flatMap((a: any) => [a.user_id, a.ditugaskan_oleh]).filter(Boolean)
+  ));
+  const dailyUserIds = Array.from(new Set((ptwDailyChecks || []).map((d: any) => d.user_id).filter(Boolean)));
+  const fieldProfileIds = Array.from(new Set([...fieldUserIds, ...dailyUserIds]));
+  const { data: fieldProfiles } = fieldProfileIds.length > 0
+    ? await supabase.from('profiles').select('id, full_name, email').in('id', fieldProfileIds)
+    : { data: [] as any[] };
+  const profileById: Record<string, { full_name: string | null; email: string | null }> = {};
+  for (const p of fieldProfiles || []) {
+    profileById[p.id] = { full_name: p.full_name, email: p.email };
+  }
 
   // Dokumen yang SEDANG menunggu review saya (HSE/PM Vendor) di proyek ini —
   // supaya reviewer bisa langsung membukanya dari halaman proyek, tidak harus
@@ -158,6 +181,12 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       assignmentSlots={assignmentSlots}
       documentLogs={documentLogs}
       myReviews={myReviews}
+      ptwFieldAssignments={ptwFieldAssignments ?? []}
+      ptwDailyChecks={ptwDailyChecks ?? []}
+      profileById={profileById}
+      fieldCandidates={pemegangCandidates}
+      canAssignHolder={canAssignHolder}
+      canFillFieldRole={canFillFieldRole}
     />
   );
 }
