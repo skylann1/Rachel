@@ -17,6 +17,7 @@ const PRESENCE_PATH_LABELS: Array<[string, string]> = [
   ['/dashboard/master-data/announcement', 'Master Data — Pengumuman'],
   ['/dashboard/projects', 'Detail Proyek'],
   ['/dashboard/approval', 'Kelola Proyek (Approval K3)'],
+  ['/dashboard/my-projects', 'Proyek Saya (Pengawas)'],
   ['/dashboard/ongoing', 'Proyek Berjalan'],
   ['/dashboard/archive', 'Arsip Proyek'],
   ['/dashboard/my-task', 'My Task'],

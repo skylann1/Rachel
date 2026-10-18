@@ -597,6 +597,35 @@ export default function PtwPDF({
                     </View>
                   </View>
                 ))}
+
+                {/* Keterangan dinamis: nama lengkap penjabat (kolom di atas hanya inisial)
+                    dan uraian pekerjaan harian dari Pemegang. Hanya muncul kalau ada isinya. */}
+                {(() => {
+                  const uraian = dailyChecks
+                    .filter((c) => c.peran === 'pemegang' && c.uraian_pekerjaan)
+                    .sort((a, b) => a.hari_ke - b.hari_ke);
+                  const pemegangNama = signatories?.pemegang?.nama;
+                  const pengawasNama = signatories?.pengawas?.nama;
+                  if (uraian.length === 0 && !pemegangNama && !pengawasNama) return null;
+                  return (
+                    <View style={{ borderTopWidth: 1, borderColor: B, padding: 1.5 }}>
+                      {(pemegangNama || pengawasNama) && (
+                        <Text style={{ fontSize: 4 }}>
+                          Pemegang PTW: {pemegangNama || '-'}   |   Pengawas PTW: {pengawasNama || '-'}
+                        </Text>
+                      )}
+                      {uraian.length > 0 && (
+                        <Text style={{ fontSize: 3.6, lineHeight: 1.1, marginTop: 0.5 }}>
+                          <Text style={{ fontWeight: 'bold' }}>Uraian harian (Pemegang): </Text>
+                          {uraian.map((c) => {
+                            const teks = String(c.uraian_pekerjaan).replace(/\s+/g, ' ').trim();
+                            return `H${c.hari_ke} ${formatCheckDate(c.tanggal)}: ${teks.length > 48 ? `${teks.slice(0, 45)}...` : teks}`;
+                          }).join('  •  ')}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })()}
               </View>
 
             </View>

@@ -6,7 +6,8 @@ import { getStageAssignmentsWithNames, type StageAssignmentRowWithName } from '.
  *
  * Empat blok pada form (lihat contoh terisi pada dokumen referensi PGN):
  *   Pemohon Permit To Work   -> vendor yang mengajukan izin
- *   Pemegang Permit To Work  -> yang memegang izin fisik di lokasi kerja
+ *   Pemegang Permit To Work  -> Pemegang PTW yang DITUGASKAN (ptw_field_assignments),
+ *                               bukan lagi PIC vendor; kosong kalau belum ada
  *   Pemberi Permit To Work   -> PTW Authority (tahap approval pertama)
  *   Penerbit Permit To Work  -> PTW Issuer (tahap approval kedua)
  *
@@ -31,6 +32,8 @@ export interface PtwSignatories {
   pemegang: PtwSignatory | null;
   pemberi: PtwSignatory | null;
   penerbit: PtwSignatory | null;
+  /** Pengawas PTW yang ditugaskan — tidak punya blok tanda tangan, dipakai untuk keterangan pada kotak Verifikasi. */
+  pengawas?: PtwSignatory | null;
 }
 
 export const PTW_SIGNATORIES_KOSONG: PtwSignatories = {
@@ -38,6 +41,7 @@ export const PTW_SIGNATORIES_KOSONG: PtwSignatories = {
   pemegang: null,
   pemberi: null,
   penerbit: null,
+  pengawas: null,
 };
 
 function formatTanggal(iso: string | null | undefined): string {
@@ -78,9 +82,9 @@ function gabunganSignatory(rows: StageAssignmentRowWithName[], satker: string): 
  * menutup tahap) walau tahap itu bisa ditugaskan ke beberapa assignee
  * sekaligus (semua harus approve).
  *
- * Blok Pemohon dan Pemegang keduanya diisi PIC vendor: yang mengajukan izin
- * dan yang memegangnya di lapangan pada praktiknya orang yang sama.
- * Mengembalikan null untuk blok yang datanya belum ada.
+ * Blok Pemohon diisi PIC vendor (yang mengajukan izin); blok Pemegang diisi
+ * Pemegang PTW yang ditugaskan di ptw_field_assignments. Mengembalikan null
+ * untuk blok yang datanya belum ada.
  */
 export async function getPtwSignatories(
   supabase: any,
@@ -99,15 +103,45 @@ export async function getPtwSignatories(
       }
     : null;
 
-  const [authorityRows, issuerRows] = await Promise.all([
+  const [authorityRows, issuerRows, { data: fieldRows }] = await Promise.all([
     getStageAssignmentsWithNames(supabase, projectId, 'ptw', 'ptw.approve_pm'),
     getStageAssignmentsWithNames(supabase, projectId, 'ptw', 'ptw.review_issuer'),
+    supabase
+      .from('ptw_field_assignments')
+      .select('peran, user_id, aktif_dari, aktif_sampai')
+      .eq('ptw_id', ptw.id)
+      .order('aktif_dari', { ascending: false }),
   ]);
+
+  // Penjabat lapangan: yang sedang aktif; kalau sudah diganti/dicabut, yang terakhir menjabat.
+  const pick = (peran: 'pemegang' | 'pengawas') => {
+    const rows = ((fieldRows || []) as { peran: string; user_id: string; aktif_dari: string; aktif_sampai: string | null }[])
+      .filter(r => r.peran === peran);
+    return rows.find(r => r.aktif_sampai === null) ?? rows[0] ?? null;
+  };
+  const holderRow = pick('pemegang');
+  const supervisorRow = pick('pengawas');
+  const ids = [holderRow?.user_id, supervisorRow?.user_id].filter(Boolean) as string[];
+  const { data: people } = ids.length > 0
+    ? await supabase.from('profiles').select('id, full_name, jabatan, role').in('id', ids)
+    : { data: [] as any[] };
+  const personById = new Map<string, any>((people || []).map((p: any) => [p.id as string, p]));
+  const toSignatory = (row: typeof holderRow, satker: string): PtwSignatory | null => {
+    if (!row) return null;
+    const p = personById.get(row.user_id);
+    return {
+      nama: p?.full_name || 'Tidak diketahui',
+      jabatan: p?.jabatan || getRoleLabel(p?.role),
+      satker,
+      tanggal: formatTanggal(row.aktif_dari),
+    };
+  };
 
   return {
     pemohon: vendor,
-    pemegang: vendor,
+    pemegang: toSignatory(holderRow, vendorPic?.perusahaan || ''),
     pemberi: gabunganSignatory(authorityRows, 'PGN'),
     penerbit: gabunganSignatory(issuerRows, 'PGN'),
+    pengawas: toSignatory(supervisorRow, 'PGN'),
   };
 }

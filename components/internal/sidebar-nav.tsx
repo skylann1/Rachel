@@ -3,12 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen, Megaphone, Activity, AlertOctagon, Mail } from 'lucide-react';
+import { LayoutDashboard, HardHat, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen, Megaphone, Activity, AlertOctagon, Mail } from 'lucide-react';
 import type { SidebarBadges } from '@/app/dashboard/actions/sidebar-badges';
 
 const menuUtama = [
   { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard, permission: { module: 'dashboard', action: 'view' } },
   { name: 'My Task', href: '/dashboard/my-task', icon: CheckCircle, permission: { module: 'dashboard', action: 'view' }, badgeKey: 'myTask' as const },
+  { name: 'Proyek Saya', href: '/dashboard/my-projects', icon: HardHat, permission: { module: 'ptw', action: 'field_pengawas' } },
   { name: 'Inspeksi', href: '/dashboard/inspection', icon: Camera, permission: { module: 'inspection', action: 'view' }, badgeKey: 'openInspections' as const },
   { name: 'Laporan Insiden', href: '/dashboard/incident', icon: AlertTriangle, permission: { module: 'incident', action: 'view' }, badgeKey: 'openIncidents' as const },
   { name: 'Kelola Proyek', href: '/dashboard/approval', icon: FileSignature, permission: { module: 'approval', action: 'view' }, badgeKey: 'pendingApproval' as const },
