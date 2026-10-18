@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { createNotification, notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 import { hasPermissionForUser } from "@/utils/permissions";
+import { normalizeActivityType } from "@/lib/inspection-activity";
 
 export async function getInspections() {
   const supabase = await createClient();
@@ -18,6 +19,7 @@ export async function getInspections() {
       image_url,
       created_at,
       is_project_activity,
+      activity_type,
       reported_by,
       target_vendor,
       vendor_response,
@@ -50,7 +52,10 @@ export async function createInspection(formData: FormData) {
   const priority = formData.get("priority") as string;
   const location = formData.get("location") as string;
   const title = formData.get("title") as string;
-  const is_project_activity = formData.get("is_project_activity") !== 'false';
+  // Tipe Kegiatan: Proyek | Non-Proyek | Audit / Kunjungan. Hanya Non-Proyek
+  // yang bukan kegiatan keproyekan (tanpa vendor terkait).
+  const activity_type = normalizeActivityType(formData.get("activity_type"));
+  const is_project_activity = activity_type !== 'Non-Proyek';
   const assigned_to = formData.get("assigned_to") as string;
   
   // Multi-foto: satu laporan bisa punya banyak foto (inspection_photos),
@@ -78,6 +83,7 @@ export async function createInspection(formData: FormData) {
       status: 'Open',
       image_url,
       is_project_activity,
+      activity_type,
       assigned_to: assigned_to || user?.id // Default to reporter if not explicitly assigned
     })
     .select()
@@ -112,7 +118,7 @@ export async function createInspection(formData: FormData) {
       await notifyOrgMembers({
         orgId: target_vendor,
         type: 'warning',
-        title: `Temuan K3 Baru: ${finding_type}`,
+        title: `Temuan K3 Baru: ${finding_type}${activity_type === 'Audit / Kunjungan' ? ' (Audit / Kunjungan)' : ''}`,
         message: `Temuan baru "${title}" dilaporkan di lokasi "${location}" dengan prioritas ${priority}.`,
         link: `/vendor/dashboard/inspection`,
       });

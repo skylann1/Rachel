@@ -1,15 +1,26 @@
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
+import { existsSync } from 'fs';
+import path from 'path';
 import { ShieldCheck, Mail, Lock, ArrowRight, Fingerprint, Radio } from 'lucide-react';
 import { login } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 
+// Logo PGSOL opsional: taruh file di public/assets/logo/pgsol-logo.png. Selama
+// file belum ada, halaman login PGSOL memakai wordmark teks sebagai pengganti.
+const PGSOL_LOGO_PATH = '/assets/logo/pgsol-logo.png';
+
 export default async function InternalLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; org?: string }>;
 }) {
   const resolvedSearchParams = await searchParams;
+  // Branding mengikuti pintu masuk (?org=pgsol, dipakai /pgsol/login). Akun
+  // PGN dan PGSOL tetap login lewat form & action yang sama.
+  const isPgsol = resolvedSearchParams?.org === 'pgsol';
+  const pgsolLogoExists = isPgsol && existsSync(path.join(process.cwd(), 'public', PGSOL_LOGO_PATH));
 
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row">
@@ -22,12 +33,25 @@ export default async function InternalLoginPage({
 
         {/* Brand */}
         <div className="relative z-10 flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30">
-            <ShieldCheck className="w-6 h-6" />
+          <div className="h-12 rounded-xl bg-white px-3 flex items-center justify-center shadow-lg shadow-black/20">
+            {isPgsol && !pgsolLogoExists ? (
+              <span className="text-sm font-black tracking-tight text-slate-800 leading-none">
+                PGN <span className="text-primary">SOLUTION</span>
+              </span>
+            ) : (
+              <Image
+                src={isPgsol ? PGSOL_LOGO_PATH : '/assets/logo/main-logo.png'}
+                alt={isPgsol ? 'PGN Solution' : 'Pertamina Gas Negara'}
+                width={isPgsol ? 120 : 110}
+                height={44}
+                priority
+                className="h-10 w-auto object-contain"
+              />
+            )}
           </div>
-          <div>
+          <div className="pl-1">
             <span className="text-xl font-black text-white tracking-tight leading-none block">RACHEL</span>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Portal Internal</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">{isPgsol ? 'Portal PGSOL' : 'Portal Internal'}</span>
           </div>
         </div>
 
@@ -92,11 +116,12 @@ export default async function InternalLoginPage({
 
         <div className="relative w-full max-w-sm">
           <div className="mb-10">
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Login Internal</h2>
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">{isPgsol ? 'Login PGSOL' : 'Login Internal'}</h2>
             <p className="text-sm text-slate-500 leading-relaxed">Masuk dengan akun korporat yang telah didaftarkan oleh administrator.</p>
           </div>
 
           <form className="space-y-6">
+            {isPgsol && <input type="hidden" name="org" value="pgsol" />}
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700">Email Korporat</label>
               <div className="relative">
@@ -152,7 +177,12 @@ export default async function InternalLoginPage({
             </SubmitButton>
           </form>
 
-          <div className="mt-8 pt-8 border-t border-slate-100 text-center">
+          <div className="mt-8 pt-8 border-t border-slate-100 text-center space-y-2">
+            <p className="text-sm text-slate-500 font-medium">
+              {isPgsol
+                ? <>Pegawai PGN? <Link href="/auth/login" className="font-bold text-primary hover:underline">Masuk via Portal Internal</Link></>
+                : <>Pegawai PGSOL? <Link href="/auth/login?org=pgsol" className="font-bold text-primary hover:underline">Masuk via Portal PGSOL</Link></>}
+            </p>
             <p className="text-sm text-slate-500 font-medium">
               Mitra Kerja atau Kontraktor? <Link href="/vendor/login" className="font-bold text-primary hover:underline">Masuk via Portal Mitra Kerja</Link>
             </p>

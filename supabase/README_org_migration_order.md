@@ -219,3 +219,13 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
     `PTW Aktif` selama pengajuan menunggu; hanya `valid_to` yang berubah saat disetujui,
     maksimal 7 hari sejak `valid_from`. Idempotent. Bergantung pada item 14 dan 15.
     **Harus dijalankan SEBELUM deploy kode fitur ini.**
+17. `schema_inspection_activity_type.sql` — kolom `inspections.activity_type`
+    (`Proyek` | `Non-Proyek` | `Audit / Kunjungan`) + backfill dari `is_project_activity` dan
+    `finding_type = 'Audit / Kunjungan'`. "Audit / Kunjungan" kini tipe kegiatan, bukan jenis
+    temuan. Idempotent. **Jalankan SEBELUM deploy** — daftar inspeksi meng-select kolom ini.
+    Sudah diterapkan di project Supabase live lewat MCP pada 2026-10-19.
+18. `schema_project_risk_level.sql` — kolom `projects.risk_level` (`low` | `moderate` | `high`,
+    NULL = belum diatur). Radio "Kategori Risiko Proyek" di form Buat Proyek sebelumnya tidak
+    disimpan; kolom ini menyimpannya dan dipakai membedakan kartu proyek (internal & vendor).
+    Idempotent. **Jalankan SEBELUM deploy** — daftar proyek vendor meng-select kolom ini.
+    Sudah diterapkan di project Supabase live lewat MCP pada 2026-10-19.

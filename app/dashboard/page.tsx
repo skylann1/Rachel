@@ -12,6 +12,7 @@ import { AnnouncementCarousel } from '@/components/announcement-carousel';
 import { getActiveAnnouncements } from '@/app/dashboard/master-data/announcement/actions';
 import { getNotifications } from '@/app/dashboard/inbox/actions';
 import { timeAgo } from '@/lib/time-ago';
+import { hasPermission } from '@/utils/permissions';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const MONTH_LONG = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -580,9 +581,12 @@ export default async function DashboardOverviewPage({
      isFiltered,
    };
 
+   const canViewVendors = await hasPermission('masterData', 'view_vendor');
+
    const statCards = [
      {
        label: 'Proyek Aktif',
+       href: '/dashboard/ongoing',
        value: activeProjects.length,
        icon: Briefcase,
        gradient: 'from-blue-500 to-blue-600',
@@ -592,6 +596,7 @@ export default async function DashboardOverviewPage({
      },
      {
        label: 'Vendor Terdaftar',
+       href: canViewVendors ? '/dashboard/master-data/vendor' : null,
        value: vendorsCount || 0,
        icon: Building2,
        gradient: 'from-violet-500 to-violet-600',
@@ -601,6 +606,7 @@ export default async function DashboardOverviewPage({
      },
      {
        label: 'Safe Man-Hours',
+       href: '/dashboard/site-status',
        value: safeManHours >= 1_000_000 ? (safeManHours / 1_000_000).toFixed(1) + 'M' : safeManHours.toLocaleString('id-ID'),
        icon: ShieldCheck,
        gradient: 'from-emerald-500 to-emerald-600',
@@ -610,6 +616,7 @@ export default async function DashboardOverviewPage({
      },
      {
        label: 'Anomali Terbuka',
+       href: '/dashboard/inspection',
        value: anomaliOpen + anomaliProgres,
        icon: ClipboardList,
        gradient: 'from-amber-500 to-amber-600',
@@ -622,6 +629,10 @@ export default async function DashboardOverviewPage({
 
    return (
       <div className="space-y-6">
+         {announcements.length > 0 && (
+           <AnnouncementCarousel announcements={announcements} />
+         )}
+
          <div className="flex flex-col gap-4">
            {/* Welcome Header */}
            <div className="relative overflow-hidden bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-up">
@@ -681,12 +692,12 @@ export default async function DashboardOverviewPage({
            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
              {statCards.map((stat, i) => {
                const Icon = stat.icon;
+               const cardClass = `group animate-fade-up relative bg-white border border-slate-200 rounded-2xl p-4 flex gap-3 shadow-sm items-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${stat.glow}`;
+               const Wrapper = ({ children }: { children: React.ReactNode }) => stat.href
+                 ? <Link href={stat.href} className={`${cardClass} cursor-pointer`} style={{ animationDelay: `${120 + i * 60}ms` }}>{children}</Link>
+                 : <div className={cardClass} style={{ animationDelay: `${120 + i * 60}ms` }}>{children}</div>;
                return (
-                 <div
-                   key={stat.label}
-                   className={`group animate-fade-up relative bg-white border border-slate-200 rounded-2xl p-4 flex gap-3 shadow-sm items-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${stat.glow}`}
-                   style={{ animationDelay: `${120 + i * 60}ms` }}
-                 >
+                 <Wrapper key={stat.label}>
                    <div className={`bg-gradient-to-br ${stat.gradient} text-white p-2.5 rounded-xl h-fit shadow-sm transition-transform duration-300 group-hover:scale-110 relative`}>
                      <Icon className="w-5 h-5" />
                      {stat.pulse && (
@@ -701,7 +712,10 @@ export default async function DashboardOverviewPage({
                      <p className="text-xl font-black text-slate-800">{stat.value}</p>
                      <p className={`text-[10px] font-semibold mt-0.5 truncate ${stat.footerTone}`}>{stat.footer}</p>
                    </div>
-                 </div>
+                   {stat.href && (
+                     <ArrowUpRight className="absolute top-3 right-3 w-4 h-4 text-slate-300 transition-all duration-300 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                   )}
+                 </Wrapper>
                );
              })}
            </div>
@@ -709,7 +723,7 @@ export default async function DashboardOverviewPage({
 
          <InteractiveDashboard data={dashboardData} />
 
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+         <div className="grid grid-cols-1 gap-6">
            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 h-fit">
              <h3 className="text-sm font-bold text-slate-800 mb-5 flex items-center gap-2">
                <Activity className="w-4 h-4 text-primary" /> Aktivitas Terakhir
@@ -747,12 +761,6 @@ export default async function DashboardOverviewPage({
                </ul>
              )}
            </div>
-
-           {announcements.length > 0 && (
-             <div className="lg:col-span-2">
-               <AnnouncementCarousel announcements={announcements} />
-             </div>
-           )}
          </div>
       </div>
    );

@@ -15,11 +15,14 @@ export async function login(formData: FormData) {
     password: formData.get("password") as string,
   };
 
+  // Pertahankan branding PGSOL (?org=pgsol) saat login gagal.
+  const orgParam = formData.get("org") === "pgsol" ? "&org=pgsol" : "";
+
   const { data: authData, error } = await supabase.auth.signInWithPassword(data);
 
   if (error) {
     await logFailedLogin(data.email, error.message);
-    redirect("/auth/login?error=" + error.message);
+    redirect("/auth/login?error=" + error.message + orgParam);
   }
 
   // Cek Role di tabel profiles
@@ -38,7 +41,7 @@ export async function login(formData: FormData) {
     // 'local': hanya sesi percobaan ini — jangan mematikan sesi sah akun itu di realm lain.
     await supabase.auth.signOut({ scope: 'local' });
     const debugMsg = `Data profil: ${JSON.stringify(profile) || 'Kosong'}. Error: ${profileError?.message || 'Tidak ada error DB'}`;
-    redirect(`/auth/login?error=Akses ditolak. ${debugMsg}`);
+    redirect(`/auth/login?error=Akses ditolak. ${debugMsg}${orgParam}`);
   }
 
   await logSuccessfulLogin(supabase, authData.user.id);

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { RISK_META, parseRiskLevel, riskCardClasses } from '@/lib/project-risk';
 import { Search, Briefcase, MapPin, Calendar, ArrowRight, FileSignature, Loader2, CalendarClock } from 'lucide-react';
 import { getVendorProjects } from './actions';
 import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
@@ -21,6 +22,7 @@ interface VendorProjectRow {
   status: string;
   progress: number | null;
   contract_number: string | null;
+  risk_level: string | null;
   procedures: ProsedurDocRow[] | ProsedurDocRow | null;
   jsa: ProsedurDocRow[] | ProsedurDocRow | null;
   ptw: PtwRow[] | PtwRow | null;
@@ -35,6 +37,7 @@ function StatusBadge({ status }: { status: string }) {
     [JSA_STATUS.approved]:              'bg-violet-100 text-violet-700',
     [PTW_STATUS.aktif]:                 'bg-emerald-100 text-emerald-700',
     [PTW_STATUS.expired]:               'bg-slate-200 text-slate-600',
+    'PTW Ditutup':                      'bg-emerald-100 text-emerald-700',
     'Selesai':                          'bg-slate-100 text-slate-600',
     'Ditolak':                          'bg-rose-100 text-rose-700',
   };
@@ -98,8 +101,12 @@ export default function VendorProjectsPage() {
     const prosedur = Array.isArray(project.procedures) ? project.procedures[0] : project.procedures;
 
     const effectivePtwStatuses = ptws.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date));
+    if (project.status === 'Selesai') return 'Selesai';
     if (effectivePtwStatuses.some(s => s === PTW_STATUS.expired)) return PTW_STATUS.expired;
-    if (ptws.length > 0 && effectivePtwStatuses.every(s => s === PTW_STATUS.aktif)) return PTW_STATUS.aktif;
+    // Semua PTW sudah ditutup: langkah berikutnya mengajukan penyelesaian proyek.
+    if (ptws.length > 0 && effectivePtwStatuses.every(s => s === PTW_STATUS.selesai)) return 'PTW Ditutup';
+    // Aktif / sedang diajukan penutupannya / sudah ditutup — pekerjaan masih berjalan.
+    if (ptws.length > 0 && effectivePtwStatuses.every(s => s === PTW_STATUS.aktif || s === PTW_STATUS.penutupanDiajukan || s === PTW_STATUS.selesai)) return PTW_STATUS.aktif;
     if (jsa?.status === JSA_STATUS.approved) return JSA_STATUS.approved;
     if (prosedur?.status === PROCEDURE_STATUS.approved) return PROCEDURE_STATUS.approved;
     // "Review HSE/PM Vendor" tidak masuk isProcedurePending (itu buat task
@@ -160,9 +167,21 @@ export default function VendorProjectsPage() {
         );
       case PTW_STATUS.aktif:
         return (
-          <div className="flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 py-2.5 rounded-xl">
-            ✅ PTW Aktif — Pekerjaan Berjalan
-          </div>
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 py-2.5 rounded-xl transition-colors"
+          >
+            ✅ PTW Aktif — Pekerjaan Berjalan <ArrowRight className="w-4 h-4" />
+          </Link>
+        );
+      case 'PTW Ditutup':
+        return (
+          <Link
+            href={`/vendor/dashboard/projects/${encodeURIComponent(project.id)}`}
+            className="flex items-center justify-center gap-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 py-3 rounded-xl transition-all shadow-sm shadow-emerald-600/30"
+          >
+            Ajukan Penyelesaian Proyek <ArrowRight className="w-4 h-4" />
+          </Link>
         );
       case PTW_STATUS.expired:
         return (
@@ -274,7 +293,7 @@ export default function VendorProjectsPage() {
           {filteredProjects.map((project) => {
             const ptwExpiry = getPtwExpiry(project);
             return (
-            <div key={project.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex flex-col relative overflow-hidden">
+            <div key={project.id} className={`border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex flex-col relative overflow-hidden ${riskCardClasses(project.risk_level)}`}>
 
               {ptwExpiry?.status === 'expiring' && (
                 <div className="flex items-center gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
@@ -291,6 +310,12 @@ export default function VendorProjectsPage() {
                   <div>
                     <h3 className="font-bold text-slate-800 line-clamp-1">{project.name}</h3>
                     <p className="text-xs text-slate-400 mt-0.5 uppercase">No. {project.contract_number}</p>
+                    {parseRiskLevel(project.risk_level) && (
+                      <span className={`mt-1.5 inline-flex items-center gap-1.5 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${RISK_META[parseRiskLevel(project.risk_level)!].badge}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${RISK_META[parseRiskLevel(project.risk_level)!].dot}`} />
+                        {RISK_META[parseRiskLevel(project.risk_level)!].label}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <StatusBadge status={getComputedStatus(project)} />

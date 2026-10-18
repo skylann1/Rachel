@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Search, Plus, MapPin, Calendar, Clock, Edit2, Trash2, Building2, Briefcase, X, ArrowRight, Hourglass, CheckCircle2 } from 'lucide-react';
 import { createProject } from './actions';
 import { STAGE_TONE_CLASS, StageTone } from '@/lib/project-stage';
+import { RISK_META, parseRiskLevel, riskCardClasses } from '@/lib/project-risk';
 
 interface ProjectClientProps {
   initialProjects: any[];
@@ -178,7 +179,7 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
       {/* Projects List */}
       <div className="space-y-4">
         {filteredProjects.map((project) => (
-          <div key={project.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow group flex flex-col lg:flex-row gap-6">
+          <div key={project.id} className={`border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow group flex flex-col lg:flex-row gap-6 ${riskCardClasses(project.risk_level)}`}>
             
             {/* Left Col: Main Info */}
             <div className="flex-1 flex gap-5">
@@ -188,6 +189,17 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-lg">{project.id.substring(0,8)}</span>
+                  {(() => {
+                    const risk = parseRiskLevel(project.risk_level);
+                    return risk ? (
+                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${RISK_META[risk].badge}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${RISK_META[risk].dot}`} />
+                        {RISK_META[risk].label}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border border-dashed border-slate-300 text-slate-400">Risiko belum diatur</span>
+                    );
+                  })()}
                   {project.stage && (() => {
                     const StageIcon = STAGE_ICON[project.stage.tone as StageTone];
                     return (
@@ -381,10 +393,10 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
 
                 {/* Kategori Risiko Proyek */}
                 <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-3">Kategori Risiko Proyek</label>
+                  <label className="text-sm font-semibold text-slate-700 block mb-3">Kategori Risiko Proyek <span className="text-rose-500">*</span></label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <label className="cursor-pointer">
-                      <input type="radio" name="risk" className="peer sr-only" value="low" />
+                      <input type="radio" name="risk" required className="peer sr-only" value="low" />
                       <div className="text-center px-4 py-3 border border-slate-200 rounded-xl peer-checked:bg-emerald-50 peer-checked:border-emerald-500 peer-checked:text-emerald-700 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50">
                         Low Risk
                       </div>

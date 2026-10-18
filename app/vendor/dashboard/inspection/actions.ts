@@ -20,6 +20,7 @@ export async function getVendorInspections() {
       id,
       title,
       finding_type,
+      activity_type,
       location,
       priority,
       status,

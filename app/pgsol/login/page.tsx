@@ -6,5 +6,5 @@ import { redirect } from 'next/navigation';
 // Halaman ini disisakan tipis (bukan dihapus) supaya bookmark/link lama
 // tidak 404.
 export default function PgsolLoginRedirect() {
-  redirect('/auth/login');
+  redirect('/auth/login?org=pgsol');
 }

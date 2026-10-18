@@ -20,7 +20,7 @@ const PRESENCE_PATH_LABELS: Array<[string, string]> = [
   ['/dashboard/ongoing', 'Proyek Berjalan'],
   ['/dashboard/archive', 'Arsip Proyek'],
   ['/dashboard/my-task', 'My Task'],
-  ['/dashboard/inspection', 'Inspeksi Proyek'],
+  ['/dashboard/inspection', 'Inspeksi'],
   ['/dashboard/incident', 'Laporan Insiden'],
   ['/dashboard/vendor-docs', 'Dokumen Vendor'],
   ['/dashboard/site-status', 'Status Lapangan'],

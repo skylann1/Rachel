@@ -15,6 +15,8 @@ const STAGE_LABELS: Record<string, string> = {
   'ptw.numbering_hsse': 'Penomoran PTW (HSSE)',
 };
 
+import ProjectRiskEditor from './ProjectRiskEditor';
+
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = decodeURIComponent(id);
@@ -23,7 +25,7 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
   const { data: project, error } = await supabase
     .from('projects')
     .select(`
-      id, name, description, contract_number, location, start_date, end_date, status, progress, vendor_id,
+      id, name, description, contract_number, location, start_date, end_date, status, progress, vendor_id, risk_level,
       vendor_profiles ( id, company_name )
     `)
     .eq('id', projectId)
@@ -99,6 +101,11 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
                   <p className="text-xs text-slate-400 mt-1">Status diperbarui otomatis oleh sistem sesuai alur approval.</p>
                </div>
                
+               <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kategori Risiko</h3>
+                  <ProjectRiskEditor projectId={project.id} initialLevel={project.risk_level} />
+               </div>
+
                <div>
                   <div className="flex justify-between items-end mb-2">
                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Progress Aktual</h3>

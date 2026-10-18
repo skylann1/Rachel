@@ -14,7 +14,7 @@ export async function getVendorProjects() {
   const { data } = await supabase
     .from('projects')
     .select(`
-      id, name, description, location, start_date, end_date, status, progress, contract_number,
+      id, name, description, location, start_date, end_date, status, progress, contract_number, risk_level,
       procedures(status), jsa(status), ptw(status, valid_to)
     `)
     .eq('vendor_id', vendorOrgId)

@@ -7,6 +7,7 @@ import { hasPermissionForUser } from "@/utils/permissions";
 import { writeStageAssignment, getStageAssignments, PGN_STAGE_KEYS } from "@/lib/stage-assignments";
 import { notifyProjectNeedsAssignment, notifyAddedAssigneesIfActive } from "@/lib/assignment-notify";
 import { logActivity } from "@/lib/activity-log";
+import { parseRiskLevel } from "@/lib/project-risk";
 
 export async function createProject(formData: FormData) {
   const supabase = await createClient();
@@ -23,6 +24,8 @@ export async function createProject(formData: FormData) {
   const start_date = formData.get("start_date") as string;
   const end_date = formData.get("end_date") as string;
   const vendor_id = formData.get("vendor_id") as string;
+  const risk_level = parseRiskLevel(formData.get("risk"));
+  if (!risk_level) throw new Error("Pilih Kategori Risiko Proyek.");
 
   const { data: project, error } = await supabase
     .from('projects')
@@ -34,6 +37,7 @@ export async function createProject(formData: FormData) {
       start_date,
       end_date,
       vendor_id,
+      risk_level,
       status: 'Menunggu Review',
       progress: 0,
     })
@@ -64,6 +68,29 @@ export async function createProject(formData: FormData) {
   await logActivity(supabase, { actorId: user.id, action: "Membuat proyek", entityType: "project", entityId: project.id, notes: name });
 
   revalidatePath("/dashboard/master-data/project");
+}
+
+/** Mengubah Kategori Risiko Proyek (termasuk proyek lama yang belum punya level). */
+export async function updateProjectRisk(projectId: string, level: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+  if (!(await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_project'))) {
+    throw new Error("Anda tidak memiliki izin untuk mengubah data proyek.");
+  }
+  const risk_level = parseRiskLevel(level);
+  if (!risk_level) throw new Error("Kategori risiko tidak valid.");
+
+  const { data: updated, error } = await supabase
+    .from('projects').update({ risk_level }).eq('id', projectId).select('id, name');
+  if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) throw new Error("Proyek tidak ditemukan atau tidak dapat diubah.");
+
+  await logActivity(supabase, { actorId: user.id, action: "Mengubah kategori risiko proyek", entityType: "project", entityId: projectId, notes: `${updated[0].name} → ${risk_level}` });
+
+  revalidatePath("/dashboard/master-data/project");
+  revalidatePath(`/dashboard/master-data/project/${projectId}`);
+  revalidatePath("/vendor/dashboard/projects");
 }
 
 export async function saveStageAssignment(projectId: string, stageKey: string, assigneeIds: string[]) {

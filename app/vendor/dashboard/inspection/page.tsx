@@ -7,6 +7,7 @@ import { getVendorInspections, submitVendorResponse } from './actions';
 import { uploadImage } from '@/utils/supabase/storage';
 import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
 import { resolveInspectionGallery } from '@/lib/inspection-photos';
+import { ACTIVITY_TYPE_META, normalizeActivityType } from '@/lib/inspection-activity';
 
 export default function VendorInspectionPage() {
   const [filter, setFilter] = useState('All');
@@ -30,6 +31,7 @@ export default function VendorInspectionPage() {
       return {
         id: d.id,
         type: d.finding_type,
+        activityType: normalizeActivityType(d.activity_type),
         description: d.title,
         location: d.location,
         date: new Date(d.created_at).toLocaleString('id-ID'),
@@ -147,6 +149,9 @@ export default function VendorInspectionPage() {
                <div className="flex items-center gap-2 mb-3">
                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{item.id}</span>
                  <span className="text-xs font-bold text-slate-500">{item.type}</span>
+                 {item.activityType === 'Audit / Kunjungan' && (
+                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${ACTIVITY_TYPE_META[item.activityType as 'Audit / Kunjungan'].badge}`}>Audit / Kunjungan</span>
+                 )}
                </div>
                
                <p className="text-sm font-semibold text-slate-800 leading-relaxed mb-4 line-clamp-3">
