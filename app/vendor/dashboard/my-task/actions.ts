@@ -8,6 +8,7 @@ import { PTW_TYPES, PTW_MAX_VALID_DAYS } from "@/lib/ptw-types";
 import { getAssignmentGaps, PARTY_LABEL, STAGE_SHORT_LABEL } from "@/lib/assignment-gaps";
 import { dayIndexForDate, FIELD_PERAN_LABEL, type FieldPeran } from "@/lib/ptw-field";
 import { todayDateString } from "@/lib/site-ops";
+import { hasPermissionForUser } from "@/utils/permissions";
 
 export type VendorTaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Temuan' | 'Penugasan' | 'DailyCheck';
 export type VendorUrgencyType = 'High' | 'Medium' | 'Low';
@@ -311,6 +312,41 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
           timeInQueue: 'Hari ini',
         });
       }
+    }
+  }
+
+  // 8. Penugasan Pemegang PTW — khusus pemegang izin ptw.assign_holder (admin
+  // vendor): PTW Aktif perusahaan ini yang belum punya Pemegang. Hilang
+  // otomatis begitu Pemegang ditugaskan (tab Penugasan di detail proyek).
+  if (await hasPermissionForUser(supabase, user.id, 'ptw', 'assign_holder')) {
+    const activePtws: { ptw: any; project: any }[] = [];
+    for (const project of projects || []) {
+      const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+      for (const ptw of ptws) {
+        if (getEffectivePtwStatus(ptw.status, ptw.valid_to ?? project.end_date) === PTW_STATUS.aktif) {
+          activePtws.push({ ptw, project });
+        }
+      }
+    }
+    const ptwIds = activePtws.map(x => x.ptw.id);
+    const { data: withHolder } = ptwIds.length > 0
+      ? await supabase.from('ptw_field_assignments').select('ptw_id').in('ptw_id', ptwIds).eq('peran', 'pemegang').is('aktif_sampai', null)
+      : { data: [] as any[] };
+    const covered = new Set((withHolder || []).map((r: any) => r.ptw_id));
+
+    for (const { ptw, project } of activePtws) {
+      if (covered.has(ptw.id)) continue;
+      tasks.push({
+        id: `assign-pemegang-${ptw.id}`,
+        title: `Tugaskan Pemegang PTW — ${ptwTypeTitle(ptw.ptw_type)}`,
+        type: 'Penugasan',
+        projectName: project.name,
+        date: ptw.created_at,
+        url: `/vendor/dashboard/projects/${project.id}`,
+        status: 'PTW aktif belum punya Pemegang',
+        urgency: 'High',
+        timeInQueue: formatTimeInQueue(ptw.created_at),
+      });
     }
   }
 

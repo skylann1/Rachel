@@ -7,7 +7,7 @@ import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, PROCEDURE_PENDING_STATUSE
 import { hasPermissionForUser } from "@/utils/permissions";
 import { getAssignmentGaps, PARTY_LABEL, STAGE_SHORT_LABEL } from "@/lib/assignment-gaps";
 import { dayIndexForDate, FIELD_PERAN_LABEL, type FieldPeran } from "@/lib/ptw-field";
-import { PTW_MAX_VALID_DAYS } from "@/lib/ptw-types";
+import { PTW_MAX_VALID_DAYS, PTW_TYPES } from "@/lib/ptw-types";
 import { todayDateString } from "@/lib/site-ops";
 
 export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan' | 'Penugasan' | 'DailyCheck';
@@ -391,6 +391,47 @@ export async function getMyTasks(): Promise<TaskItem[]> {
           status: 'Belum diisi hari ini',
           urgency: 'High',
           timeInQueue: 'Hari ini',
+        });
+      }
+    }
+  }
+
+  // 8. Penugasan Pengawas PTW — khusus pemegang izin ptw.assign_pengawas (PGN):
+  // PTW yang sudah Aktif tapi belum punya Pengawas. Tanpa Pengawas, Safety
+  // Checklist dan daily check pengawas tidak punya penanggung jawab. Hilang
+  // otomatis begitu Pengawas ditugaskan (tab Penugasan di detail proyek).
+  {
+    const { data: me } = await supabase.from('profiles').select('type').eq('id', user.id).single();
+    if (me?.type === 'pgn' && await hasPermissionForUser(supabase, user.id, 'ptw', 'assign_pengawas')) {
+      const { data: activePtws } = await supabase
+        .from('ptw')
+        .select('id, ptw_type, ptw_number, status, valid_to, created_at, project_id, projects ( name, end_date, vendor_profiles ( company_name ) )')
+        .eq('status', PTW_STATUS.aktif);
+
+      const ptwIds = (activePtws || []).map((p: any) => p.id);
+      const { data: withPengawas } = ptwIds.length > 0
+        ? await supabase.from('ptw_field_assignments').select('ptw_id').in('ptw_id', ptwIds).eq('peran', 'pengawas').is('aktif_sampai', null)
+        : { data: [] as any[] };
+      const covered = new Set((withPengawas || []).map((r: any) => r.ptw_id));
+
+      for (const ptw of (activePtws || []) as any[]) {
+        if (covered.has(ptw.id)) continue;
+        const proj = Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects;
+        if (getEffectivePtwStatus(ptw.status, ptw.valid_to ?? proj?.end_date) !== PTW_STATUS.aktif) continue;
+        const vendor = proj?.vendor_profiles;
+        const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
+        const typeTitle = PTW_TYPES.find(t => t.id === ptw.ptw_type)?.title.split('(')[0].trim() || ptw.ptw_type;
+        tasks.push({
+          id: `assign-pengawas-${ptw.id}`,
+          title: `Tugaskan Pengawas PTW — ${typeTitle}${ptw.ptw_number ? ` (${ptw.ptw_number})` : ''}`,
+          type: 'Penugasan',
+          projectName: proj?.name || 'Unknown Project',
+          vendorName: companyName || 'Internal',
+          date: ptw.created_at,
+          url: `/dashboard/projects/${ptw.project_id}`,
+          status: 'PTW aktif belum punya Pengawas',
+          urgency: 'High',
+          timeInQueue: formatTimeInQueue(ptw.created_at),
         });
       }
     }

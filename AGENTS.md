@@ -44,7 +44,7 @@ PTW/Prosedur/JSA/Incident documents render via `@react-pdf/renderer` components 
 Larger features get a dated spec/plan under `docs/superpowers/specs/` and `docs/superpowers/plans/` (e.g. `2026-09-14-ptw-safety-checklist-fill-*`). Read the latest before touching approval/workflow features.
 
 ## Env
-`.env.local` (gitignored): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (for `utils/supabase/admin.ts`). `RESEND_API_KEY` is optional — senders in `lib/email.ts` silently no-op without it.
+`.env.local` (gitignored): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (for `utils/supabase/admin.ts`). `RESEND_API_KEY` is optional — senders in `lib/email.ts` silently no-op without it. `CRON_SECRET` is required for the Vercel Cron job (`vercel.json` -> `/api/cron/ptw-daily-reminders`, daily PTW daily-check reminders); the route returns 401 without it, so set it in Vercel (Production).
 
 ## Ignore
 - `.claude/worktrees/` — stale feature worktrees with their own `node_modules`; don't edit or search there.
