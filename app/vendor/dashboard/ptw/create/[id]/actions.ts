@@ -1,10 +1,10 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { notifyAssignees } from "@/app/dashboard/inbox/actions";
 import { APPROVED_JSA } from "@/lib/project-stage";
 import { PTW_STATUS } from "@/lib/ptw-status";
-import type { PtwFormDetails, PtwType } from "@/lib/ptw-types";
+import { PTW_TYPES, PTW_MAX_VALID_DAYS, type PtwFormDetails, type PtwType } from "@/lib/ptw-types";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { resetStageAssignments, getStageAssignments } from "@/lib/stage-assignments";
 import { aggregateStepNeeds, StepKebutuhan } from "@/lib/procedure-kebutuhan";
@@ -96,10 +96,13 @@ export async function getRequiredPtwTypes(projectId: string): Promise<PtwType[]>
   return (data?.content?.requiredPtwTypes as PtwType[]) || [];
 }
 
+type PtwWorkerInput = { id: string; worker_name?: string; worker_role?: string; certification?: string | null };
+type PtwEquipmentInput = { id: string; name?: string; type?: string; certificate_number?: string | null };
+
 export async function savePtw(
   projectId: string,
-  workers: any[],
-  equipment: any[],
+  workers: PtwWorkerInput[],
+  equipment: PtwEquipmentInput[],
   ptwType: string,
   hazards: string[],
   apd: Record<string, string[]>,
@@ -108,14 +111,65 @@ export async function savePtw(
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Sesi login berakhir. Silakan login ulang.');
+  }
 
+  // Validasi sisi server — aturan di form hanya UX, bisa dilewati.
+  if (!PTW_TYPES.some(t => t.id === ptwType)) {
+    throw new Error('Jenis PTW tidak valid.');
+  }
+  if (workers.length === 0 && equipment.length === 0) {
+    throw new Error('Pilih minimal satu pekerja atau peralatan.');
+  }
+  if (!details.validFrom || !details.validTo) {
+    throw new Error('Masa berlaku izin wajib diisi.');
+  }
+  const dari = new Date(details.validFrom).getTime();
+  const sampai = new Date(details.validTo).getTime();
+  if (Number.isNaN(dari) || Number.isNaN(sampai)) {
+    throw new Error('Format tanggal masa berlaku tidak valid.');
+  }
+  const durasiHari = Math.floor((sampai - dari) / 86_400_000) + 1;
+  if (durasiHari < 1) {
+    throw new Error('Tanggal selesai tidak boleh lebih awal dari tanggal mulai.');
+  }
+  if (durasiHari > PTW_MAX_VALID_DAYS) {
+    throw new Error(`Masa berlaku maksimal ${PTW_MAX_VALID_DAYS} hari.`);
+  }
+
+  // Pekerja & peralatan harus milik organisasi vendor pemanggil.
+  const orgId = await getCallerVendorOrgId(supabase);
+  if (!orgId) {
+    throw new Error('Organisasi vendor tidak ditemukan untuk akun ini.');
+  }
+  const workerIds = workers.map(w => w.id);
+  const equipmentIds = equipment.map(e => e.id);
+  if (workerIds.length > 0) {
+    const { data: owned } = await supabase
+      .from('vendor_workers').select('id').eq('vendor_id', orgId).in('id', workerIds);
+    if ((owned?.length ?? 0) !== new Set(workerIds).size) {
+      throw new Error('Ada pekerja yang bukan milik organisasi Anda.');
+    }
+  }
+  if (equipmentIds.length > 0) {
+    const { data: owned } = await supabase
+      .from('vendor_equipment').select('id').eq('vendor_id', orgId).in('id', equipmentIds);
+    if ((owned?.length ?? 0) !== new Set(equipmentIds).size) {
+      throw new Error('Ada peralatan yang bukan milik organisasi Anda.');
+    }
+  }
+
+  // limit(1) + maybeSingle: proyek bisa saja punya lebih dari satu baris JSA.
   const { data: jsa } = await supabase
     .from('jsa')
     .select('status')
     .eq('project_id', projectId)
-    .single();
+    .eq('status', APPROVED_JSA)
+    .limit(1)
+    .maybeSingle();
 
-  if (jsa?.status !== APPROVED_JSA) {
+  if (!jsa) {
     throw new Error('JSA untuk proyek ini belum disetujui. PTW tidak dapat diajukan.');
   }
 
@@ -146,12 +200,10 @@ export async function savePtw(
     }
     // Reviewer yang sedang ditugaskan menilai lewat Setujui/Tolak, bukan
     // mengajukan ulang (resubmit mereset penugasan tahap review).
-    if (user) {
-      for (const stageKey of ['ptw.hse_vendor', 'ptw.review_vendor']) {
-        const rows = await getStageAssignments(supabase, projectId, 'ptw', stageKey);
-        if (rows.some(r => r.assignee_id === user.id && r.status === 'pending')) {
-          throw new Error('Anda ditugaskan sebagai reviewer PTW ini. Gunakan Setujui / Tolak, bukan mengajukan ulang.');
-        }
+    for (const stageKey of ['ptw.hse_vendor', 'ptw.review_vendor']) {
+      const rows = await getStageAssignments(supabase, projectId, 'ptw', stageKey);
+      if (rows.some(r => r.assignee_id === user.id && r.status === 'pending')) {
+        throw new Error('Anda ditugaskan sebagai reviewer PTW ini. Gunakan Setujui / Tolak, bukan mengajukan ulang.');
       }
     }
     // .select() dipakai supaya update yang tidak mengenai baris (ditolak RLS,
@@ -222,7 +274,7 @@ export async function savePtw(
 
   if (ptwId) {
     await logDocumentEvent(supabase, {
-      docType: 'ptw', docId: ptwId, projectId, actorId: user?.id,
+      docType: 'ptw', docId: ptwId, projectId, actorId: user.id,
       action: existing ? `PTW Diajukan Ulang (${ptwType})` : `PTW Diajukan (${ptwType})`,
     });
   }

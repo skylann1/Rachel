@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useDeferredValue } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Users, Truck, Stamp, ShieldAlert, FileText, HardHat, FlaskConical, Plus, Trash2, CalendarClock, Flame, AlertTriangle, Sparkles } from 'lucide-react';
@@ -78,6 +78,8 @@ export default function PTWCreatePage() {
   // Alasan tombol Ajukan disembunyikan: reviewer yang sedang ditugaskan, atau
   // PTW sudah lewat tahap review vendor. null = penyusun boleh mengajukan.
   const [submitBlock, setSubmitBlock] = useState<string | null>(null);
+  // Tombol Ajukan baru aktif setelah status PTW & penugasan reviewer selesai dicek.
+  const [blockChecked, setBlockChecked] = useState(false);
 
   // Baris yang ter-prefill otomatis dari kebutuhan langkah JSA yang disetujui —
   // dipakai untuk badge "dari JSA" pada selector pekerja & peralatan, dan
@@ -150,9 +152,10 @@ export default function PTWCreatePage() {
         if (!resubmittable.includes(data.status)) {
           setSubmitBlock(`PTW ini sudah berada di tahap "${data.status}" dan tidak bisa diajukan ulang dari sini.`);
         } else {
-          getMyVendorReviewAssignment(projectId as string, 'ptw', data.id)
-            .then(a => { if (a) setSubmitBlock('Anda reviewer untuk PTW ini — gunakan Setujui atau Tolak di kotak review. Tombol ajukan hanya untuk penyusun.'); })
-            .catch(() => {});
+          try {
+            const a = await getMyVendorReviewAssignment(projectId as string, 'ptw', data.id);
+            if (a) setSubmitBlock('Anda reviewer untuk PTW ini — gunakan Setujui atau Tolak di kotak review. Tombol ajukan hanya untuk penyusun.');
+          } catch { /* server tetap menolak pengajuan oleh reviewer */ }
         }
         // Merevisi PTW tipe ini yang sudah pernah diajukan.
         if (data.workers) setSelectedPekerja(data.workers.map((w: any) => w.id).filter(Boolean));
@@ -208,6 +211,7 @@ export default function PTWCreatePage() {
       setShowAllPeralatan(appliedPrefill.equipment.length === 0);
       setShowAllApd(!Object.values(appliedPrefill.apd).some(list => list.length > 0));
       setShowAllHazards(appliedPrefill.hazards.length === 0);
+      setBlockChecked(true);
 
       // Belum ada acuan sama sekali — mulai dari tanggal proyek, dipotong
       // ke batas 7 hari supaya vendor tidak langsung kena error.
@@ -282,6 +286,15 @@ export default function PTWCreatePage() {
     setHotWorkTypes(prev => prev.includes(item) ? prev.filter(x => x !== item) : [...prev, item]);
   };
 
+  // Preview PDF di-render berat; useDeferredValue menunda render ulangnya
+  // supaya klik/ketikan di form tidak tersendat.
+  const preview = useDeferredValue({
+    projectId, ptwType, hazards: selectedHazards, apd: selectedApd,
+    pekerja: selectedPekerjaData, peralatan: selectedPeralatanData,
+    gasTests: requiresGasTest ? gasTests : [],
+    validFrom, validTo, workStart, workEnd, hotWorkTypes, gasFreq,
+  });
+
   const handleAjukan = async () => {
     if (masaBerlakuError) {
       alert(masaBerlakuError);
@@ -297,7 +310,7 @@ export default function PTWCreatePage() {
         hotWorkTypes: isHotWork ? hotWorkTypes : [],
         gasTestFrequency: isHotWork ? gasFreq : {},
       });
-      alert("PTW berhasil diajukan dan sedang menunggu validasi Project Manager!");
+      alert("PTW berhasil diajukan dan sedang menunggu review HSE Vendor!");
       router.push(`/vendor/dashboard/ptw/create/${encodeURIComponent(projectId)}`);
     } catch (err) {
       console.error(err);
@@ -310,6 +323,7 @@ export default function PTWCreatePage() {
   if (!typeDef) {
     return null;
   }
+
 
   const visiblePekerja = showAllPekerja
     ? rosterPekerja
@@ -344,7 +358,7 @@ export default function PTWCreatePage() {
           {submitBlock ? (
             <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 max-w-xs">{submitBlock}</p>
           ) : (
-          <button onClick={handleAjukan} disabled={isSubmitting || !!masaBerlakuError || (selectedPekerja.length === 0 && selectedPeralatan.length === 0)} className="px-6 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm shadow-emerald-600/30 flex items-center gap-2">
+          <button onClick={handleAjukan} disabled={isSubmitting || !blockChecked || !!masaBerlakuError || (selectedPekerja.length === 0 && selectedPeralatan.length === 0)} className="px-6 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm shadow-emerald-600/30 flex items-center gap-2">
             {isSubmitting ? (
               <span className="flex items-center gap-2"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Mengajukan...</span>
             ) : (
@@ -684,19 +698,19 @@ export default function PTWCreatePage() {
           <div className="flex-1 w-full bg-slate-500">
              <PDFViewer width="100%" height="100%" className="border-none">
                <PtwPDF
-                 projectId={projectId}
-                 ptwType={ptwType}
-                 hazards={selectedHazards}
-                 apd={selectedApd}
-                 pekerja={selectedPekerjaData}
-                 peralatan={selectedPeralatanData}
-                 gasTests={requiresGasTest ? gasTests : []}
-                 validFrom={validFrom}
-                 validTo={validTo}
-                 workStart={workStart}
-                 workEnd={workEnd}
-                 hotWorkTypes={hotWorkTypes}
-                 gasTestFrequency={gasFreq}
+                 projectId={preview.projectId}
+                 ptwType={preview.ptwType}
+                 hazards={preview.hazards}
+                 apd={preview.apd}
+                 pekerja={preview.pekerja}
+                 peralatan={preview.peralatan}
+                 gasTests={preview.gasTests}
+                 validFrom={preview.validFrom}
+                 validTo={preview.validTo}
+                 workStart={preview.workStart}
+                 workEnd={preview.workEnd}
+                 hotWorkTypes={preview.hotWorkTypes}
+                 gasTestFrequency={preview.gasFreq}
                />
              </PDFViewer>
           </div>

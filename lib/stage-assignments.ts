@@ -277,8 +277,9 @@ export function isStageFullyApproved(rows: StageAssignmentRow[]): boolean {
 export async function resetStageAssignments(
   supabase: any, projectId: string, docType: string, stageKey: string
 ): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('stage_assignments')
     .update({ status: 'pending', decided_at: null, note: null })
     .eq('project_id', projectId).eq('doc_type', docType).eq('stage_key', stageKey);
+  if (error) throw new Error(`Gagal mereset penugasan ${stageKey}: ${error.message}`);
 }
