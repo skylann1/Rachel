@@ -25,9 +25,11 @@ export default function PtwExtensionModal({
   validTo: string;
   onClose: () => void;
 }) {
+  // Tiap pengajuan menambah maksimal 7 hari dari tanggal berakhir saat ini; boleh diajukan lagi setelahnya.
   const minDate = addDays(validTo, 1);
-  const maxDate = addDays(validFrom, PTW_MAX_VALID_DAYS - 1);
-  const noRoom = minDate > maxDate;
+  const maxDate = addDays(validTo, PTW_MAX_VALID_DAYS);
+  const noRoom = false;
+  const totalSetelah = (end: string) => Math.floor((new Date(`${end}T00:00:00`).getTime() - new Date(`${validFrom}T00:00:00`).getTime()) / 86_400_000) + 1;
 
   const [newValidTo, setNewValidTo] = useState(minDate <= maxDate ? minDate : '');
   const [reason, setReason] = useState('');
@@ -62,15 +64,15 @@ export default function PtwExtensionModal({
         <div className="p-6 overflow-y-auto space-y-5">
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600 space-y-1">
             <p><strong>Berlaku saat ini:</strong> {formatDate(validFrom)} s/d {formatDate(validTo)}</p>
-            <p className="text-xs text-slate-500">Masa berlaku PTW maksimal {PTW_MAX_VALID_DAYS} hari sejak tanggal mulai (paling lambat {formatDate(maxDate)}).</p>
+            <p className="text-xs text-slate-500">
+              Satu perpanjangan maksimal {PTW_MAX_VALID_DAYS} hari (paling lambat {formatDate(maxDate)}). Kalau masih kurang, ajukan perpanjangan lagi.
+              Hari ke-8 dst dicetak di <strong>lembar lanjutan</strong> pada dokumen PTW yang sama.
+            </p>
+            {newValidTo && newValidTo >= minDate && newValidTo <= maxDate && (
+              <p className="text-xs font-semibold text-primary">Total masa berlaku menjadi {totalSetelah(newValidTo)} hari (Hari ke-{totalSetelah(validTo) + 1} s/d {totalSetelah(newValidTo)} masuk lembar lanjutan).</p>
+            )}
           </div>
 
-          {noRoom && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-800">PTW ini sudah mencapai batas {PTW_MAX_VALID_DAYS} hari dan tidak bisa diperpanjang lagi.</p>
-            </div>
-          )}
           {error && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />

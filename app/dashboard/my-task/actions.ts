@@ -7,10 +7,10 @@ import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, PROCEDURE_PENDING_STATUSE
 import { hasPermissionForUser } from "@/utils/permissions";
 import { getAssignmentGaps, PARTY_LABEL, STAGE_SHORT_LABEL } from "@/lib/assignment-gaps";
 import { dayIndexForDate, FIELD_PERAN_LABEL, type FieldPeran } from "@/lib/ptw-field";
-import { PTW_MAX_VALID_DAYS, PTW_TYPES } from "@/lib/ptw-types";
+import { PTW_TRACK_MAX_DAYS, PTW_TYPES } from "@/lib/ptw-types";
 import { todayDateString } from "@/lib/site-ops";
 
-export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan' | 'Penugasan' | 'DailyCheck';
+export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan' | 'Penugasan' | 'DailyCheck' | 'Penyelesaian';
 export type UrgencyType = 'High' | 'Medium' | 'Low';
 
 export interface TaskItem {
@@ -368,7 +368,7 @@ export async function getMyTasks(): Promise<TaskItem[]> {
         const proj = Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects;
         const effective = getEffectivePtwStatus(ptw.status, ptw.valid_to ?? proj?.end_date);
         if (effective !== PTW_STATUS.aktif) continue;
-        const todayHari = dayIndexForDate(ptw.valid_from, ptw.valid_to, today, PTW_MAX_VALID_DAYS);
+        const todayHari = dayIndexForDate(ptw.valid_from, ptw.valid_to, today, PTW_TRACK_MAX_DAYS);
         if (todayHari === null) continue;
 
         const { data: existingCheck } = await supabase
@@ -433,6 +433,99 @@ export async function getMyTasks(): Promise<TaskItem[]> {
           urgency: 'High',
           timeInQueue: formatTimeInQueue(ptw.created_at),
         });
+      }
+    }
+  }
+
+  // 9. Verifikasi penutupan & perpanjangan PTW (HSSE) dan penyelesaian proyek (PM).
+  // Gerbangnya sama dengan RPC-nya: izin + ditugaskan di tahap proyek itu
+  // (ptw.numbering_hsse untuk HSSE, ptw.approve_pm untuk PM). Hilang otomatis
+  // begitu diputuskan.
+  {
+    const [canVerifyClosure, canVerifyExtension, canVerifyCompletion] = await Promise.all([
+      hasPermissionForUser(supabase, user.id, 'ptw', 'verify_closure'),
+      hasPermissionForUser(supabase, user.id, 'ptw', 'verify_extension'),
+      hasPermissionForUser(supabase, user.id, 'ptw', 'verify_project_completion'),
+    ]);
+
+    if (canVerifyClosure || canVerifyExtension || canVerifyCompletion) {
+      const { data: mineStages } = await supabase
+        .from('stage_assignments')
+        .select('project_id, stage_key')
+        .eq('assignee_id', user.id)
+        .eq('doc_type', 'ptw')
+        .in('stage_key', ['ptw.numbering_hsse', 'ptw.approve_pm']);
+      const hsseProjects = new Set((mineStages || []).filter((r: any) => r.stage_key === 'ptw.numbering_hsse').map((r: any) => r.project_id));
+      const pmProjects = new Set((mineStages || []).filter((r: any) => r.stage_key === 'ptw.approve_pm').map((r: any) => r.project_id));
+
+      const projectIds = Array.from(new Set([...hsseProjects, ...pmProjects]));
+      if (projectIds.length > 0) {
+        const { data: projs } = await supabase
+          .from('projects')
+          .select(`
+            id, name, status, completion_requested_at, completion_note,
+            vendor_profiles ( company_name ),
+            ptw ( id, ptw_type, ptw_number, status, closure_requested_at, closure_note, extension_requested_to, extension_reason, extension_requested_at )
+          `)
+          .in('id', projectIds);
+
+        for (const proj of (projs || []) as any[]) {
+          const vendor = Array.isArray(proj.vendor_profiles) ? proj.vendor_profiles[0] : proj.vendor_profiles;
+          const vendorName = vendor?.company_name || 'Internal';
+          const ptws: any[] = Array.isArray(proj.ptw) ? proj.ptw : (proj.ptw ? [proj.ptw] : []);
+
+          for (const ptw of ptws) {
+            const typeTitle = PTW_TYPES.find(t => t.id === ptw.ptw_type)?.title.split('(')[0].trim() || ptw.ptw_type;
+            const label = `${typeTitle}${ptw.ptw_number ? ` (${ptw.ptw_number})` : ''}`;
+
+            if (canVerifyClosure && hsseProjects.has(proj.id) && ptw.status === PTW_STATUS.penutupanDiajukan) {
+              const since = ptw.closure_requested_at || new Date().toISOString();
+              tasks.push({
+                id: `closure-${ptw.id}`,
+                title: `Verifikasi Penutupan PTW — ${label}`,
+                type: 'PTW',
+                projectName: proj.name,
+                vendorName,
+                date: since,
+                url: `/dashboard/projects/${proj.id}`,
+                status: 'Vendor mengajukan penutupan PTW',
+                urgency: getUrgency(since),
+                timeInQueue: formatTimeInQueue(since),
+              });
+            }
+
+            if (canVerifyExtension && hsseProjects.has(proj.id) && ptw.status === PTW_STATUS.aktif && ptw.extension_requested_to) {
+              const since = ptw.extension_requested_at || new Date().toISOString();
+              tasks.push({
+                id: `extension-${ptw.id}`,
+                title: `Verifikasi Perpanjangan PTW — ${label}`,
+                type: 'PTW',
+                projectName: proj.name,
+                vendorName,
+                date: since,
+                url: `/dashboard/projects/${proj.id}`,
+                status: `Diminta sampai ${ptw.extension_requested_to}`,
+                urgency: getUrgency(since) === 'Low' ? 'Medium' : 'High',
+                timeInQueue: formatTimeInQueue(since),
+              });
+            }
+          }
+
+          if (canVerifyCompletion && pmProjects.has(proj.id) && proj.completion_requested_at && proj.status !== 'Selesai') {
+            tasks.push({
+              id: `completion-${proj.id}`,
+              title: 'Verifikasi Penyelesaian Proyek',
+              type: 'Penyelesaian',
+              projectName: proj.name,
+              vendorName,
+              date: proj.completion_requested_at,
+              url: `/dashboard/projects/${proj.id}`,
+              status: 'Vendor mengajukan penyelesaian proyek',
+              urgency: getUrgency(proj.completion_requested_at),
+              timeInQueue: formatTimeInQueue(proj.completion_requested_at),
+            });
+          }
+        }
       }
     }
   }

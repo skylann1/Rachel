@@ -229,3 +229,9 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
     disimpan; kolom ini menyimpannya dan dipakai membedakan kartu proyek (internal & vendor).
     Idempotent. **Jalankan SEBELUM deploy** — daftar proyek vendor meng-select kolom ini.
     Sudah diterapkan di project Supabase live lewat MCP pada 2026-10-19.
+19. `schema_ptw_extension_multi_sheet.sql` — perpanjangan PTW boleh melewati Hari ke-7 pada PTW
+    yang sama: tiap pengajuan menambah maksimal 7 hari (boleh berulang), CHECK `hari_ke` pada
+    `ptw_daily_checks` dilonggarkan ke 1..366, dan RPC `ptw_submit_daily_check` /
+    `ptw_request_extension` / `ptw_decide_extension` diganti. Menggantikan batas "total 7 hari"
+    di item 16. Idempotent. Bergantung pada item 14 dan 16. **Jalankan SEBELUM deploy.**
+    Sudah diterapkan di project Supabase live lewat MCP pada 2026-10-19.

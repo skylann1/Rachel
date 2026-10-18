@@ -186,12 +186,12 @@ export default function PtwDailyCheckTab({
                   </tr>
                 </thead>
                 <tbody>
-                  {Array.from({ length: PTW_MAX_VALID_DAYS }, (_, i) => {
+                  {Array.from({ length: dayDates.length || PTW_MAX_VALID_DAYS }, (_, i) => {
                     const hari = i + 1;
                     const dayDate = dayDates[i];
                     if (!dayDate) {
                       return (
-                        <tr key={hari} className="border-t border-slate-100">
+                        <tr key={hari} className={`border-t ${hari > 7 && (hari - 1) % 7 === 0 ? 'border-t-2 border-indigo-300' : 'border-slate-100'}`}>
                           <td className="py-2 pr-3 font-mono text-slate-400">{hari}</td>
                           <td className="py-2 pr-3 text-slate-300" colSpan={4}>Tidak dalam masa berlaku</td>
                         </tr>
@@ -202,8 +202,13 @@ export default function PtwDailyCheckTab({
                     const filledCount = (holderCheck ? 1 : 0) + (pengawasCheck ? 1 : 0);
                     const st = dayRowStatus(dayDate, today, filledCount);
                     return (
-                      <tr key={hari} className="border-t border-slate-100">
-                        <td className="py-2 pr-3 font-mono font-bold text-slate-600">{hari}</td>
+                      <tr key={hari} className={`border-t ${hari > 7 && (hari - 1) % 7 === 0 ? 'border-t-2 border-indigo-300' : 'border-slate-100'}`}>
+                        <td className="py-2 pr-3 font-mono font-bold text-slate-600">
+                          {hari}
+                          {hari > 7 && (hari - 1) % 7 === 0 && (
+                            <span className="block text-[9px] font-bold uppercase tracking-wide text-indigo-500">Lembar {Math.floor((hari - 1) / 7) + 1}</span>
+                          )}
+                        </td>
                         <td className="py-2 pr-3 text-slate-600">{formatCheckDate(dayDate)}</td>
                         <td className="py-2 pr-3">
                           <span className={`text-[11px] font-bold border rounded-full px-2 py-0.5 ${STATUS_CHIP[st]}`}>
@@ -240,7 +245,7 @@ export default function PtwDailyCheckTab({
             {/* Tampilan HP: chip hari + satu kartu ringkasan per hari */}
             <div className="md:hidden px-5 py-4 space-y-3">
               <div className="flex gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
-                {Array.from({ length: PTW_MAX_VALID_DAYS }, (_, i) => i).map((i) => {
+                {Array.from({ length: dayDates.length || PTW_MAX_VALID_DAYS }, (_, i) => i).map((i) => {
                   const hari = i + 1;
                   const dayDate = dayDates[i];
                   const selected = (mobileDay[ptw.id] ?? (todayHari ? todayHari - 1 : 0)) === i;
@@ -255,7 +260,7 @@ export default function PtwDailyCheckTab({
                         selected ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200'
                       }`}
                     >
-                      Hari {hari}
+                      Hari {hari}{hari > 7 && <span className="ml-1 text-[9px] font-bold uppercase text-indigo-400">L{Math.floor((hari - 1) / 7) + 1}</span>}
                       {dayDate && (
                         <span className={`block font-normal ${selected ? 'text-white/80' : 'text-slate-400'}`}>
                           {formatCheckDate(dayDate)}

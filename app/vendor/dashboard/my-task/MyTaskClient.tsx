@@ -19,7 +19,8 @@ import {
   Inbox,
   Flame,
   UserPlus,
-  CalendarCheck2
+  CalendarCheck2,
+  Flag
 } from 'lucide-react';
 import { VendorTaskItem, VendorTaskType } from './actions';
 
@@ -29,7 +30,7 @@ interface MyTaskClientProps {
 
 type SortMode = 'urgency' | 'oldest' | 'name';
 
-const TASK_TYPES: VendorTaskType[] = ['Penugasan', 'Prosedur', 'JSA', 'PTW', 'Temuan', 'DailyCheck'];
+const TASK_TYPES: VendorTaskType[] = ['Penugasan', 'Prosedur', 'JSA', 'PTW', 'Temuan', 'DailyCheck', 'Penyelesaian'];
 
 const TYPE_META: Record<VendorTaskType, { color: string; icon: React.ElementType; soft: string; ink: string }> = {
   Prosedur: { color: '#4f46e5', icon: FileSignature, soft: 'bg-indigo-50', ink: 'text-indigo-600' },
@@ -38,6 +39,7 @@ const TYPE_META: Record<VendorTaskType, { color: string; icon: React.ElementType
   Temuan:   { color: '#e11d48', icon: AlertTriangle, soft: 'bg-rose-50', ink: 'text-rose-600' },
   Penugasan: { color: '#7c3aed', icon: UserPlus, soft: 'bg-violet-50', ink: 'text-violet-600' },
   DailyCheck: { color: '#0d9488', icon: CalendarCheck2, soft: 'bg-teal-50', ink: 'text-teal-600' },
+  Penyelesaian: { color: '#475569', icon: Flag, soft: 'bg-slate-100', ink: 'text-slate-600' },
 };
 
 const URGENCY_META = {
@@ -113,7 +115,7 @@ export default function MyTaskClient({ tasks }: MyTaskClientProps) {
   }, [projectNames, selectedProject]);
 
   const typeCounts = useMemo(() => {
-    const counts: Record<VendorTaskType, number> = { Prosedur: 0, JSA: 0, PTW: 0, Temuan: 0, Penugasan: 0, DailyCheck: 0 };
+    const counts: Record<VendorTaskType, number> = { Prosedur: 0, JSA: 0, PTW: 0, Temuan: 0, Penugasan: 0, DailyCheck: 0, Penyelesaian: 0 };
     tasks.forEach(t => counts[t.type]++);
     return counts;
   }, [tasks]);

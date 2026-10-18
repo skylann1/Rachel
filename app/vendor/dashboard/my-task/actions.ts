@@ -4,13 +4,13 @@ import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { JSA_STATUS } from "@/lib/jsa-status";
 import { getEffectivePtwStatus, PTW_STATUS } from "@/lib/ptw-status";
-import { PTW_TYPES, PTW_MAX_VALID_DAYS } from "@/lib/ptw-types";
+import { PTW_TYPES, PTW_TRACK_MAX_DAYS } from "@/lib/ptw-types";
 import { getAssignmentGaps, PARTY_LABEL, STAGE_SHORT_LABEL } from "@/lib/assignment-gaps";
 import { dayIndexForDate, FIELD_PERAN_LABEL, type FieldPeran } from "@/lib/ptw-field";
 import { todayDateString } from "@/lib/site-ops";
 import { hasPermissionForUser } from "@/utils/permissions";
 
-export type VendorTaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Temuan' | 'Penugasan' | 'DailyCheck';
+export type VendorTaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Temuan' | 'Penugasan' | 'DailyCheck' | 'Penyelesaian';
 export type VendorUrgencyType = 'High' | 'Medium' | 'Low';
 
 export interface VendorTaskItem {
@@ -61,10 +61,10 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
   const { data: projects } = await supabase
     .from('projects')
     .select(`
-      id, name, created_at, end_date,
+      id, name, created_at, end_date, status, completion_requested_at, completion_rejection_note,
       procedures ( status, content, created_at ),
       jsa ( status, rejection_note, created_at ),
-      ptw ( id, status, ptw_type, rejection_note, created_at, valid_from, valid_to )
+      ptw ( id, status, ptw_type, ptw_number, rejection_note, created_at, valid_from, valid_to, closure_rejection_note, extension_rejection_note, extension_requested_to )
     `)
     .eq('vendor_id', vendorOrgId);
 
@@ -290,7 +290,7 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
 
         const effective = getEffectivePtwStatus(ptw.status, ptw.valid_to ?? projectForPtw.end_date);
         if (effective !== PTW_STATUS.aktif) continue;
-        const todayHari = dayIndexForDate(ptw.valid_from, ptw.valid_to, today, PTW_MAX_VALID_DAYS);
+        const todayHari = dayIndexForDate(ptw.valid_from, ptw.valid_to, today, PTW_TRACK_MAX_DAYS);
         if (todayHari === null) continue;
 
         const { data: existingCheck } = await supabase
@@ -347,6 +347,73 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
         urgency: 'High',
         timeInQueue: formatTimeInQueue(ptw.created_at),
       });
+    }
+  }
+
+  // 9. Tindak lanjut penutupan / perpanjangan / penyelesaian — sisi vendor.
+  //  * penutupan PTW ditolak HSSE   -> perbaiki lalu ajukan lagi (pemegang izin ptw.request_closure)
+  //  * perpanjangan PTW ditolak HSSE -> ajukan ulang bila masih perlu (ptw.request_extension)
+  //  * semua PTW sudah Selesai       -> ajukan penyelesaian proyek (ptw.request_project_completion);
+  //    kalau pernah ditolak PM, alasannya ikut ditampilkan.
+  {
+    const [canClose, canExtend, canComplete] = await Promise.all([
+      hasPermissionForUser(supabase, user.id, 'ptw', 'request_closure'),
+      hasPermissionForUser(supabase, user.id, 'ptw', 'request_extension'),
+      hasPermissionForUser(supabase, user.id, 'ptw', 'request_project_completion'),
+    ]);
+
+    for (const project of projects || []) {
+      const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+
+      for (const ptw of ptws) {
+        const eff = getEffectivePtwStatus(ptw.status, ptw.valid_to ?? project.end_date);
+        if (eff !== PTW_STATUS.aktif) continue;
+        const label = `${ptwTypeTitle(ptw.ptw_type)}${ptw.ptw_number ? ` (${ptw.ptw_number})` : ''}`;
+
+        if (canClose && ptw.closure_rejection_note) {
+          tasks.push({
+            id: `closure-rejected-${ptw.id}`,
+            title: `Penutupan PTW ditolak — ${label}`,
+            type: 'PTW',
+            projectName: project.name,
+            date: ptw.created_at,
+            url: `/vendor/dashboard/projects/${project.id}`,
+            status: `Alasan: ${ptw.closure_rejection_note}`,
+            urgency: 'High',
+            timeInQueue: formatTimeInQueue(ptw.created_at),
+          });
+        }
+        if (canExtend && ptw.extension_rejection_note && !ptw.extension_requested_to) {
+          tasks.push({
+            id: `extension-rejected-${ptw.id}`,
+            title: `Perpanjangan PTW ditolak — ${label}`,
+            type: 'PTW',
+            projectName: project.name,
+            date: ptw.created_at,
+            url: `/vendor/dashboard/projects/${project.id}`,
+            status: `Alasan: ${ptw.extension_rejection_note}`,
+            urgency: 'Medium',
+            timeInQueue: formatTimeInQueue(ptw.created_at),
+          });
+        }
+      }
+
+      const allClosed = ptws.length > 0 && ptws.every((p: any) => p.status === PTW_STATUS.selesai);
+      if (canComplete && allClosed && project.status !== 'Selesai' && !project.completion_requested_at) {
+        tasks.push({
+          id: `completion-${project.id}`,
+          title: 'Ajukan Penyelesaian Proyek',
+          type: 'Penyelesaian',
+          projectName: project.name,
+          date: project.created_at,
+          url: `/vendor/dashboard/projects/${project.id}`,
+          status: project.completion_rejection_note
+            ? `Ditolak PM: ${project.completion_rejection_note}`
+            : 'Semua PTW sudah ditutup',
+          urgency: project.completion_rejection_note ? 'High' : 'Medium',
+          timeInQueue: formatTimeInQueue(project.created_at),
+        });
+      }
     }
   }
 

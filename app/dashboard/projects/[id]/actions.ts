@@ -7,7 +7,7 @@ import { getEligibleAssignees } from "@/lib/stage-assignments";
 import { getEffectivePtwStatus, PTW_STATUS } from "@/lib/ptw-status";
 import { todayDateString } from "@/lib/site-ops";
 import { dayIndexForDate, type FieldPeran, type PtwFieldData, type FieldCandidate } from "@/lib/ptw-field";
-import { PTW_MAX_VALID_DAYS } from "@/lib/ptw-types";
+import { PTW_TRACK_MAX_DAYS } from "@/lib/ptw-types";
 
 function getProjectPath(projectId: string) {
   return `/dashboard/projects/${projectId}`;
@@ -207,7 +207,7 @@ export async function getPtwFieldData(ptwId: string): Promise<PtwFieldData> {
   const active = effective === PTW_STATUS.aktif;
 
   const todayHari = active
-    ? dayIndexForDate(ptw.valid_from, ptw.valid_to, today, PTW_MAX_VALID_DAYS)
+    ? dayIndexForDate(ptw.valid_from, ptw.valid_to, today, PTW_TRACK_MAX_DAYS)
     : null;
 
   return {

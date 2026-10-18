@@ -509,6 +509,14 @@ export interface PtwFormDetails {
 /** Batas masa berlaku satu PTW, mengikuti kolom "Hari ke-1 s/d ke-7" pada form. */
 export const PTW_MAX_VALID_DAYS = 7;
 
+/**
+ * Batas teknis jumlah hari yang dilacak (daily check, safety checklist, kolom
+ * hari). PTW diterbitkan maksimal PTW_MAX_VALID_DAYS (satu lembar formulir),
+ * tapi bisa diperpanjang berkali-kali — tiap perpanjangan maksimal
+ * PTW_MAX_VALID_DAYS hari dan hari tambahannya masuk ke lembar lanjutan.
+ */
+export const PTW_TRACK_MAX_DAYS = 366;
+
 export interface PtwGasTestEntry {
   tanggal: string;
   waktu: string;
@@ -579,8 +587,8 @@ export function flattenSafetyChecklist(typeDef: PtwTypeDefinition): PtwSafetyChe
 }
 
 /**
- * Tanggal kalender untuk tiap kolom "Hari ke-N", dibatasi
- * PTW_MAX_VALID_DAYS. Kosong kalau validFrom tidak ada/tidak valid — form
+ * Tanggal kalender untuk tiap kolom "Hari ke-N", mengikuti masa berlaku
+ * (termasuk hasil perpanjangan; maksimal PTW_TRACK_MAX_DAYS). Kosong kalau validFrom tidak ada/tidak valid — form
  * isian menampilkan 0 kolom hari untuk PTW lama tanpa masa berlaku
  * tersimpan, bukan menebak rentangnya.
  */
@@ -594,7 +602,7 @@ export function ptwValidDayDates(validFrom?: string | null, validTo?: string | n
     const end = new Date(`${validTo}T00:00:00`);
     if (!isNaN(end.getTime())) {
       const diffDays = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
-      if (diffDays > 0) count = Math.min(diffDays, PTW_MAX_VALID_DAYS);
+      if (diffDays > 0) count = Math.min(diffDays, PTW_TRACK_MAX_DAYS);
     }
   }
 

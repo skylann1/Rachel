@@ -244,7 +244,8 @@ export default function InternalPanduanPage() {
             items={[
               <>Hanya untuk PTW berstatus <strong>{PTW_STATUS.aktif}</strong> dan <strong>belum lewat</strong> tanggal berakhir.</>,
               <>Vendor mengisi tanggal berlaku baru dan alasan. PTW tetap Aktif selama menunggu.</>,
-              <>Total masa berlaku <strong>maksimal 7 hari</strong> sejak tanggal mulai (sesuai kolom Hari ke-1 sampai ke-7).</>,
+              <>Satu pengajuan menambah <strong>maksimal 7 hari</strong> dari tanggal berakhir saat ini, dan boleh <strong>diajukan berulang</strong> kalau masih kurang.</>,
+              <>Satu lembar formulir memuat 7 hari. Hari ke-8 dst masuk <strong>lembar lanjutan</strong> (Safety Checklist dan Verifikasi) pada dokumen PTW yang sama, bertanda &ldquo;Lembar Lanjutan&rdquo;.</>,
             ]}
           />
           <Lane

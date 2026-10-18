@@ -88,3 +88,9 @@ Tiap migrasi dijalankan manual di Supabase SQL editor sebelum kode dideploy.
 - Verifikator: HSSE yang ditugaskan di `ptw.numbering_hsse` + permission `ptw.verify_extension`. Disetujui -> `valid_to` diganti dan `extension_count` +1; ditolak -> catatan ke vendor.
 - Migrasi: `supabase/schema_ptw_extension.sql`. Aksi: `requestPtwExtension` / `decidePtwExtension` di `completion-actions.ts`.
 - Batasan: PTW `Expired` tidak bisa diperpanjang (harus ditutup). Satu PTW per (proyek, tipe) masih berlaku, jadi PTW tipe sama tidak bisa diterbitkan ulang setelah ditutup.
+
+## Perpanjangan PTW — revisi (multi-lembar)
+- Perpanjangan tetap pada PTW yang SAMA (bukan PTW baru). Tiap pengajuan menambah maksimal 7 hari dari `valid_to` saat ini dan boleh diajukan berulang selagi PTW Aktif.
+- Satu lembar formulir = 7 hari. Hari ke-8 dst dicatat di tab Daily Check / Safety Check (kolom hari bertanda "Lembar N") dan dicetak sebagai **lembar lanjutan** pada PDF yang sama (`PtwPDF.tsx`, satu `<Page>` per 7 hari, judul "LEMBAR LANJUTAN", keterangan "halaman X dari N").
+- Batas teknis 366 hari (`PTW_TRACK_MAX_DAYS`); penerbitan awal tetap maksimal 7 hari (`PTW_MAX_VALID_DAYS`).
+- Migrasi: `supabase/schema_ptw_extension_multi_sheet.sql`. Menggantikan batas "total 7 hari" di bagian "Perpanjangan PTW (diimplementasi)".

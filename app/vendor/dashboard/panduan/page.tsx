@@ -223,7 +223,8 @@ export default function VendorPanduanPage() {
             items={[
               <>Buka proyek, tab <strong>Dokumen K3</strong>, lalu pada kartu PTW yang aktif tekan <strong>Ajukan Perpanjangan PTW</strong>.</>,
               <>Pilih tanggal berlaku baru dan tulis alasannya.</>,
-              <>Total masa berlaku <strong>maksimal 7 hari</strong> sejak tanggal mulai. Kalau sudah mencapai batas, perpanjangan tidak tersedia.</>,
+              <>Satu perpanjangan menambah <strong>maksimal 7 hari</strong>. Kalau masih kurang, ajukan perpanjangan lagi (boleh berulang selama PTW masih Aktif).</>,
+              <>Hari ke-8 dst dicatat di <strong>lembar lanjutan</strong> (Safety Check dan Daily Check) dan ikut tercetak menyatu di dokumen PTW yang sama.</>,
               <>Tombol hanya muncul untuk akun yang punya izin <strong>Mengajukan Perpanjangan PTW</strong>.</>,
             ]}
           />

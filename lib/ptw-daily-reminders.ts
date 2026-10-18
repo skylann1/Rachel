@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
-import { PTW_MAX_VALID_DAYS, PTW_TYPES } from '@/lib/ptw-types';
+import { PTW_TRACK_MAX_DAYS, PTW_TYPES } from '@/lib/ptw-types';
 import { dayIndexForDate, FIELD_PERAN_LABEL, type FieldPeran } from '@/lib/ptw-field';
 import { todayDateString } from '@/lib/site-ops';
 
@@ -31,7 +31,7 @@ export async function findPendingDailyChecks(supabase: SupabaseClient): Promise<
     .map((p: any) => {
       const proj = Array.isArray(p.projects) ? p.projects[0] : p.projects;
       const effective = getEffectivePtwStatus(p.status, p.valid_to ?? proj?.end_date);
-      const hariKe = dayIndexForDate(p.valid_from, p.valid_to, today, PTW_MAX_VALID_DAYS);
+      const hariKe = dayIndexForDate(p.valid_from, p.valid_to, today, PTW_TRACK_MAX_DAYS);
       return { ptw: p, proj, effective, hariKe };
     })
     .filter(x => x.effective === PTW_STATUS.aktif && x.hariKe !== null);

@@ -4,7 +4,7 @@ import {
   PTW_TYPES, APD_ITEMS, PtwType, PTW_GAS_TEST_TYPES, PTW_GAS_FORM_TYPES, GAS_TEST_STANDARDS,
   PtwGasTestEntry, PtwGasTestFrequency, HOT_WORK_JOB_TYPES,
   hazardColumnsFor, APD_CATEGORY_LABELS, APD_OTHERS_LABEL,
-  flattenSafetyChecklist, PtwSafetyChecklistData,
+  flattenSafetyChecklist, PtwSafetyChecklistData, ptwValidDayDates,
 } from '@/lib/ptw-types';
 import type { PtwSignatories, PtwSignatory } from '@/lib/ptw-signatories';
 import { formatCheckDate, formatCheckTime, type PtwDailyCheck } from '@/lib/ptw-field';
@@ -238,6 +238,9 @@ export default function PtwPDF({
 
   // Masa berlaku PTW; jatuh kembali ke tanggal proyek untuk baris lama yang
   // dibuat sebelum kolom valid_from/valid_to ada.
+  // Jumlah hari berlaku (termasuk hasil perpanjangan) dan jumlah lembar (7 hari per lembar).
+  const totalDays = Math.max(1, ptwValidDayDates(validFrom, validTo).length);
+  const totalWeeks = Math.max(1, Math.ceil(totalDays / 7));
   const berlakuMulai = validFrom || startDate;
   const berlakuSelesai = validTo || endDate;
   const jamMulai = workStart || '08:00';
@@ -328,6 +331,169 @@ export default function PtwPDF({
       <View style={[styles.tCell, { width: '9%', borderRightWidth: 0 }]}><Text style={{ fontSize: 4 }}>{keterangan || ''}</Text></View>
     </View>
   );
+
+  /** Satu lembar Safety Checklist + Verifikasi (7 hari). Lembar 0 = halaman utama; lembar berikutnya
+   *  muncul bila PTW diperpanjang melewati Hari ke-7 dan dicetak menyatu dalam dokumen yang sama. */
+  const SafetySheet = ({ weekIndex }: { weekIndex: number }) => {
+    const off = weekIndex * 7;
+    return (
+      <View style={styles.sectionBox}>
+              <Text style={styles.sectionHeader}>
+                {weekIndex === 0
+                  ? (totalWeeks > 1 ? `E. SAFETY CHECKLIST — HARI KE-1 S/D 7 (PTW DIPERPANJANG, LANJUTAN DI HALAMAN BERIKUTNYA)` : 'E. SAFETY CHECKLIST')
+                  : `E. SAFETY CHECKLIST — LEMBAR LANJUTAN ${weekIndex} (HARI KE-${off + 1} S/D ${Math.min(off + 7, totalDays)})`}
+              </Text>
+
+              {/* Table Header — tinggi tetap; "Hari ke-N" dan Sudah/Belum ditumpuk
+                  di dalam sel, sisanya (Ceklist/Item/Keterangan) di tengah
+                  vertikal, seperti sel yang di-merge 2 baris pada form asli. */}
+              <View style={[styles.tHeaderRow, { height: 15 }]}>
+                <View style={[styles.tCell, { width: '4%', alignItems: 'center' }]}><Text style={{ fontSize: 4 }}>Ceklist</Text></View>
+                <View style={[styles.tCell, { width: '31%', alignItems: 'center' }]}><Text>Item</Text></View>
+                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                  <View key={d} style={[styles.tCell, { width: '8%', padding: 0 }]}>
+                    <View style={{ height: 7.5, borderBottomWidth: 1, borderColor: B, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 4 }}>Hari ke-{off + d}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', flex: 1 }}>
+                      <View style={{ flex: 1, borderRightWidth: 1, borderColor: B, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 3.5 }}>Sudah</Text></View>
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 3.5 }}>Belum</Text></View>
+                    </View>
+                  </View>
+                ))}
+                <View style={[styles.tCell, { width: '9%', borderRightWidth: 0, alignItems: 'center' }]}><Text style={{ fontSize: 4 }}>Keterangan</Text></View>
+              </View>
+
+              {/* Table Body — sub-item jadi baris tersendiri karena pada form
+                  asli masing-masing punya kolom Sudah/Belum sendiri. */}
+              {flattenSafetyChecklist(typeDef).map((row, i) => (
+                <ChecklistRow
+                  key={row.key ?? `hdr-${i}`}
+                  marker={row.marker}
+                  label={row.label}
+                  indent={row.indent}
+                  bold={row.bold}
+                  split={row.checkable}
+                  days={row.key ? checklistData[row.key]?.days?.slice(off, off + 7) : undefined}
+                  keterangan={row.key ? checklistData[row.key]?.keterangan : undefined}
+                />
+              ))}
+
+              {/* Frekuensi uji gas — ada pada form panas, listrik, ruang
+                  terbatas, dan penggunaan kamera. */}
+              {weekIndex === 0 && requiresGasTest && (
+                <View style={{ borderTopWidth: 1, borderColor: B }}>
+                  <Text style={{ fontSize: fs_header, fontWeight: 'bold', paddingVertical: 1, paddingHorizontal: 2, backgroundColor: SECTION_BG }}>
+                    Pengujian Kandungan Gas
+                  </Text>
+                  {([
+                    ['O2', gasTestFrequency.o2],
+                    ['Toxic', gasTestFrequency.toxic],
+                    ['Combustible', gasTestFrequency.combustible],
+                  ] as const).map(([label, value]) => (
+                    <View key={label} style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: B, minHeight: 8, alignItems: 'center' }}>
+                      <Text style={{ width: '20%', padding: 1, borderRightWidth: 1, borderColor: B }}>{label}</Text>
+                      <Text style={{ flex: 1, padding: 1 }}>
+                        Dilakukan setiap {value || '…............................'} Jam/hari
+                      </Text>
+                    </View>
+                  ))}
+                  <Text style={{ fontSize: 4, padding: 1, borderTopWidth: 1, borderColor: B }}>
+                    *Keterangan :  Untuk hasil uji kandungan gas WAJIB menggunakan Formulir Uji Kandungan Gas
+                  </Text>
+                </View>
+              )}
+
+              {/* Verifikasi — sejajar dengan kolom Hari ke-1..7 di atas, sama dengan
+                  form asli: tanggal, waktu, lalu nama inisial + paraf per hari. */}
+              <View style={{ borderTopWidth: 1, borderColor: B }} wrap={false}>
+                <View style={{ flexDirection: 'row', backgroundColor: SECTION_BG, borderBottomWidth: 1, borderColor: B }}>
+                  <Text style={{ width: '35%', fontWeight: 'bold', fontSize: fs_header, paddingVertical: 1, paddingHorizontal: 4 }}>Verifikasi</Text>
+                </View>
+
+                {/* Tanggal & Waktu — Tanggal dari check manapun yang ada hari itu; Waktu = waktu verifikasi Pemegang. */}
+                {(['Tanggal (DD/MM)', 'Waktu'] as const).map((label) => (
+                  <View key={label} style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: B, height: 10 }}>
+                    <View style={{ width: '35%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}><Text>{label}</Text></View>
+                    {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                      const holder = dailyCheckByHari(off + d, 'pemegang');
+                      const pengawas = dailyCheckByHari(off + d, 'pengawas');
+                      const tanggal = (holder ?? pengawas)?.tanggal;
+                      const value = label === 'Tanggal (DD/MM)'
+                        ? (tanggal ? formatCheckDate(tanggal) : '')
+                        : (holder?.diisi_pada ? formatCheckTime(holder.diisi_pada) : '');
+                      return (
+                        <View key={d} style={{ width: '8%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 4 }}>{value}</Text>
+                        </View>
+                      );
+                    })}
+                    <View style={{ width: '9%' }} />
+                  </View>
+                ))}
+
+                {/* Pemegang PTW / Pengawas-Penerbit PTW: dua baris (Nama lengkap, Paraf) */}
+                {(['pemegang', 'pengawas'] as const).map((peran, gi) => (
+                  <View key={peran} style={{ flexDirection: 'row', borderBottomWidth: gi === 1 ? 0 : 1, borderColor: B }}>
+                    <View style={{ width: '22%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}>
+                      <Text>{peran === 'pemegang' ? 'Pemegang PTW' : 'Pengawas / Penerbit PTW'}</Text>
+                    </View>
+                    <View style={{ width: '78%' }}>
+                      {(['Nama', 'Paraf'] as const).map((sub, si) => (
+                        <View key={sub} style={{ flexDirection: 'row', height: 12, borderBottomWidth: si === 0 ? 1 : 0, borderColor: B }}>
+                          <View style={{ width: '16.67%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 3 }}><Text style={{ fontSize: 4 }}>{sub}</Text></View>
+                          {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                            const check = dailyCheckByHari(off + d, peran);
+                            return (
+                              <View key={d} style={{ width: '10.26%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', alignItems: 'center' }}>
+                                {/* Nama lengkap (bukan inisial) dan tulisan "Check" sebagai paraf —
+                                    simbol centang tidak tersedia di font PDF dan tampil kosong. */}
+                                <Text style={{ fontSize: sub === 'Nama' ? 3.2 : 4, lineHeight: 1.05, textAlign: 'center', paddingHorizontal: 0.5 }}>
+                                  {check ? (sub === 'Nama' ? (check.user_name || check.inisial) : 'Check') : ''}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                          <View style={{ width: '11.5%' }} />
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+
+                {/* Keterangan dinamis: penjabat yang ditugaskan dan uraian pekerjaan harian
+                    dari Pemegang. Hanya muncul kalau ada isinya. */}
+                {(() => {
+                  const uraian = dailyChecks
+                    .filter((c) => c.peran === 'pemegang' && c.uraian_pekerjaan && c.hari_ke > off && c.hari_ke <= off + 7)
+                    .sort((a, b) => a.hari_ke - b.hari_ke);
+                  const pemegangNama = signatories?.pemegang?.nama;
+                  const pengawasNama = signatories?.pengawas?.nama;
+                  if (uraian.length === 0 && !pemegangNama && !pengawasNama) return null;
+                  return (
+                    <View style={{ borderTopWidth: 1, borderColor: B, padding: 1.5 }}>
+                      {(pemegangNama || pengawasNama) && (
+                        <Text style={{ fontSize: 4 }}>
+                          Pemegang PTW: {pemegangNama || '-'}   |   Pengawas PTW: {pengawasNama || '-'}
+                        </Text>
+                      )}
+                      {uraian.length > 0 && (
+                        <Text style={{ fontSize: 3.6, lineHeight: 1.1, marginTop: 0.5 }}>
+                          <Text style={{ fontWeight: 'bold' }}>Uraian harian (Pemegang): </Text>
+                          {uraian.map((c) => {
+                            const teks = String(c.uraian_pekerjaan).replace(/\s+/g, ' ').trim();
+                            return `H${c.hari_ke} ${formatCheckDate(c.tanggal)}: ${teks.length > 48 ? `${teks.slice(0, 45)}...` : teks}`;
+                          }).join('  •  ')}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })()}
+              </View>
+
+            </View>
+    );
+  };
 
   return (
     <Document>
@@ -482,153 +648,7 @@ export default function PtwPDF({
             {/* Jangan pakai flex: 1 di sini — parent-nya tidak punya tinggi
                 tetap, jadi flex membuat blok ini melar menghabiskan sisa
                 halaman dan mendorong footer ke halaman berikutnya. */}
-            <View style={styles.sectionBox}>
-              <Text style={styles.sectionHeader}>E. SAFETY CHECKLIST</Text>
-
-              {/* Table Header — tinggi tetap; "Hari ke-N" dan Sudah/Belum ditumpuk
-                  di dalam sel, sisanya (Ceklist/Item/Keterangan) di tengah
-                  vertikal, seperti sel yang di-merge 2 baris pada form asli. */}
-              <View style={[styles.tHeaderRow, { height: 15 }]}>
-                <View style={[styles.tCell, { width: '4%', alignItems: 'center' }]}><Text style={{ fontSize: 4 }}>Ceklist</Text></View>
-                <View style={[styles.tCell, { width: '31%', alignItems: 'center' }]}><Text>Item</Text></View>
-                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                  <View key={d} style={[styles.tCell, { width: '8%', padding: 0 }]}>
-                    <View style={{ height: 7.5, borderBottomWidth: 1, borderColor: B, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 4 }}>Hari ke-{d}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', flex: 1 }}>
-                      <View style={{ flex: 1, borderRightWidth: 1, borderColor: B, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 3.5 }}>Sudah</Text></View>
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 3.5 }}>Belum</Text></View>
-                    </View>
-                  </View>
-                ))}
-                <View style={[styles.tCell, { width: '9%', borderRightWidth: 0, alignItems: 'center' }]}><Text style={{ fontSize: 4 }}>Keterangan</Text></View>
-              </View>
-
-              {/* Table Body — sub-item jadi baris tersendiri karena pada form
-                  asli masing-masing punya kolom Sudah/Belum sendiri. */}
-              {flattenSafetyChecklist(typeDef).map((row, i) => (
-                <ChecklistRow
-                  key={row.key ?? `hdr-${i}`}
-                  marker={row.marker}
-                  label={row.label}
-                  indent={row.indent}
-                  bold={row.bold}
-                  split={row.checkable}
-                  days={row.key ? checklistData[row.key]?.days : undefined}
-                  keterangan={row.key ? checklistData[row.key]?.keterangan : undefined}
-                />
-              ))}
-
-              {/* Frekuensi uji gas — ada pada form panas, listrik, ruang
-                  terbatas, dan penggunaan kamera. */}
-              {requiresGasTest && (
-                <View style={{ borderTopWidth: 1, borderColor: B }}>
-                  <Text style={{ fontSize: fs_header, fontWeight: 'bold', paddingVertical: 1, paddingHorizontal: 2, backgroundColor: SECTION_BG }}>
-                    Pengujian Kandungan Gas
-                  </Text>
-                  {([
-                    ['O2', gasTestFrequency.o2],
-                    ['Toxic', gasTestFrequency.toxic],
-                    ['Combustible', gasTestFrequency.combustible],
-                  ] as const).map(([label, value]) => (
-                    <View key={label} style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: B, minHeight: 8, alignItems: 'center' }}>
-                      <Text style={{ width: '20%', padding: 1, borderRightWidth: 1, borderColor: B }}>{label}</Text>
-                      <Text style={{ flex: 1, padding: 1 }}>
-                        Dilakukan setiap {value || '…............................'} Jam/hari
-                      </Text>
-                    </View>
-                  ))}
-                  <Text style={{ fontSize: 4, padding: 1, borderTopWidth: 1, borderColor: B }}>
-                    *Keterangan :  Untuk hasil uji kandungan gas WAJIB menggunakan Formulir Uji Kandungan Gas
-                  </Text>
-                </View>
-              )}
-
-              {/* Verifikasi — sejajar dengan kolom Hari ke-1..7 di atas, sama dengan
-                  form asli: tanggal, waktu, lalu nama inisial + paraf per hari. */}
-              <View style={{ borderTopWidth: 1, borderColor: B }} wrap={false}>
-                <View style={{ flexDirection: 'row', backgroundColor: SECTION_BG, borderBottomWidth: 1, borderColor: B }}>
-                  <Text style={{ width: '35%', fontWeight: 'bold', fontSize: fs_header, paddingVertical: 1, paddingHorizontal: 4 }}>Verifikasi</Text>
-                </View>
-
-                {/* Tanggal & Waktu — Tanggal dari check manapun yang ada hari itu; Waktu = waktu verifikasi Pemegang. */}
-                {(['Tanggal (DD/MM)', 'Waktu'] as const).map((label) => (
-                  <View key={label} style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: B, height: 10 }}>
-                    <View style={{ width: '35%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}><Text>{label}</Text></View>
-                    {[1, 2, 3, 4, 5, 6, 7].map((d) => {
-                      const holder = dailyCheckByHari(d, 'pemegang');
-                      const pengawas = dailyCheckByHari(d, 'pengawas');
-                      const tanggal = (holder ?? pengawas)?.tanggal;
-                      const value = label === 'Tanggal (DD/MM)'
-                        ? (tanggal ? formatCheckDate(tanggal) : '')
-                        : (holder?.diisi_pada ? formatCheckTime(holder.diisi_pada) : '');
-                      return (
-                        <View key={d} style={{ width: '8%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 4 }}>{value}</Text>
-                        </View>
-                      );
-                    })}
-                    <View style={{ width: '9%' }} />
-                  </View>
-                ))}
-
-                {/* Pemegang PTW / Pengawas-Penerbit PTW: dua baris (Nama Inisial, Paraf) */}
-                {(['pemegang', 'pengawas'] as const).map((peran, gi) => (
-                  <View key={peran} style={{ flexDirection: 'row', borderBottomWidth: gi === 1 ? 0 : 1, borderColor: B }}>
-                    <View style={{ width: '22%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}>
-                      <Text>{peran === 'pemegang' ? 'Pemegang PTW' : 'Pengawas / Penerbit PTW'}</Text>
-                    </View>
-                    <View style={{ width: '78%' }}>
-                      {(['Nama Inisial', 'Paraf'] as const).map((sub, si) => (
-                        <View key={sub} style={{ flexDirection: 'row', height: 12, borderBottomWidth: si === 0 ? 1 : 0, borderColor: B }}>
-                          <View style={{ width: '16.67%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 3 }}><Text style={{ fontSize: 4 }}>{sub}</Text></View>
-                          {[1, 2, 3, 4, 5, 6, 7].map((d) => {
-                            const check = dailyCheckByHari(d, peran);
-                            return (
-                              <View key={d} style={{ width: '10.26%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', alignItems: 'center' }}>
-                                <Text style={{ fontSize: 4 }}>{check ? (sub === 'Nama Inisial' ? check.inisial : '✓') : ''}</Text>
-                              </View>
-                            );
-                          })}
-                          <View style={{ width: '11.5%' }} />
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                ))}
-
-                {/* Keterangan dinamis: nama lengkap penjabat (kolom di atas hanya inisial)
-                    dan uraian pekerjaan harian dari Pemegang. Hanya muncul kalau ada isinya. */}
-                {(() => {
-                  const uraian = dailyChecks
-                    .filter((c) => c.peran === 'pemegang' && c.uraian_pekerjaan)
-                    .sort((a, b) => a.hari_ke - b.hari_ke);
-                  const pemegangNama = signatories?.pemegang?.nama;
-                  const pengawasNama = signatories?.pengawas?.nama;
-                  if (uraian.length === 0 && !pemegangNama && !pengawasNama) return null;
-                  return (
-                    <View style={{ borderTopWidth: 1, borderColor: B, padding: 1.5 }}>
-                      {(pemegangNama || pengawasNama) && (
-                        <Text style={{ fontSize: 4 }}>
-                          Pemegang PTW: {pemegangNama || '-'}   |   Pengawas PTW: {pengawasNama || '-'}
-                        </Text>
-                      )}
-                      {uraian.length > 0 && (
-                        <Text style={{ fontSize: 3.6, lineHeight: 1.1, marginTop: 0.5 }}>
-                          <Text style={{ fontWeight: 'bold' }}>Uraian harian (Pemegang): </Text>
-                          {uraian.map((c) => {
-                            const teks = String(c.uraian_pekerjaan).replace(/\s+/g, ' ').trim();
-                            return `H${c.hari_ke} ${formatCheckDate(c.tanggal)}: ${teks.length > 48 ? `${teks.slice(0, 45)}...` : teks}`;
-                          }).join('  •  ')}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })()}
-              </View>
-
-            </View>
+            <SafetySheet weekIndex={0} />
           </View>
 
         </View>
@@ -731,6 +751,31 @@ export default function PtwPDF({
         </View>
 
       </Page>
+
+      {/* LEMBAR LANJUTAN — PTW diperpanjang melebihi 7 hari. Safety Checklist & Verifikasi
+          untuk hari berikutnya dicetak menyatu di dokumen ini, satu lembar per 7 hari. */}
+      {Array.from({ length: totalWeeks - 1 }, (_, w) => (
+        <Page key={`lanjutan-${w + 1}`} size="A4" orientation="landscape" style={styles.page}>
+          <View style={[styles.topHeader, { backgroundColor: typeDef.color }]}>
+            <View style={styles.topHeaderLogo}>
+              <Image src="/assets/logo/main-logo.png" style={{ width: '90%', objectFit: 'contain' }} />
+            </View>
+            <View style={styles.topHeaderCenter}>
+              <Text style={[styles.headerTitle, { color: typeDef.textColor }]}>LEMBAR LANJUTAN — {typeDef.title.toUpperCase()}</Text>
+              <Text style={[styles.headerSubtitle, { color: typeDef.textColor }]}>
+                No. PTW {ptwNumber || '-'}  |  Perpanjangan: Hari ke-{(w + 1) * 7 + 1} s/d {Math.min((w + 2) * 7, totalDays)}  |  Berlaku s/d {formatDate(berlakuSelesai)}
+              </Text>
+              <Text style={[styles.headerRegion, { color: typeDef.textColor }]}>{projectName || ''}{location ? ` — ${location}` : ''}</Text>
+            </View>
+          </View>
+          <View style={{ marginTop: 4 }}>
+            <SafetySheet weekIndex={w + 1} />
+          </View>
+          <Text style={[styles.disclaimer, { marginTop: 4 }]}>
+            Lembar lanjutan ini adalah bagian dari PTW No. {ptwNumber || '-'} (halaman {w + 2} dari {totalWeeks} lembar checklist). Hari ke-1 s/d 7 ada pada halaman utama.
+          </Text>
+        </Page>
+      ))}
 
       {hasGasForm && (
         <Page size="A4" orientation="landscape" style={styles.page}>

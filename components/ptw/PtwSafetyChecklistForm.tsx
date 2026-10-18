@@ -88,7 +88,8 @@ export default function PtwSafetyChecklistForm({
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-2 py-2 font-bold min-w-[220px]">Item</th>
                 {dayDates.map((d, i) => (
-                  <th key={d} className="px-1 py-2 font-bold text-center min-w-[70px]">
+                  <th key={d} className={`px-1 py-2 font-bold text-center min-w-[70px] ${i >= 7 ? 'bg-indigo-50/70' : ''} ${i > 0 && i % 7 === 0 ? 'border-l-2 border-indigo-300' : ''}`}>
+                    {i > 0 && i % 7 === 0 && <div className="text-[9px] font-bold uppercase tracking-wide text-indigo-500">Lembar {Math.floor(i / 7) + 1}</div>}
                     Hari {i + 1}
                     <div className="font-normal text-slate-400">{formatDayLabel(d)}</div>
                   </th>
@@ -156,7 +157,7 @@ export default function PtwSafetyChecklistForm({
                   mobileDay === i ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200'
                 }`}
               >
-                Hari {i + 1}
+                Hari {i + 1}{i >= 7 && <span className="ml-1 text-[9px] font-bold uppercase opacity-70">L{Math.floor(i / 7) + 1}</span>}
                 <span className={`block font-normal ${mobileDay === i ? 'text-white/80' : 'text-slate-400'}`}>{formatDayLabel(d)}</span>
               </button>
             ))}
