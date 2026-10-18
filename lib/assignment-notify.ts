@@ -15,6 +15,7 @@ import {
 import { PROCEDURE_STAGE_PERMISSION } from '@/lib/procedure-status';
 import { JSA_STAGE_PERMISSION } from '@/lib/jsa-status';
 import { PTW_STAGE_PERMISSION } from '@/lib/ptw-status';
+import { insertNotificationsWithPush } from '@/lib/push';
 
 /** Permission yang menandai "admin penugasan" tiap pihak (sinkron dengan getAdminParty). */
 const ADMIN_PERMISSION: Record<AssignmentParty, { module: string; action: string }> = {
@@ -57,7 +58,8 @@ async function insertNotifications(supabase: any, userIds: string[], payload: {
   link: string;
 }) {
   if (userIds.length === 0) return;
-  await supabase.from('notifications').insert(
+  await insertNotificationsWithPush(
+    supabase,
     [...new Set(userIds)].map(user_id => ({ user_id, ...payload })),
   );
 }

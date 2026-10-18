@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bell, CheckCircle2, AlertTriangle, ShieldCheck, FileSignature, Clock } from "lucide-react";
 import { getNotifications, markNotificationAsRead, NotificationItem, NotificationType } from "@/app/dashboard/inbox/actions";
 import { useNotificationsRealtime } from "@/hooks/useNotificationsRealtime";
+import { PushNotificationToggle } from "@/components/pwa/push-toggle";
 
 const ICONS: Record<string, { Icon: React.ElementType; cls: string }> = {
   approval: { Icon: CheckCircle2, cls: 'text-emerald-600 bg-emerald-50' },
@@ -132,6 +133,7 @@ export function InternalNotificationBell({ initialUnread, userId, mutedTypes = [
               })
             )}
           </div>
+          <PushNotificationToggle />
         </div>
       )}
     </div>

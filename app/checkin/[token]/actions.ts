@@ -5,6 +5,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { PTW_STATUS, getEffectivePtwStatus } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { createNotification, notifyUsersByPermission } from "@/app/dashboard/inbox/actions";
+import { insertNotificationsWithPush } from "@/lib/push";
 import { todayDateString } from "@/lib/site-ops";
 
 /**
@@ -140,13 +141,11 @@ export async function triggerStopWork(token: string, params: { reporterName: str
       .select('id')
       .eq('org_id', project.vendor_id);
     if (vendorMembers && vendorMembers.length > 0) {
-      await supabase.from('notifications').insert(
-        vendorMembers.map(m => ({
-          user_id: m.id, type: 'warning',
-          title: 'Stop Work Authority — Pekerjaan Dihentikan',
-          message, link: `/vendor/dashboard/projects/${ptw.project_id}`,
-        }))
-      );
+      await insertNotificationsWithPush(supabase, vendorMembers.map(m => ({
+        user_id: m.id, type: 'warning',
+        title: 'Stop Work Authority - Pekerjaan Dihentikan',
+        message, link: `/vendor/dashboard/projects/${ptw.project_id}`,
+      })));
     }
   }
   if (project?.assigned_inspector) {

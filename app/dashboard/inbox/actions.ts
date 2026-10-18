@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { notifyEmptyStage } from "@/lib/assignment-notify";
+import { insertNotificationsWithPush } from "@/lib/push";
 
 // =====================================================================
 // NOTIFICATION TYPES
@@ -187,13 +188,13 @@ export async function createNotification({
   link?: string;
 }) {
   const supabase = await createClient();
-  await supabase.from('notifications').insert({
+  await insertNotificationsWithPush(supabase, [{
     user_id: userId,
     type,
     title,
     message,
     link: link || null,
-  });
+  }]);
 }
 
 /**
@@ -228,15 +229,13 @@ export async function notifyOrgMembers({
 
   if (!members || members.length === 0) return;
 
-  await supabase.from('notifications').insert(
-    members.map(m => ({
-      user_id: m.id,
-      type,
-      title,
-      message,
-      link: link || null,
-    }))
-  );
+  await insertNotificationsWithPush(supabase, members.map(m => ({
+    user_id: m.id,
+    type,
+    title,
+    message,
+    link: link || null,
+  })));
 }
 
 /**
@@ -281,7 +280,7 @@ export async function notifyUsersByRole({
     link: link || null,
   }));
 
-  await supabase.from('notifications').insert(notifications);
+  await insertNotificationsWithPush(supabase, notifications);
 }
 
 /**
@@ -331,7 +330,7 @@ export async function notifyUsersByPermission({
     link: link || null,
   }));
 
-  await supabase.from('notifications').insert(notifications);
+  await insertNotificationsWithPush(supabase, notifications);
 }
 
 /**
@@ -378,13 +377,11 @@ export async function notifyAssignees({
     return;
   }
 
-  await supabase.from('notifications').insert(
-    assignees.map(a => ({
-      user_id: a.assignee_id,
-      type,
-      title,
-      message,
-      link: link || null,
-    }))
-  );
+  await insertNotificationsWithPush(supabase, assignees.map(a => ({
+    user_id: a.assignee_id,
+    type,
+    title,
+    message,
+    link: link || null,
+  })));
 }

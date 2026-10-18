@@ -9,10 +9,13 @@
 //   - Hashed build assets under /_next/static are cache-first.
 //   - Everything else (RSC/data requests, POST server actions) goes straight
 //     to the network.
+//   - Web Push: `push` menampilkan notifikasi sistem (muncul walau aplikasi
+//     ditutup) dan `notificationclick` memfokuskan/membuka aplikasi pada
+//     halaman terkait. Pengirimannya dari server (lib/push.ts).
 //
 // Bump CACHE_VERSION whenever this file changes to evict old caches.
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `rachel-k3-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline";
 
@@ -103,4 +106,65 @@ self.addEventListener("fetch", (event) => {
   if (isStaticAsset(url)) {
     event.respondWith(cacheFirst(request));
   }
+});
+
+// ---------------------------------------------------------------------------
+// Web Push (notifikasi perangkat)
+// ---------------------------------------------------------------------------
+// Payload dikirim oleh lib/push.ts sebagai JSON: { title, body, url, tag }.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+
+  const title = data.title || "RACHEL K3";
+  const options = {
+    body: data.body || "",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: data.tag || "rachel-k3",
+    data: { url: data.url || "/" },
+    vibrate: [80, 40, 80],
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Tap notifikasi: fokus tab aplikasi yang sudah terbuka (lalu arahkan ke
+// halaman terkait), atau buka jendela baru kalau belum ada.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const target = new URL(
+    (event.notification.data && event.notification.data.url) || "/",
+    self.location.origin
+  ).href;
+
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      for (const client of windows) {
+        if (client.url.startsWith(self.location.origin)) {
+          await client.focus();
+          if ("navigate" in client && client.url !== target) {
+            try {
+              await client.navigate(target);
+            } catch {
+              // navigate tidak selalu diizinkan; fokus saja sudah cukup.
+            }
+          }
+          return;
+        }
+      }
+
+      await self.clients.openWindow(target);
+    })()
+  );
 });
