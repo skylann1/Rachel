@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Menu, X, LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, BookOpen, UserCog, ShieldCheck } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useVendorBadges } from '@/components/vendor/badges-provider';
+import { logout } from '@/app/vendor/login/actions';
 
 const menuUtama = [
   { name: 'Dashboard Mitra Kerja', href: '/vendor/dashboard', icon: LayoutDashboard },
@@ -143,7 +144,7 @@ export function VendorMobileSidebar() {
         </nav>
 
         <div className="p-3 border-t border-slate-800/80 shrink-0">
-          <form method="POST" action="/auth/logout">
+          <form action={logout}>
             <button type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors">
               <LogOut className="h-4 w-4" />
               Keluar

@@ -7,6 +7,7 @@ import { Menu, X, LogOut } from 'lucide-react';
 import Image from "next/image";
 import { SidebarNav } from "./sidebar-nav";
 import type { SidebarBadges } from "@/app/dashboard/actions/sidebar-badges";
+import { logout } from "@/app/auth/login/actions";
 
 export function InternalMobileSidebar({
   userPermissions,
@@ -86,7 +87,7 @@ export function InternalMobileSidebar({
 
         {/* Logout */}
         <div className="p-4 border-t border-slate-800 shrink-0">
-          <form method="POST" action="/api/auth/logout">
+          <form action={logout}>
             <button type="submit" className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
               <LogOut className="h-5 w-5" />
               Keluar Sistem
