@@ -631,7 +631,7 @@ export async function rejectJsa(jsaId: string, note: string) {
   revalidatePath('/dashboard/approval');
 }
 
-export async function approvePtw(ptwId: string) {
+export async function approvePtw(ptwId: string, ptwNumberInput?: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
@@ -641,6 +641,7 @@ export async function approvePtw(ptwId: string) {
 
   let stageKey = '';
   let updatePayloadIfComplete: any = {};
+  let ptwNumberToUse = '';
 
   // Urutan PGSOL: HSE PGSOL (ptw.hse_pgsol) dulu, baru PM PGSOL
   // (ptw.review_pgsol — nama stage_key lama dipertahankan).
@@ -661,6 +662,15 @@ export async function approvePtw(ptwId: string) {
     stageKey = 'ptw.numbering_hsse';
     requireDistinctApprover(current.authority_id, user.id, "PTW Authority (PM)");
     requireDistinctApprover(current.issuer_id, user.id, "PTW Issuer");
+    // Nomor PTW diinput manual oleh HSSE (bukan lagi digenerate sistem).
+    // Divalidasi SEBELUM penugasan ditandai approved, supaya nomor yang
+    // salah/bentrok tidak meninggalkan tahap setengah selesai.
+    const manualNumber = (ptwNumberInput ?? '').trim();
+    if (!manualNumber) throw new Error("Nomor PTW wajib diisi oleh HSSE.");
+    if (manualNumber.length > 60) throw new Error("Nomor PTW terlalu panjang (maksimal 60 karakter).");
+    const { data: dupe } = await supabase.from('ptw').select('id').eq('ptw_number', manualNumber).neq('id', ptwId).maybeSingle();
+    if (dupe) throw new Error(`Nomor PTW "${manualNumber}" sudah dipakai PTW lain.`);
+    ptwNumberToUse = manualNumber;
   } else {
     throw new Error("PTW tidak dalam tahap yang bisa disetujui.");
   }
@@ -683,17 +693,9 @@ export async function approvePtw(ptwId: string) {
   }
 
   if (stageKey === 'ptw.numbering_hsse') {
-    const year = new Date().getFullYear();
-    // Nomor diambil dari counter atomik (RPC get_next_ptw_number): `count+1`
-    // dari sisi aplikasi rawan balapan — dua PTW yang dinomori nyaris
-    // bersamaan bisa dapat nomor sama. Function-nya INSERT ... ON CONFLICT
-    // ... RETURNING, satu statement, sehingga aman dari race. Tabel
-    // ptw_numbering dibuat di supabase/schema_ptw_numbering.sql.
-    const { data: ptwNumber, error: numError } = await supabase.rpc('get_next_ptw_number', { p_year: year });
-    if (numError || typeof ptwNumber !== 'string' || !ptwNumber) {
-      throw new Error(numError?.message || 'Gagal mendapatkan nomor PTW berikutnya.');
-    }
-    updatePayloadIfComplete = { hsse_id: user.id, ptw_number: ptwNumber, status: PTW_STATUS.aktif };
+    // Unique index idx_ptw_number_unique tetap jadi jaring pengaman terakhir
+    // kalau dua HSSE memakai nomor yang sama nyaris bersamaan.
+    updatePayloadIfComplete = { hsse_id: user.id, ptw_number: ptwNumberToUse, status: PTW_STATUS.aktif };
   }
 
   // .eq('status', current.status) tetap jadi optimistic lock terakhir:

@@ -22,6 +22,7 @@ import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
 import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel';
 import PtwDailyCheckTab from '@/components/ptw/PtwDailyCheckTab';
 import { assignFieldRole, submitDailyCheck } from '@/app/dashboard/projects/[id]/actions';
+import { decidePtwClosure, decideProjectCompletion, decidePtwExtension } from '@/app/dashboard/projects/[id]/completion-actions';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION, PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, isProcedurePending, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
@@ -354,14 +355,17 @@ const APPROVE_LABELS: Record<string, { title: string; desc: string }> = {
 };
 
 // Reuse ApproveModal
-function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
+function ApproveModal({ labelKey, warning, requireNumber, onConfirm, onCancel, isLoading }: {
   labelKey: string;
+  /** Tahap Penomoran HSSE: HSSE wajib mengisi nomor PTW sebelum menyetujui. */
+  requireNumber?: boolean;
   /** Safety-gate notice — set when the PTW being approved has an expired worker/equipment. */
   warning?: string | null;
-  onConfirm: () => void;
+  onConfirm: (ptwNumber?: string) => void;
   onCancel: () => void;
   isLoading: boolean;
 }) {
+  const [ptwNumber, setPtwNumber] = useState('');
   const { title, desc } = APPROVE_LABELS[labelKey] ?? APPROVE_LABELS.prosedur;
   const danger = !!warning;
   return (
@@ -386,6 +390,21 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
             </div>
           )}
 
+          {requireNumber && (
+            <div className="mt-5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Nomor PTW <span className="text-rose-500">*</span></label>
+              <input
+                type="text"
+                value={ptwNumber}
+                onChange={e => setPtwNumber(e.target.value)}
+                maxLength={60}
+                placeholder="Contoh: PTW-2026-001"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              />
+              <p className="mt-1 text-[11px] text-slate-400">Nomor harus unik. Masukkan sesuai penomoran resmi HSSE.</p>
+            </div>
+          )}
+
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
             <button
               onClick={onCancel}
@@ -395,8 +414,8 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
               Batal
             </button>
             <button
-              onClick={onConfirm}
-              disabled={isLoading}
+              onClick={() => onConfirm(requireNumber ? ptwNumber.trim() : undefined)}
+              disabled={isLoading || (!!requireNumber && ptwNumber.trim().length === 0)}
               className={`flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-colors disabled:opacity-50 ${
                 danger ? 'bg-rose-600 shadow-rose-200 hover:bg-rose-700' : 'bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700'
               }`}
@@ -414,7 +433,7 @@ function ApproveModal({ labelKey, warning, onConfirm, onCancel, isLoading }: {
 export default function AdminProjectClient({
   project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, permissions,
   siteCheckins, toolboxMeetings, stageAssignments,
-  ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates,
+  ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canVerifyClosure, canVerifyCompletion, canVerifyExtension,
 }: {
   project: any, currentUserId: string, jsaSignatories?: any, ptwSignatories?: Record<string, any>,
   /** worker_id / equipment_id -> 'expired' | 'expiring' | 'valid' | 'unknown', computed server-side against live master data. */
@@ -435,6 +454,12 @@ export default function AdminProjectClient({
   profileById?: Record<string, { full_name: string | null; email: string | null }>,
   /** Kandidat yang boleh ditugaskan sebagai Pengawas (sesama staf PGN pemanggil). */
   fieldCandidates?: { id: string; name: string }[],
+  /** true kalau pemanggil punya ptw.verify_closure DAN ditugaskan di tahap HSSE proyek ini. */
+  canVerifyClosure?: boolean,
+  /** true kalau pemanggil punya ptw.verify_project_completion DAN ditugaskan di tahap PM proyek ini. */
+  canVerifyCompletion?: boolean,
+  /** true kalau pemanggil punya ptw.verify_extension DAN ditugaskan di tahap HSSE proyek ini. */
+  canVerifyExtension?: boolean,
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -448,6 +473,25 @@ export default function AdminProjectClient({
   const [hseError, setHseError] = useState<string | null>(null);
   const [qrModalToken, setQrModalToken] = useState<string | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
+  // Verifikasi penutupan PTW / penyelesaian proyek. `rejecting` = id PTW (atau 'project') yang sedang mengisi catatan penolakan.
+  const [rejecting, setRejecting] = useState<string | null>(null);
+  const [decisionNote, setDecisionNote] = useState('');
+  const [decisionBusy, setDecisionBusy] = useState(false);
+  const [decisionError, setDecisionError] = useState('');
+
+  const runDecision = async (fn: () => Promise<{ success: true } | { success: false; error: string }>) => {
+    setDecisionBusy(true);
+    setDecisionError('');
+    const res = await fn();
+    if (res.success) {
+      setRejecting(null);
+      setDecisionNote('');
+      router.refresh();
+    } else {
+      setDecisionError(res.error);
+    }
+    setDecisionBusy(false);
+  };
 
   const canResumeWork = !!permissions?.['ptw']?.includes('resume_work');
   const canEditSafetyChecklist = !!permissions?.['ptw']?.includes('edit_safety_checklist');
@@ -509,14 +553,18 @@ export default function AdminProjectClient({
   const ptwEffectiveStatuses = ptws.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date));
   const ptwAnyExpired = ptwEffectiveStatuses.some(s => s === PTW_STATUS.expired);
   const ptwAnyStopped = ptwEffectiveStatuses.some(s => s === PTW_STATUS.stoppedSwa);
-  const ptwAllAktif = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.aktif);
+  const ptwAllClosed = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.selesai);
+  const ptwAllAktif = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.aktif || s === PTW_STATUS.selesai || s === PTW_STATUS.penutupanDiajukan);
+  const projectCompleted = project.status === 'Selesai';
+  const completionRequested = !!project.completion_requested_at && !projectCompleted;
   const ptwAnyRejected = ptws.some(p => p.status === PTW_STATUS.draft && p.rejection_note);
-  const ptwStatus = ptwAnyStopped ? 'Stopped'
+  const ptwStatus = ptwAllClosed ? 'Approved'
+    : ptwAnyStopped ? 'Stopped'
     : ptwAnyExpired ? 'Expired'
     : ptwAllAktif ? 'Approved'
     : ptwAnyRejected ? 'Rejected'
     : ptws.length > 0 ? 'Pending' : 'Draft';
-  const ptwAktifCount = ptwEffectiveStatuses.filter(s => s === PTW_STATUS.aktif).length;
+  const ptwAktifCount = ptwEffectiveStatuses.filter(s => s === PTW_STATUS.aktif || s === PTW_STATUS.penutupanDiajukan || s === PTW_STATUS.selesai).length;
 
   const getStepStyle = (status: string) => {
     switch (status) {
@@ -658,14 +706,14 @@ export default function AdminProjectClient({
     }
   };
 
-  const handleConfirmApprove = async () => {
+  const handleConfirmApprove = async (ptwNumber?: string) => {
     if (!approveTarget) return;
     const { type, id } = approveTarget;
     setIsLoading(true);
     try {
       if (type === 'prosedur') await approveProcedure(id);
       if (type === 'jsa') await approveJsa(id);
-      if (type === 'ptw') await approvePtw(id);
+      if (type === 'ptw') await approvePtw(id, ptwNumber);
       setApproveTarget(null);
       router.refresh();
     } catch (e) {
@@ -742,6 +790,7 @@ export default function AdminProjectClient({
                 : approveTarget.type
           }
           warning={approveTargetPtwWarning}
+          requireNumber={approveTarget.type === 'ptw' && ptws.find(p => p.id === approveTarget.id)?.status === PTW_STATUS.menungguPenomoranHSSE}
           onConfirm={handleConfirmApprove}
           onCancel={() => setApproveTarget(null)}
           isLoading={isLoading}
@@ -1415,6 +1464,43 @@ export default function AdminProjectClient({
 
                </div>
 
+               {/* PENYELESAIAN PROYEK */}
+               {(completionRequested || projectCompleted) && (
+                 <div className={`mt-6 rounded-2xl border p-5 ${projectCompleted ? 'bg-emerald-50 border-emerald-200' : 'bg-sky-50 border-sky-200'}`}>
+                   <h3 className="font-bold text-slate-800 text-sm mb-1">Penyelesaian Proyek</h3>
+                   {projectCompleted ? (
+                     <p className="text-sm text-emerald-800">Proyek telah dinyatakan selesai{project.completed_at ? ` pada ${new Date(project.completed_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''} dan masuk Arsip.</p>
+                   ) : (
+                     <div className="space-y-3">
+                       <p className="text-sm text-sky-900">Vendor mengajukan penyelesaian proyek. Seluruh PTW sudah ditutup.</p>
+                       {project.completion_note && <p className="text-sm text-slate-700"><strong>Catatan vendor:</strong> {project.completion_note}</p>}
+                       {canVerifyCompletion ? (
+                         rejecting === 'project' ? (
+                           <div className="space-y-2">
+                             <textarea rows={2} value={decisionNote} onChange={e => setDecisionNote(e.target.value)} placeholder="Alasan penolakan (wajib)" className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white" />
+                             {decisionError && <p className="text-sm text-rose-600 font-medium">{decisionError}</p>}
+                             <div className="flex gap-2">
+                               <button disabled={decisionBusy} onClick={() => { setRejecting(null); setDecisionNote(''); setDecisionError(''); }} className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg">Batal</button>
+                               <button disabled={decisionBusy || !decisionNote.trim()} onClick={() => runDecision(() => decideProjectCompletion(project.id, false, decisionNote))} className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg">Tolak Penyelesaian</button>
+                             </div>
+                           </div>
+                         ) : (
+                           <div className="space-y-2">
+                             {decisionError && <p className="text-sm text-rose-600 font-medium">{decisionError}</p>}
+                             <div className="flex gap-2">
+                               <button disabled={decisionBusy} onClick={() => { setRejecting('project'); setDecisionError(''); }} className="px-4 py-2 text-sm font-bold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg">Tolak</button>
+                               <button disabled={decisionBusy} onClick={() => runDecision(() => decideProjectCompletion(project.id, true))} className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg">{decisionBusy ? 'Memproses...' : 'Verifikasi & Selesaikan Proyek'}</button>
+                             </div>
+                           </div>
+                         )
+                       ) : (
+                         <p className="text-xs italic text-sky-700">Hanya PM yang ditugaskan di proyek ini yang dapat memverifikasi.</p>
+                       )}
+                     </div>
+                   )}
+                 </div>
+               )}
+
                {/* REFERENSI PTW — satu proyek bisa punya beberapa tipe PTW sekaligus */}
                <div className="mt-6">
                   <h3 className="font-bold text-slate-700 text-sm mb-4">Permit to Work</h3>
@@ -1429,7 +1515,9 @@ export default function AdminProjectClient({
                       ptws.map(row => {
                         const rowEffective = getEffectivePtwStatus(row.status, row.valid_to ?? project.end_date);
                         const rowIsStopped = rowEffective === PTW_STATUS.stoppedSwa;
-                        const rowIsReference = rowEffective === PTW_STATUS.aktif || rowEffective === PTW_STATUS.expired || rowIsStopped;
+                        const rowIsClosing = rowEffective === PTW_STATUS.penutupanDiajukan;
+                        const rowIsClosed = rowEffective === PTW_STATUS.selesai;
+                        const rowIsReference = rowEffective === PTW_STATUS.aktif || rowEffective === PTW_STATUS.expired || rowIsStopped || rowIsClosing || rowIsClosed;
                         const rowTitle = PTW_TYPES.find(t => t.id === row.ptw_type)?.title.split('(')[0].trim() || row.ptw_type;
 
                         return rowIsReference ? (
@@ -1440,7 +1528,7 @@ export default function AdminProjectClient({
                              </div>
                              <h3 className="font-bold text-slate-800 text-lg">{rowTitle}</h3>
                              <p className="text-sm text-slate-500 mt-1 mb-3">
-                               {rowIsStopped ? 'Dihentikan lewat Stop Work Authority dari lapangan.' : rowEffective === PTW_STATUS.expired ? 'Surat Izin Kerja Aman (SIKA) yang telah kedaluwarsa.' : 'Surat Izin Kerja Aman (SIKA) yang telah aktif.'}
+                               {rowIsStopped ? 'Dihentikan lewat Stop Work Authority dari lapangan.' : rowIsClosed ? 'Pekerjaan selesai — PTW telah diverifikasi dan ditutup.' : rowIsClosing ? 'Vendor mengajukan penutupan PTW — menunggu verifikasi HSSE.' : rowEffective === PTW_STATUS.expired ? 'Surat Izin Kerja Aman (SIKA) yang telah kedaluwarsa.' : 'Surat Izin Kerja Aman (SIKA) yang telah aktif.'}
                              </p>
                              {rowIsStopped && (
                                <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-xs text-red-800 space-y-1">
@@ -1457,7 +1545,65 @@ export default function AdminProjectClient({
                                  )}
                                </div>
                              )}
-                             {row.field_token && !rowIsStopped && (
+                             {rowEffective === PTW_STATUS.aktif && row.extension_requested_to && (
+                               <div className="rounded-xl p-3 mb-4 text-xs space-y-1 border bg-sky-50 border-sky-200 text-sky-900">
+                                 <p className="font-bold">Perpanjangan diajukan vendor</p>
+                                 <p><strong>Berlaku saat ini:</strong> {row.valid_to ? new Date(`${row.valid_to}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</p>
+                                 <p><strong>Diminta sampai:</strong> {new Date(`${row.extension_requested_to}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                 {row.extension_reason && <p><strong>Alasan:</strong> {row.extension_reason}</p>}
+                                 {canVerifyExtension ? (
+                                   rejecting === `ext-${row.id}` ? (
+                                     <div className="space-y-2 pt-2">
+                                       <textarea rows={2} value={decisionNote} onChange={e => setDecisionNote(e.target.value)} placeholder="Alasan penolakan (wajib)" className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white" />
+                                       {decisionError && <p className="text-rose-600 font-medium">{decisionError}</p>}
+                                       <div className="flex gap-2">
+                                         <button disabled={decisionBusy} onClick={() => { setRejecting(null); setDecisionNote(''); setDecisionError(''); }} className="flex-1 py-2 font-bold text-slate-600 bg-white border border-slate-200 rounded-lg">Batal</button>
+                                         <button disabled={decisionBusy || !decisionNote.trim()} onClick={() => runDecision(() => decidePtwExtension(row.id, false, decisionNote))} className="flex-1 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg">Tolak</button>
+                                       </div>
+                                     </div>
+                                   ) : (
+                                     <div className="space-y-2 pt-2">
+                                       {decisionError && <p className="text-rose-600 font-medium">{decisionError}</p>}
+                                       <div className="flex gap-2">
+                                         <button disabled={decisionBusy} onClick={() => { setRejecting(`ext-${row.id}`); setDecisionError(''); }} className="flex-1 py-2 font-bold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg">Tolak</button>
+                                         <button disabled={decisionBusy} onClick={() => runDecision(() => decidePtwExtension(row.id, true))} className="flex-1 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg">{decisionBusy ? 'Memproses...' : 'Setujui Perpanjangan'}</button>
+                                       </div>
+                                     </div>
+                                   )
+                                 ) : (
+                                   <p className="italic text-sky-700">Hanya HSSE yang ditugaskan di proyek ini yang dapat memverifikasi.</p>
+                                 )}
+                               </div>
+                             )}
+                             {(rowIsClosing || rowIsClosed) && (
+                               <div className={`rounded-xl p-3 mb-4 text-xs space-y-1 border ${rowIsClosed ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-sky-50 border-sky-200 text-sky-900'}`}>
+                                 {row.closure_finished_at && <p><strong>Pekerjaan selesai:</strong> {new Date(row.closure_finished_at).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+                                 {row.closure_note && <p><strong>Catatan vendor:</strong> {row.closure_note}</p>}
+                                 {rowIsClosed && row.closed_at && <p><strong>Ditutup:</strong> {new Date(row.closed_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+                                 {rowIsClosing && canVerifyClosure && (
+                                   rejecting === row.id ? (
+                                     <div className="space-y-2 pt-2">
+                                       <textarea rows={2} value={decisionNote} onChange={e => setDecisionNote(e.target.value)} placeholder="Alasan penolakan (wajib)" className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white" />
+                                       {decisionError && <p className="text-rose-600 font-medium">{decisionError}</p>}
+                                       <div className="flex gap-2">
+                                         <button disabled={decisionBusy} onClick={() => { setRejecting(null); setDecisionNote(''); setDecisionError(''); }} className="flex-1 py-2 font-bold text-slate-600 bg-white border border-slate-200 rounded-lg">Batal</button>
+                                         <button disabled={decisionBusy || !decisionNote.trim()} onClick={() => runDecision(() => decidePtwClosure(row.id, false, decisionNote))} className="flex-1 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg">Tolak Penutupan</button>
+                                       </div>
+                                     </div>
+                                   ) : (
+                                     <div className="space-y-2 pt-2">
+                                       {decisionError && <p className="text-rose-600 font-medium">{decisionError}</p>}
+                                       <div className="flex gap-2">
+                                         <button disabled={decisionBusy} onClick={() => { setRejecting(row.id); setDecisionError(''); }} className="flex-1 py-2 font-bold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg">Tolak</button>
+                                         <button disabled={decisionBusy} onClick={() => runDecision(() => decidePtwClosure(row.id, true))} className="flex-1 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg">{decisionBusy ? 'Memproses...' : 'Verifikasi & Tutup PTW'}</button>
+                                       </div>
+                                     </div>
+                                   )
+                                 )}
+                                 {rowIsClosing && !canVerifyClosure && <p className="italic text-sky-700">Hanya HSSE yang ditugaskan di proyek ini yang dapat memverifikasi.</p>}
+                               </div>
+                             )}
+                             {row.field_token && !rowIsStopped && !rowIsClosing && !rowIsClosed && (
                                <button
                                  onClick={() => setQrModalToken(row.field_token)}
                                  className="w-full mb-2 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors"

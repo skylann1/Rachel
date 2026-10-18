@@ -16,6 +16,9 @@ import PtwPDF from '@/components/ptw/PtwPDF';
 import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
 import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel';
 import PtwDailyCheckTab from '@/components/ptw/PtwDailyCheckTab';
+import PtwClosureModal from '@/components/ptw/PtwClosureModal';
+import PtwExtensionModal from '@/components/ptw/PtwExtensionModal';
+import { requestProjectCompletion } from '@/app/dashboard/projects/[id]/completion-actions';
 import { assignFieldRole, submitDailyCheck } from '@/app/dashboard/projects/[id]/actions';
 import { todayDateString } from '@/lib/site-ops';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
@@ -46,9 +49,9 @@ function docLogTone(action: string) {
  * menunggu, jadi tone 'action' tidak pernah dipakai di layar ini.
  */
 function vendorRailTone(status: string): RailTone {
-  if (status === 'Approved') return 'done';
+  if (status === 'Approved' || status === 'Closed') return 'done';
   if (status === 'Rejected') return 'returned';
-  if (status === 'Pending') return 'waiting';
+  if (status === 'Pending' || status === 'Closing') return 'waiting';
   return 'idle';
 }
 
@@ -90,6 +93,7 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
 export function VendorProjectClient({
   project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, myReviews,
   ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canAssignHolder, canFillFieldRole,
+  canRequestClosure, canRequestCompletion, canRequestExtension,
 }: {
   project: any; currentUserId: string; jsaSignatories?: any; ptwSignatories?: Record<string, any>;
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
@@ -114,9 +118,20 @@ export function VendorProjectClient({
   canAssignHolder?: boolean;
   /** true kalau caller punya ptw.field_holder atau ptw.field_pengawas — boleh mengisi daily check bila sedang ditugaskan. */
   canFillFieldRole?: boolean;
+  /** true kalau caller punya ptw.request_closure — menampilkan tombol Ajukan Penutupan PTW. */
+  canRequestClosure?: boolean;
+  /** true kalau caller punya ptw.request_project_completion — boleh mengajukan penyelesaian proyek. */
+  canRequestCompletion?: boolean;
+  /** true kalau caller punya ptw.request_extension — menampilkan tombol Ajukan Perpanjangan PTW. */
+  canRequestExtension?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState('ringkasan');
   const [qrModalToken, setQrModalToken] = useState<string | null>(null);
+  const [closurePtwId, setClosurePtwId] = useState<string | null>(null);
+  const [extensionPtwId, setExtensionPtwId] = useState<string | null>(null);
+  const [completionNote, setCompletionNote] = useState('');
+  const [completionLoading, setCompletionLoading] = useState(false);
+  const [completionError, setCompletionError] = useState('');
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
   // Satu proyek bisa punya beberapa PTW sekaligus (tipe berbeda) — lihat lib/project-stage.ts
@@ -141,18 +156,24 @@ export function VendorProjectClient({
   const ptwEffectiveStatuses = ptws.map(p => getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date));
   const ptwAnyExpired = ptwEffectiveStatuses.some(s => s === PTW_STATUS.expired);
   const ptwAnyStopped = ptwEffectiveStatuses.some(s => s === PTW_STATUS.stoppedSwa);
-  const ptwAllAktif = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.aktif);
+  const ptwAllClosed = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.selesai);
+  const ptwAllAktif = ptws.length > 0 && ptwEffectiveStatuses.every(s => s === PTW_STATUS.aktif || s === PTW_STATUS.selesai || s === PTW_STATUS.penutupanDiajukan);
   const ptwAnyRejected = ptws.some(p => p.status === PTW_STATUS.draft && p.rejection_note);
-  const ptwStatus = ptwAnyStopped ? 'Stopped'
+  const projectCompleted = project.status === 'Selesai';
+  const completionRequested = !!project.completion_requested_at && !projectCompleted;
+  const ptwStatus = ptwAllClosed ? 'Closed'
+    : ptwAnyStopped ? 'Stopped'
     : ptwAnyExpired ? 'Expired'
     : ptwAllAktif ? 'Approved'
     : ptwAnyRejected ? 'Rejected'
     : ptws.length > 0 ? 'Pending' : 'Draft';
-  const ptwAktifCount = ptwEffectiveStatuses.filter(s => s === PTW_STATUS.aktif).length;
+  const ptwAktifCount = ptwEffectiveStatuses.filter(s => s === PTW_STATUS.aktif || s === PTW_STATUS.penutupanDiajukan).length;
+  const ptwClosedCount = ptwEffectiveStatuses.filter(s => s === PTW_STATUS.selesai).length;
 
   const getStepStyle = (status: string) => {
     switch (status) {
       case 'Approved': return 'bg-emerald-500 text-white border-emerald-500';
+      case 'Closed': return 'bg-emerald-600 text-white border-emerald-600';
       case 'Pending': return 'bg-amber-400 text-white border-amber-400';
       case 'Rejected': return 'bg-rose-500 text-white border-rose-500';
       case 'Expired': return 'bg-slate-400 text-white border-slate-400';
@@ -161,10 +182,12 @@ export function VendorProjectClient({
     }
   };
 
-  const getStepLineStyle = (status: string) => status === 'Approved' ? 'bg-emerald-500' : 'bg-slate-200';
+  const getStepLineStyle = (status: string) => (status === 'Approved' || status === 'Closed') ? 'bg-emerald-500' : 'bg-slate-200';
 
   const getStatusBadge = (status: string, detailedStatus?: string) => {
     if (status === 'Approved') return <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Disetujui</span>;
+    if (status === 'Closed') return <span className="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Selesai</span>;
+    if (status === 'Closing') return <span className="bg-sky-100 text-sky-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Verifikasi Penutupan</span>;
     if (status === 'Pending') return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded font-bold uppercase">{detailedStatus || 'Dalam Review'}</span>;
     if (status === 'Rejected') return <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded font-bold uppercase">Perlu Revisi</span>;
     if (status === 'Expired') return <span className="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded font-bold uppercase">Kedaluwarsa</span>;
@@ -198,6 +221,11 @@ export function VendorProjectClient({
     if (jsaStatus === 'Draft') return { label: jsa ? 'Lanjutkan JSA' : 'Buat JSA', detail: 'Prosedur Kerja sudah disetujui. Lanjut identifikasi bahaya dan mitigasi lewat JSA.', href: `/vendor/dashboard/jsa/create/${encodeURIComponent(project.id)}`, waiting: false };
     if (jsaStatus === 'Pending') return { label: 'Menunggu review JSA', detail: 'JSA sedang berjalan di rantai persetujuan. Lihat posisinya di tab Dokumen K3.', waiting: true };
 
+    if (projectCompleted) return { label: 'Proyek selesai', detail: 'Proyek telah dinyatakan selesai dan masuk arsip.', waiting: true };
+    if (ptws.length > 0 && ptwAllClosed) {
+      if (completionRequested) return { label: 'Menunggu verifikasi penyelesaian proyek', detail: 'Pengajuan penyelesaian proyek sedang diverifikasi PM.', waiting: true };
+      return { label: 'Ajukan Penyelesaian Proyek', detail: 'Semua PTW sudah ditutup. Ajukan penyelesaian proyek di tab Ringkasan Proyek.', waiting: false };
+    }
     if (ptws.length === 0) return { label: 'Ajukan PTW', detail: 'JSA sudah disetujui. Ajukan izin kerja sesuai jenis pekerjaan di lapangan.', href: `/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}`, waiting: false };
     if (ptwStatus === 'Rejected') return { label: 'Revisi PTW', detail: 'Ada PTW yang dikembalikan dengan catatan revisi. Cek tab Dokumen K3.', waiting: false };
     if (ptwStatus === 'Stopped') return { label: 'Pekerjaan dihentikan (Stop Work Authority)', detail: 'Hubungi PM/HSSE untuk mengaktifkan kembali izin kerja.', waiting: true };
@@ -213,6 +241,33 @@ export function VendorProjectClient({
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
+      {extensionPtwId && (() => {
+        const target = ptws.find((p: any) => p.id === extensionPtwId);
+        if (!target || !target.valid_from || !target.valid_to) return null;
+        return (
+          <PtwExtensionModal
+            ptwId={target.id}
+            ptwTitle={`${ptwTitleById[target.id]}${target.ptw_number ? ` — ${target.ptw_number}` : ''}`}
+            validFrom={target.valid_from}
+            validTo={target.valid_to}
+            onClose={() => setExtensionPtwId(null)}
+          />
+        );
+      })()}
+
+      {closurePtwId && (() => {
+        const target = ptws.find((p: any) => p.id === closurePtwId);
+        if (!target) return null;
+        return (
+          <PtwClosureModal
+            ptwId={target.id}
+            ptwTitle={`${ptwTitleById[target.id]}${target.ptw_number ? ` — ${target.ptw_number}` : ''}`}
+            openCheckinCount={openSiteCheckins.filter((c: any) => c.ptw_id === target.id).length}
+            onClose={() => setClosurePtwId(null)}
+          />
+        );
+      })()}
+
       {qrModalToken && (
         <CheckinQrModal
           url={buildCheckinUrl(qrModalToken, typeof window !== 'undefined' ? window.location.origin : undefined)}
@@ -367,6 +422,62 @@ export function VendorProjectClient({
               </div>
             </div>
           </div>
+
+          {/* Penyelesaian proyek */}
+          {(ptwAllClosed || projectCompleted) && (
+            <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <h2 className="text-lg font-bold text-slate-800">Penyelesaian Proyek</h2>
+              {projectCompleted ? (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 font-medium">
+                  <CheckCircle2 className="w-4 h-4 inline mr-2 -mt-0.5" />
+                  Proyek telah dinyatakan selesai{project.completed_at ? ` pada ${new Date(project.completed_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.
+                </div>
+              ) : completionRequested ? (
+                <div className="p-4 bg-sky-50 border border-sky-100 rounded-xl text-sm text-sky-800 font-medium space-y-1">
+                  <p><CheckCircle2 className="w-4 h-4 inline mr-2 -mt-0.5" />Penyelesaian proyek sudah diajukan dan menunggu verifikasi PM.</p>
+                  {project.completion_note && <p className="text-xs"><strong>Catatan Anda:</strong> {project.completion_note}</p>}
+                </div>
+              ) : (
+                <>
+                  {project.completion_rejection_note && (
+                    <div className="p-4 bg-rose-50 rounded-xl text-sm text-rose-700 font-medium border border-rose-100">
+                      <AlertTriangle className="w-4 h-4 inline mr-2 -mt-0.5" />
+                      <span className="font-bold">Penyelesaian ditolak:</span> {project.completion_rejection_note}
+                    </div>
+                  )}
+                  <p className="text-sm text-slate-600">Semua PTW sudah ditutup. Ajukan penyelesaian proyek untuk diverifikasi PM. Proyek tidak bisa diselesaikan selama masih ada Inspeksi Temuan yang belum ditutup.</p>
+                  {canRequestCompletion ? (
+                    <>
+                      <textarea
+                        rows={3}
+                        value={completionNote}
+                        onChange={e => setCompletionNote(e.target.value)}
+                        placeholder="Catatan penyelesaian proyek (wajib)"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                      {completionError && <p className="text-sm text-rose-600 font-medium">{completionError}</p>}
+                      <button
+                        disabled={completionLoading || completionNote.trim().length === 0}
+                        onClick={async () => {
+                          setCompletionLoading(true);
+                          setCompletionError('');
+                          const res = await requestProjectCompletion(project.id, completionNote);
+                          if (res.success) window.location.reload();
+                          else { setCompletionError(res.error); setCompletionLoading(false); }
+                        }}
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 disabled:bg-primary/40 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors"
+                      >
+                        {completionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        Ajukan Penyelesaian Proyek
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-500">Anda tidak memiliki izin mengajukan penyelesaian proyek. Hubungi admin perusahaan Anda.</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -560,7 +671,9 @@ export function VendorProjectClient({
                   <div className="space-y-3">
                     {ptws.map((row) => {
                       const rowEffective = getEffectivePtwStatus(row.status, row.valid_to ?? project.end_date);
-                      const rowStatus = rowEffective === PTW_STATUS.stoppedSwa ? 'Stopped'
+                      const rowStatus = rowEffective === PTW_STATUS.selesai ? 'Closed'
+                        : rowEffective === PTW_STATUS.penutupanDiajukan ? 'Closing'
+                        : rowEffective === PTW_STATUS.stoppedSwa ? 'Stopped'
                         : rowEffective === PTW_STATUS.aktif ? 'Approved'
                         : rowEffective === PTW_STATUS.expired ? 'Expired'
                         : (row.status === PTW_STATUS.draft && row.rejection_note) ? 'Rejected'
@@ -596,6 +709,58 @@ export function VendorProjectClient({
                               <p><strong>Alasan:</strong> {row.stopped_reason}</p>
                               <p className="text-xs text-red-600">Hubungi PM/HSSE untuk mengaktifkan kembali PTW ini.</p>
                             </div>
+                          )}
+
+                          {row.closure_rejection_note && (rowStatus === 'Approved' || rowStatus === 'Expired') && (
+                            <div className="p-3 bg-rose-50 rounded-lg text-sm text-rose-700 font-medium border border-rose-100">
+                              <AlertTriangle className="w-4 h-4 inline mr-2 -mt-0.5" />
+                              <span className="font-bold">Penutupan ditolak:</span> {row.closure_rejection_note}
+                            </div>
+                          )}
+
+                          {(rowStatus === 'Closing' || rowStatus === 'Closed') && (
+                            <div className={`p-3 rounded-lg text-sm border space-y-1 ${rowStatus === 'Closed' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-sky-50 border-sky-100 text-sky-800'}`}>
+                              <div className="flex items-center gap-2 font-bold">
+                                <CheckCircle2 className="w-4 h-4" />
+                                {rowStatus === 'Closed' ? 'PTW telah ditutup' : 'Penutupan diajukan — menunggu verifikasi HSSE'}
+                              </div>
+                              {row.closure_finished_at && <p><strong>Pekerjaan selesai:</strong> {new Date(row.closure_finished_at).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+                              {row.closure_note && <p><strong>Catatan:</strong> {row.closure_note}</p>}
+                              {row.closed_at && <p className="text-xs">Diverifikasi {new Date(row.closed_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+                            </div>
+                          )}
+
+                          {rowStatus === 'Approved' && row.extension_requested_to && (
+                            <div className="p-3 bg-sky-50 rounded-lg text-sm text-sky-800 border border-sky-100 space-y-1">
+                              <div className="flex items-center gap-2 font-bold"><Clock className="w-4 h-4" /> Perpanjangan diajukan — menunggu verifikasi HSSE</div>
+                              <p><strong>Sampai:</strong> {new Date(`${row.extension_requested_to}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                              {row.extension_reason && <p><strong>Alasan:</strong> {row.extension_reason}</p>}
+                            </div>
+                          )}
+
+                          {rowStatus === 'Approved' && !row.extension_requested_to && row.extension_rejection_note && (
+                            <div className="p-3 bg-rose-50 rounded-lg text-sm text-rose-700 font-medium border border-rose-100">
+                              <AlertTriangle className="w-4 h-4 inline mr-2 -mt-0.5" />
+                              <span className="font-bold">Perpanjangan ditolak:</span> {row.extension_rejection_note}
+                            </div>
+                          )}
+
+                          {canRequestExtension && rowStatus === 'Approved' && !row.extension_requested_to && row.valid_from && row.valid_to && (
+                            <button
+                              onClick={() => setExtensionPtwId(row.id)}
+                              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors"
+                            >
+                              <Calendar className="w-4 h-4" /> Ajukan Perpanjangan PTW
+                            </button>
+                          )}
+
+                          {canRequestClosure && (rowStatus === 'Approved' || rowStatus === 'Expired') && (
+                            <button
+                              onClick={() => setClosurePtwId(row.id)}
+                              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors"
+                            >
+                              <CheckCircle2 className="w-4 h-4" /> Pekerjaan Selesai — Ajukan Penutupan PTW
+                            </button>
                           )}
 
                           {row.field_token && rowStatus === 'Approved' && (
@@ -649,7 +814,7 @@ export function VendorProjectClient({
                                 )}
                               </BlobProvider>
                             </div>
-                            {(rowStatus === 'Rejected' || rowStatus === 'Expired') && (
+                            {rowStatus === 'Rejected' && (
                               <Link
                                 href={`/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}/${row.ptw_type}`}
                                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm transition-colors shadow-sm shadow-primary/30"

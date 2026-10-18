@@ -66,6 +66,7 @@ export default async function ProjectManagementPage() {
       ptws: ptwMap.get(p.id) ?? [],
       projectStatus: p.status,
       endDate: p.end_date,
+      completionRequested: !!p.completion_requested_at,
     }),
   }));
 

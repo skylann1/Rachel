@@ -35,13 +35,15 @@ export interface ProjectDocs {
   ptws?: { status?: string | null; valid_to?: string | null }[];
   projectStatus?: string | null;
   endDate?: string | null;
+  /** projects.completion_requested_at terisi — vendor sudah mengajukan penyelesaian proyek. */
+  completionRequested?: boolean;
 }
 
 export const APPROVED_PROCEDURE = PROCEDURE_STATUS.approved;
 export const APPROVED_JSA = JSA_STATUS.approved;
 
 export function getProjectStage(docs: ProjectDocs): ProjectStage {
-  const { procedureStatus, jsaStatus, ptws, projectStatus, endDate } = docs;
+  const { procedureStatus, jsaStatus, ptws, projectStatus, endDate, completionRequested } = docs;
 
   if (projectStatus === 'Ditolak') {
     return { label: 'Ditolak', hint: 'Proyek ditolak dan tidak dilanjutkan.', tone: 'rejected', actor: null };
@@ -105,7 +107,15 @@ export function getProjectStage(docs: ProjectDocs): ProjectStage {
   if (effectiveStatuses.some(s => s === PTW_STATUS.expired)) {
     return { label: 'PTW Kedaluwarsa', hint: 'Salah satu PTW proyek ini telah lewat masa berlaku.', tone: 'rejected', actor: 'internal' };
   }
-  if (effectiveStatuses.every(s => s === PTW_STATUS.aktif)) {
+  if (effectiveStatuses.every(s => s === PTW_STATUS.selesai)) {
+    return completionRequested
+      ? { label: 'Verifikasi Penyelesaian', hint: 'Vendor mengajukan penyelesaian proyek dan menunggu verifikasi PM.', tone: 'waiting-internal', actor: 'internal' }
+      : { label: 'Menunggu Penyelesaian', hint: 'Semua PTW sudah ditutup. Vendor belum mengajukan penyelesaian proyek.', tone: 'waiting-vendor', actor: 'vendor' };
+  }
+  if (effectiveStatuses.some(s => s === PTW_STATUS.penutupanDiajukan)) {
+    return { label: 'Verifikasi Penutupan PTW', hint: 'Vendor mengajukan penutupan PTW dan menunggu verifikasi HSSE.', tone: 'waiting-internal', actor: 'internal' };
+  }
+  if (effectiveStatuses.every(s => s === PTW_STATUS.aktif || s === PTW_STATUS.selesai)) {
     return {
       label: PTW_STATUS.aktif,
       hint: effectiveStatuses.length > 1 ? `Semua ${effectiveStatuses.length} izin kerja aktif — pekerjaan boleh berjalan.` : 'Izin kerja aktif — pekerjaan boleh berjalan.',
@@ -114,7 +124,7 @@ export function getProjectStage(docs: ProjectDocs): ProjectStage {
     };
   }
 
-  const pendingCount = effectiveStatuses.filter(s => s !== PTW_STATUS.aktif).length;
+  const pendingCount = effectiveStatuses.filter(s => s !== PTW_STATUS.aktif && s !== PTW_STATUS.selesai).length;
   return {
     label: 'Review PTW',
     hint: effectiveStatuses.length > 1

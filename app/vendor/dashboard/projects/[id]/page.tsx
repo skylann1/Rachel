@@ -20,6 +20,9 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   const canManageAssignments = await hasPermission('masterData', 'manage_org_staff');
   const canEditSafetyChecklist = await hasPermission('ptw', 'edit_safety_checklist');
   const canAssignHolder = await hasPermission('ptw', 'assign_holder');
+  const canRequestClosure = await hasPermission('ptw', 'request_closure');
+  const canRequestExtension = await hasPermission('ptw', 'request_extension');
+  const canRequestCompletion = await hasPermission('ptw', 'request_project_completion');
   const canFillFieldRole = (await hasPermission('ptw', 'field_holder')) || (await hasPermission('ptw', 'field_pengawas'));
   const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', user?.id).single();
   const actorOrgId = actorProfile?.org_id ?? '';
@@ -76,12 +79,15 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
     .from('projects')
     .select(`
       id, name, location, start_date, end_date, description, status, contract_number,
+      completion_requested_at, completion_note, completion_rejection_note, completed_at,
       vendor_profiles ( company_name, organizations ( profiles ( full_name ) ) ),
       jsa ( id, status, rejection_note, reviewer_id, reviewed_at, approver_id, approved_at, jsa_steps ( id, step_number, pekerjaan, bahaya, risiko, tindakan ) ),
       ptw ( id, status, rejection_note, ptw_number, workers, equipment, ptw_type, hazards, apd, gas_tests,
             created_at, authority_id, authority_approved_at, issuer_id, issuer_approved_at, hsse_id,
             valid_from, valid_to, work_start, work_end, hot_work_types, gas_test_frequency,
-            field_token, stopped_at, stopped_reason, stopped_by_name, safety_checklist ),
+            field_token, stopped_at, stopped_reason, stopped_by_name, safety_checklist,
+            closure_requested_at, closure_finished_at, closure_checklist, closure_note, closure_rejection_note, closed_at,
+            extension_requested_to, extension_reason, extension_requested_at, extension_rejection_note, extension_count ),
       procedures ( id, status, content )
     `)
     .eq('id', projectId)
@@ -187,6 +193,9 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       fieldCandidates={pemegangCandidates}
       canAssignHolder={canAssignHolder}
       canFillFieldRole={canFillFieldRole}
+      canRequestClosure={canRequestClosure}
+      canRequestExtension={canRequestExtension}
+      canRequestCompletion={canRequestCompletion}
     />
   );
 }

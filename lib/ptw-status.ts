@@ -35,7 +35,28 @@ export const PTW_STATUS = {
   aktif: 'PTW Aktif',
   expired: 'Expired',
   stoppedSwa: 'Dihentikan (SWA)',
+  penutupanDiajukan: 'Penutupan Diajukan',
+  selesai: 'Selesai',
 } as const;
+
+/**
+ * Penutupan PTW: PTW Aktif/Expired -> (vendor mengisi form penutupan)
+ * 'Penutupan Diajukan' -> (HSSE memverifikasi) 'Selesai'. Ditolak -> kembali
+ * 'PTW Aktif'. Transisi hanya lewat RPC ptw_request_closure/ptw_decide_closure
+ * (supabase/schema_ptw_project_completion.sql).
+ */
+export function isPtwClosed(status: string | null | undefined): boolean {
+  return status === PTW_STATUS.selesai;
+}
+
+/** Item checklist yang diisi pemegang saat mengajukan penutupan PTW. */
+export const PTW_CLOSURE_CHECKLIST = [
+  { key: 'pekerjaan_selesai', label: 'Seluruh pekerjaan yang diizinkan PTW ini telah selesai' },
+  { key: 'area_bersih', label: 'Area kerja telah dibersihkan (housekeeping) dan aman' },
+  { key: 'peralatan_keluar', label: 'Peralatan, material, dan sisa pekerjaan telah dikeluarkan dari area' },
+  { key: 'tidak_ada_bahaya', label: 'Tidak ada sumber energi/bahaya tersisa (isolasi dilepas, tidak ada api/gas/bukaan)' },
+  { key: 'pekerja_keluar', label: 'Semua pekerja telah check-out dan meninggalkan area kerja' },
+] as const;
 
 /**
  * Status yang berarti PTW sedang menunggu tindakan pihak INTERNAL
@@ -84,11 +105,15 @@ export const PTW_STAGE_SEQUENCE = [
 
 /**
  * Index tahap saat ini di PTW_STAGE_SEQUENCE; -1 = belum mulai (Draft),
- * sequence.length = semua tahap selesai (Aktif/Expired/Dihentikan — ketiganya
- * cuma dicapai setelah penomoran HSSE, jadi diperlakukan sama untuk timeline).
+ * sequence.length = semua tahap selesai (Aktif/Expired/Dihentikan/Penutupan
+ * Diajukan/Selesai — semuanya cuma dicapai setelah penomoran HSSE, jadi
+ * diperlakukan sama untuk timeline).
  */
 export function ptwStageIndex(status: string | null | undefined): number {
-  if (status === PTW_STATUS.aktif || status === PTW_STATUS.expired || status === PTW_STATUS.stoppedSwa) {
+  if (
+    status === PTW_STATUS.aktif || status === PTW_STATUS.expired || status === PTW_STATUS.stoppedSwa ||
+    status === PTW_STATUS.penutupanDiajukan || status === PTW_STATUS.selesai
+  ) {
     return PTW_STAGE_SEQUENCE.length;
   }
   return PTW_STAGE_SEQUENCE.findIndex(s => s.status === status);

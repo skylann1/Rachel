@@ -57,7 +57,6 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
     { value: 'Prosedur Disetujui', label: 'Prosedur Disetujui' },
     { value: 'JSA Disetujui', label: 'JSA Disetujui' },
     { value: 'PTW Aktif', label: 'PTW Aktif' },
-    { value: 'Selesai', label: 'Selesai' },
     { value: 'Ditolak', label: 'Ditolak' },
   ];
 

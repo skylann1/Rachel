@@ -202,3 +202,20 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
     Idempotent. **Harus dijalankan SEBELUM deploy kode fitur ini** — halaman proyek
     meng-embed `ptw_daily_checks`, jadi tanpa tabel ini halaman proyek gagal dimuat.
     Spec: `docs/superpowers/specs/2026-10-18-ptw-field-roles-daily-check-design.md`.
+15. `schema_ptw_project_completion.sql` — penutupan PTW (`Penutupan Diajukan` -> `Selesai`)
+    dan penyelesaian proyek: kolom `ptw.closure_*`/`closed_*`, `projects.completion_*`/
+    `completed_*`, empat RPC (`ptw_request_closure`, `ptw_decide_closure`,
+    `project_request_completion`, `project_decide_completion`), backfill permission baru
+    (`verify_closure`, `verify_project_completion`, `request_closure`,
+    `request_project_completion`) ke role yang sudah ada, plus dua role siap pakai:
+    `vendor_pemegang_ptw` dan `pgn_pengawas_ptw`. Idempotent. Bergantung pada item 14
+    (`ptw_user_has_perm`). **Harus dijalankan SEBELUM deploy kode fitur ini** — halaman
+    proyek meng-select kolom closure/completion yang baru. Nomor PTW kini diinput manual
+    oleh HSSE (RPC `get_next_ptw_number` tidak lagi dipakai, boleh dibiarkan).
+    Spec: `docs/superpowers/specs/2026-10-19-ptw-and-project-completion-design.md`.
+16. `schema_ptw_extension.sql` — perpanjangan PTW: kolom `ptw.extension_*`, RPC
+    `ptw_request_extension` / `ptw_decide_extension`, dan backfill permission
+    `request_extension` (vendor pemegang/admin) + `verify_extension` (HSSE). PTW tetap
+    `PTW Aktif` selama pengajuan menunggu; hanya `valid_to` yang berubah saat disetujui,
+    maksimal 7 hari sejak `valid_from`. Idempotent. Bergantung pada item 14 dan 15.
+    **Harus dijalankan SEBELUM deploy kode fitur ini.**

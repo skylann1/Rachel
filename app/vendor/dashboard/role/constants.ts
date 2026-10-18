@@ -103,6 +103,9 @@ export const allPermissionModules = [
       { key: 'assign_pengawas', label: 'Menugaskan / Mengganti Pengawas PTW', allowedTypes: ['pgn'] },
       { key: 'field_holder', label: 'Dapat Ditugaskan sebagai Pemegang PTW (daily check)', allowedTypes: ['vendor'] },
       { key: 'assign_holder', label: 'Menugaskan / Mengganti Pemegang PTW', allowedTypes: ['vendor'] },
+      { key: 'request_closure', label: 'Mengajukan Penutupan PTW (Pekerjaan Selesai)', allowedTypes: ['vendor'] },
+      { key: 'request_extension', label: 'Mengajukan Perpanjangan PTW', allowedTypes: ['vendor'] },
+      { key: 'request_project_completion', label: 'Mengajukan Penyelesaian Proyek', allowedTypes: ['vendor'] },
     ]
   },
   {
