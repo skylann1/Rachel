@@ -6,8 +6,11 @@ import { JSA_STATUS, JSA_STAGE_PERMISSION, JSA_PENDING_STATUSES } from "@/lib/js
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, PROCEDURE_PENDING_STATUSES } from "@/lib/procedure-status";
 import { hasPermissionForUser } from "@/utils/permissions";
 import { getAssignmentGaps, PARTY_LABEL, STAGE_SHORT_LABEL } from "@/lib/assignment-gaps";
+import { dayIndexForDate, FIELD_PERAN_LABEL, type FieldPeran } from "@/lib/ptw-field";
+import { PTW_MAX_VALID_DAYS } from "@/lib/ptw-types";
+import { todayDateString } from "@/lib/site-ops";
 
-export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan' | 'Penugasan';
+export type TaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Insiden' | 'Pengawasan' | 'Penugasan' | 'DailyCheck';
 export type UrgencyType = 'High' | 'Medium' | 'Low';
 
 export interface TaskItem {
@@ -339,6 +342,58 @@ export async function getMyTasks(): Promise<TaskItem[]> {
         timeInQueue: formatTimeInQueue(g.createdAt),
       });
     });
+  }
+
+  // 7. Daily check PTW — Pemegang/Pengawas aktif (PGN jadi Pengawas) yang
+  // belum isi check hari ini. Hilang otomatis setelah kirim (lihat
+  // submitDailyCheck di app/dashboard/projects/[id]/actions.ts).
+  {
+    const { data: myActive } = await supabase
+      .from('ptw_field_assignments')
+      .select('ptw_id, peran')
+      .eq('user_id', user.id)
+      .is('aktif_sampai', null);
+
+    if (myActive && myActive.length > 0) {
+      const ptwIds = myActive.map((a: any) => a.ptw_id);
+      const { data: myPtws } = await supabase
+        .from('ptw')
+        .select('id, status, valid_from, valid_to, project_id, projects ( name, end_date, vendor_profiles ( company_name ) )')
+        .in('id', ptwIds);
+
+      const today = todayDateString();
+      for (const a of myActive) {
+        const ptw: any = (myPtws || []).find((p: any) => p.id === a.ptw_id);
+        if (!ptw) continue;
+        const proj = Array.isArray(ptw.projects) ? ptw.projects[0] : ptw.projects;
+        const effective = getEffectivePtwStatus(ptw.status, ptw.valid_to ?? proj?.end_date);
+        if (effective !== PTW_STATUS.aktif) continue;
+        const todayHari = dayIndexForDate(ptw.valid_from, ptw.valid_to, today, PTW_MAX_VALID_DAYS);
+        if (todayHari === null) continue;
+
+        const { data: existingCheck } = await supabase
+          .from('ptw_daily_checks')
+          .select('id')
+          .eq('ptw_id', ptw.id).eq('hari_ke', todayHari).eq('peran', a.peran)
+          .maybeSingle();
+        if (existingCheck) continue;
+
+        const vendor = proj?.vendor_profiles;
+        const companyName = Array.isArray(vendor) ? vendor[0]?.company_name : vendor?.company_name;
+        tasks.push({
+          id: `dailycheck-${ptw.id}-${a.peran}`,
+          title: `Daily Check PTW — ${FIELD_PERAN_LABEL[a.peran as FieldPeran]} (Hari ke-${todayHari})`,
+          type: 'DailyCheck',
+          projectName: proj?.name || 'Unknown Project',
+          vendorName: companyName || 'Internal',
+          date: new Date().toISOString(),
+          url: `/dashboard/projects/${ptw.project_id}`,
+          status: 'Belum diisi hari ini',
+          urgency: 'High',
+          timeInQueue: 'Hari ini',
+        });
+      }
+    }
   }
 
   // Sort tasks by date (newest first)

@@ -3,11 +3,13 @@
 import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { JSA_STATUS } from "@/lib/jsa-status";
-import { PTW_STATUS } from "@/lib/ptw-status";
-import { PTW_TYPES } from "@/lib/ptw-types";
+import { getEffectivePtwStatus, PTW_STATUS } from "@/lib/ptw-status";
+import { PTW_TYPES, PTW_MAX_VALID_DAYS } from "@/lib/ptw-types";
 import { getAssignmentGaps, PARTY_LABEL, STAGE_SHORT_LABEL } from "@/lib/assignment-gaps";
+import { dayIndexForDate, FIELD_PERAN_LABEL, type FieldPeran } from "@/lib/ptw-field";
+import { todayDateString } from "@/lib/site-ops";
 
-export type VendorTaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Temuan' | 'Penugasan';
+export type VendorTaskType = 'Prosedur' | 'JSA' | 'PTW' | 'Temuan' | 'Penugasan' | 'DailyCheck';
 export type VendorUrgencyType = 'High' | 'Medium' | 'Low';
 
 export interface VendorTaskItem {
@@ -58,10 +60,10 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
   const { data: projects } = await supabase
     .from('projects')
     .select(`
-      id, name, created_at,
+      id, name, created_at, end_date,
       procedures ( status, content, created_at ),
       jsa ( status, rejection_note, created_at ),
-      ptw ( id, status, ptw_type, rejection_note, created_at )
+      ptw ( id, status, ptw_type, rejection_note, created_at, valid_from, valid_to )
     `)
     .eq('vendor_id', vendorOrgId);
 
@@ -262,6 +264,55 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
       });
     }
   });
+
+  // 7. Daily check PTW — Pemegang aktif (staf vendor) yang belum isi check
+  // hari ini. Hilang otomatis setelah kirim (lihat submitDailyCheck di
+  // app/dashboard/projects/[id]/actions.ts, dipakai lintas realm).
+  {
+    const { data: myActive } = await supabase
+      .from('ptw_field_assignments')
+      .select('ptw_id, peran')
+      .eq('user_id', user.id)
+      .is('aktif_sampai', null);
+
+    if (myActive && myActive.length > 0) {
+      const today = todayDateString();
+      for (const a of myActive) {
+        let ptw: any = null;
+        let projectForPtw: any = null;
+        for (const project of projects || []) {
+          const ptws: any[] = Array.isArray(project.ptw) ? project.ptw : (project.ptw ? [project.ptw] : []);
+          const found = ptws.find((p: any) => p.id === a.ptw_id);
+          if (found) { ptw = found; projectForPtw = project; break; }
+        }
+        if (!ptw || !projectForPtw) continue;
+
+        const effective = getEffectivePtwStatus(ptw.status, ptw.valid_to ?? projectForPtw.end_date);
+        if (effective !== PTW_STATUS.aktif) continue;
+        const todayHari = dayIndexForDate(ptw.valid_from, ptw.valid_to, today, PTW_MAX_VALID_DAYS);
+        if (todayHari === null) continue;
+
+        const { data: existingCheck } = await supabase
+          .from('ptw_daily_checks')
+          .select('id')
+          .eq('ptw_id', ptw.id).eq('hari_ke', todayHari).eq('peran', a.peran)
+          .maybeSingle();
+        if (existingCheck) continue;
+
+        tasks.push({
+          id: `dailycheck-${ptw.id}-${a.peran}`,
+          title: `Daily Check PTW — ${FIELD_PERAN_LABEL[a.peran as FieldPeran]} (Hari ke-${todayHari})`,
+          type: 'DailyCheck',
+          projectName: projectForPtw.name,
+          date: new Date().toISOString(),
+          url: `/vendor/dashboard/projects/${projectForPtw.id}`,
+          status: 'Belum diisi hari ini',
+          urgency: 'High',
+          timeInQueue: 'Hari ini',
+        });
+      }
+    }
+  }
 
   // Penugasan HSE/PM Vendor — khusus admin vendor: slot approval internal yang
   // masih kosong membuat dokumen tersangkut di tahap review vendor.
