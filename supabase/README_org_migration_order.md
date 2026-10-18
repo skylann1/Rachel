@@ -179,3 +179,9 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
     membaca/menulis. Kode tetap jalan tanpa tabel ini (pencatatan gagal diam-
     diam dan halaman menampilkan petunjuk), jadi boleh dijalankan sebelum atau
     sesudah deploy.
+14. `schema_ptw_field_assignments.sql` — Pemegang/Pengawas PTW per PTW + daily check
+    (`ptw_field_assignments`, `ptw_daily_checks`, RPC `ptw_assign_field_role` /
+    `ptw_submit_daily_check`, dan versi baru `update_ptw_safety_checklist`).
+    Idempotent. **Harus dijalankan SEBELUM deploy kode fitur ini** — halaman proyek
+    meng-embed `ptw_daily_checks`, jadi tanpa tabel ini halaman proyek gagal dimuat.
+    Spec: `docs/superpowers/specs/2026-10-18-ptw-field-roles-daily-check-design.md`.
