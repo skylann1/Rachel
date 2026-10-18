@@ -133,6 +133,13 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
    `getVendorInspections()` sekarang melakukan `.select()` dengan join ke
    `inspection_photos`; tanpa migrasi ini PostgREST akan menolak seluruh
    `select` tersebut (relationship belum ada di schema cache) sehingga
+8. schema_ptw_field_assignments.sql — Pemegang/Pengawas PTW per PTW + daily check
+   (ptw_field_assignments, ptw_daily_checks, RPC ptw_assign_field_role /
+   ptw_submit_daily_check, dan versi baru update_ptw_safety_checklist).
+   Idempotent. **Harus dijalankan SEBELUM deploy kode fitur ini** — halaman proyek
+   meng-embed ptw_daily_checks, jadi tanpa tabel ini halaman proyek gagal dimuat.
+   Spec: docs/superpowers/specs/2026-10-18-ptw-field-roles-daily-check-design.md.
+
    daftar Inspeksi Temuan tampil kosong di dashboard internal maupun
    vendor. Aman dijalankan ulang (memakai `CREATE TABLE IF NOT EXISTS` +
    `DROP POLICY IF EXISTS` di seluruh file).
@@ -179,6 +186,16 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
     membaca/menulis. Kode tetap jalan tanpa tabel ini (pencatatan gagal diam-
     diam dan halaman menampilkan petunjuk), jadi boleh dijalankan sebelum atau
     sesudah deploy.
+13. `schema_push_subscriptions.sql` — tabel `push_subscriptions` untuk notifikasi
+    Web Push (notifikasi perangkat ala WhatsApp/Instagram di notification tray,
+    muncul walau aplikasi ditutup). Additive & independen; aman dijalankan
+    ulang. Diperlukan supaya push benar-benar terkirim — tanpa tabel ini insert
+    notifikasi in-app tetap jalan (pengiriman push dilewati, errornya ditelan).
+    Butuh tiga env var: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+    `VAPID_SUBJECT` (generate dengan `npx web-push generate-vapid-keys`), diset
+    di `.env.local` **dan** di Vercel (Production + Preview). Tanpa env tsb,
+    fitur push nonaktif total (tombol aktivasi tidak tampil).
+    Lihat `docs/superpowers/specs/2026-10-16-pwa-push-notifications-design.md`.
 14. `schema_ptw_field_assignments.sql` — Pemegang/Pengawas PTW per PTW + daily check
     (`ptw_field_assignments`, `ptw_daily_checks`, RPC `ptw_assign_field_role` /
     `ptw_submit_daily_check`, dan versi baru `update_ptw_safety_checklist`).
