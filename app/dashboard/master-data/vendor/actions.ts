@@ -7,6 +7,55 @@ import { revalidatePath } from 'next/cache';
 import { logActivity } from '@/lib/activity-log';
 import { diffFields, type ActivityMetadata } from '@/lib/activity-diff';
 
+/**
+ * Daftar staff (akun) milik satu organisasi vendor — dipakai panel "Staff"
+ * di halaman Data Vendor, menggantikan satu PIC representatif yang
+ * sebelumnya ditampilkan di page.tsx. Baca-saja: mutasinya tetap lewat
+ * addAccount/updateAccount/dkk di master-data/account/actions.ts supaya
+ * gerbang izinnya (manage_account / manage_org_staff) tidak dobel logic.
+ */
+export async function getVendorStaff(orgId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Unauthorized', staff: [] };
+
+  const canView = (await hasPermissionForUser(supabase, user.id, 'masterData', 'view_vendor'))
+    || (await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_vendor'));
+  if (!canView) return { error: 'Anda tidak memiliki izin untuk melihat staff vendor.', staff: [] };
+
+  const adminAuthClient = createAdminClient();
+  const [{ data: profiles, error }, { data: vendor }] = await Promise.all([
+    adminAuthClient
+      .from('profiles')
+      .select('id, full_name, email, role, type, jabatan, status')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: true }),
+    adminAuthClient.from('vendor_profiles').select('company_name').eq('id', orgId).maybeSingle(),
+  ]);
+
+  if (error) {
+    console.error('Error fetching vendor staff:', error);
+    return { error: 'Gagal memuat daftar staff vendor.', staff: [] };
+  }
+
+  // companyName diisi dari company yang sudah ada supaya EditAccountModal
+  // (field "Nama Perusahaan" wajib untuk tipe vendor) tidak tampil kosong —
+  // lihat catatan di EditAccountModal.tsx soal kolom ini.
+  const staff = (profiles || []).map(p => ({
+    id: p.id,
+    name: p.full_name,
+    email: p.email || 'Menunggu Sinkronisasi',
+    role: p.role,
+    type: p.type,
+    companyName: vendor?.company_name || null,
+    nip: null as string | null,
+    jabatan: p.jabatan || null,
+    status: p.status || 'Active',
+  }));
+
+  return { error: null, staff };
+}
+
 async function requireManageVendor() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

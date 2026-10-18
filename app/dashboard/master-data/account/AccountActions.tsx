@@ -18,7 +18,7 @@ interface Account {
   status: string;
 }
 
-export default function AccountActions({ account, roles, lockedType }: { account: Account, roles: any[], lockedType?: 'pgn' | 'pgsol' | 'vendor' }) {
+export default function AccountActions({ account, roles, lockedType, onChanged }: { account: Account, roles: any[], lockedType?: 'pgn' | 'pgsol' | 'vendor', onChanged?: () => void }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isConfirmSuspendOpen, setIsConfirmSuspendOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -36,6 +36,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
     await suspendAccount(account.id, !isSuspended);
     setLoading(false);
     setIsConfirmSuspendOpen(false);
+    onChanged?.();
   }
 
   async function handleDelete() {
@@ -43,6 +44,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
     await deleteAccount(account.id);
     setLoading(false);
     setIsConfirmDeleteOpen(false);
+    onChanged?.();
   }
 
   async function handleResetPassword() {
@@ -104,7 +106,7 @@ export default function AccountActions({ account, roles, lockedType }: { account
 
       <EditAccountModal
         isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
+        onClose={() => { setIsEditModalOpen(false); onChanged?.(); }}
         account={account}
         roles={roles}
         lockedType={lockedType}

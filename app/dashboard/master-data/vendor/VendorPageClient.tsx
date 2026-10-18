@@ -2,17 +2,28 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Plus, MapPin, Phone, Mail, Edit2, Trash2, CheckCircle2, AlertTriangle, FileText, Building2, X, Download, Eye, User } from 'lucide-react';
+import { Search, Plus, MapPin, Phone, Mail, Edit2, Trash2, CheckCircle2, AlertTriangle, FileText, Building2, X, Download, Eye, User, Users } from 'lucide-react';
 import EditVendorModal from './EditVendorModal';
+import AddVendorModal from './AddVendorModal';
+import VendorStaffModal from './VendorStaffModal';
 
 
 
-export default function VendorPageClient({ initialVendors }: { initialVendors: any[] }) {
+export default function VendorPageClient({ initialVendors, canManageVendor, canManageAccounts, vendorRoles }: {
+  initialVendors: any[];
+  canManageVendor: boolean;
+  canManageAccounts: boolean;
+  vendorRoles: any[];
+}) {
+  const router = useRouter();
   const [selectedVendorForDocs, setSelectedVendorForDocs] = useState<any | null>(null);
   const [selectedVendorForEdit, setSelectedVendorForEdit] = useState<any | null>(null);
+  const [selectedVendorForStaff, setSelectedVendorForStaff] = useState<any | null>(null);
+  const [isAddVendorOpen, setIsAddVendorOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  
+
   // Search and filter states (Client side filtering for simplicity or can be handled by server)
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua Status CSMS');
@@ -41,6 +52,14 @@ export default function VendorPageClient({ initialVendors }: { initialVendors: a
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Data Vendor</h1>
           <p className="text-sm text-slate-500 mt-1">Kelola direktori mitra kerja, status verifikasi K3, dan detail kontak.</p>
         </div>
+        {canManageVendor && (
+          <button
+            onClick={() => setIsAddVendorOpen(true)}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-primary/30 shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Tambah Vendor
+          </button>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -139,18 +158,26 @@ export default function VendorPageClient({ initialVendors }: { initialVendors: a
 
             {/* Card Footer - Actions */}
             <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-               <button 
+               <button
+                  onClick={() => setSelectedVendorForStaff(vendor)}
+                  className="text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+               >
+                  <Users className="w-3.5 h-3.5" /> Staff
+               </button>
+               <button
                   onClick={() => setSelectedVendorForDocs(vendor)}
                   className="text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
                >
                   <FileText className="w-3.5 h-3.5" /> Dokumen
                </button>
-               <button 
-                  onClick={() => setSelectedVendorForEdit(vendor)}
-                  className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
-               >
-                  <Edit2 className="w-3.5 h-3.5" /> Edit
-               </button>
+               {canManageVendor && (
+                 <button
+                    onClick={() => setSelectedVendorForEdit(vendor)}
+                    className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                 >
+                    <Edit2 className="w-3.5 h-3.5" /> Edit
+                 </button>
+               )}
             </div>
           </div>
         ))}
@@ -162,7 +189,7 @@ export default function VendorPageClient({ initialVendors }: { initialVendors: a
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-2">Data Vendor Tidak Ditemukan</h3>
             <p className="text-slate-500 text-sm max-w-md text-center">
-              Belum ada data vendor yang cocok dengan kriteria pencarian Anda. Pastikan akun vendor telah didaftarkan melalui menu Manajemen Akun.
+              Belum ada data vendor yang cocok dengan kriteria pencarian Anda. Pastikan vendor telah didaftarkan melalui tombol Tambah Vendor.
             </p>
           </div>
         )}
@@ -242,6 +269,19 @@ export default function VendorPageClient({ initialVendors }: { initialVendors: a
 
       {/* Action Modals */}
       <EditVendorModal isOpen={!!selectedVendorForEdit} onClose={() => setSelectedVendorForEdit(null)} vendor={selectedVendorForEdit} />
+
+      <AddVendorModal
+        isOpen={isAddVendorOpen}
+        onClose={() => { setIsAddVendorOpen(false); router.refresh(); }}
+      />
+
+      <VendorStaffModal
+        isOpen={!!selectedVendorForStaff}
+        onClose={() => setSelectedVendorForStaff(null)}
+        vendor={selectedVendorForStaff}
+        canManageAccounts={canManageAccounts}
+        vendorRoles={vendorRoles}
+      />
 
     </div>
   );

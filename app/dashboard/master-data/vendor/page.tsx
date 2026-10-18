@@ -1,5 +1,6 @@
 import React from 'react';
 import { createClient } from '@/utils/supabase/server';
+import { hasPermission } from '@/utils/permissions';
 import VendorPageClient from './VendorPageClient';
 
 export const metadata = {
@@ -8,6 +9,21 @@ export const metadata = {
 
 export default async function VendorManagementPage() {
   const supabase = await createClient();
+
+  // canManageVendor -> boleh registrasi vendor baru & edit profil company.
+  // canManageAccounts -> boleh tambah/edit/nonaktifkan/hapus STAFF vendor
+  // (manage_account, sama seperti gerbang di master-data/account/actions.ts
+  // — dipindah lokasinya ke sini, bukan diganti model izinnya).
+  const [canManageVendor, canManageAccounts] = await Promise.all([
+    hasPermission('masterData', 'manage_vendor'),
+    hasPermission('masterData', 'manage_account'),
+  ]);
+
+  const { data: vendorRoles } = await supabase
+    .from('roles')
+    .select('name, is_system, type')
+    .eq('type', 'vendor')
+    .order('name');
 
   // `vendor_profiles.id` sekarang adalah id ORGANISASI (lihat
   // schema_org_backfill_vendor.sql) dan FK-nya ke `profiles` sudah dilepas,
@@ -52,6 +68,11 @@ export default async function VendorManagementPage() {
   }));
 
   return (
-    <VendorPageClient initialVendors={initialVendors} />
+    <VendorPageClient
+      initialVendors={initialVendors}
+      canManageVendor={canManageVendor}
+      canManageAccounts={canManageAccounts}
+      vendorRoles={vendorRoles || []}
+    />
   );
 }

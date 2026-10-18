@@ -73,9 +73,14 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
   // /pgsol/dashboard/staff. `type` kolom teks (bukan uuid), jadi sentinel
   // '__none__' aman dipakai kalau actorType entah kenapa kosong — hasilnya
   // nol baris, bukan error tipe.
+  // Akun & role bertipe vendor sekarang dikelola dari halaman Data Vendor
+  // (app/dashboard/master-data/vendor), bukan di sini — "Manajemen Akun"
+  // khusus internal (pgn) + PGSOL.
   let rolesQuery = supabase.from('roles').select('name, is_system, type').order('name');
   if (!crossOrg) {
     rolesQuery = rolesQuery.eq('type', actorType ?? '__none__');
+  } else {
+    rolesQuery = rolesQuery.neq('type', 'vendor');
   }
   const { data: roles, error: rolesError } = await rolesQuery;
   if (rolesError) console.error('Gagal memuat daftar role:', rolesError.message);
@@ -94,6 +99,8 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
 
   if (!crossOrg) {
     query = query.eq('org_id', actorOrgId as string);
+  } else {
+    query = query.neq('type', 'vendor');
   }
   if (search) {
     // PostgREST pakai koma untuk memisahkan kondisi & kurung untuk grouping

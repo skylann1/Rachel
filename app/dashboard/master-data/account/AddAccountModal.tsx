@@ -16,12 +16,21 @@ interface AddAccountModalProps {
   onClose: () => void;
   roles: any[];
   lockedType?: 'pgn' | 'pgsol' | 'vendor';
+  /**
+   * Dipakai halaman Data Vendor untuk menambah STAFF TAMBAHAN ke vendor yang
+   * SUDAH ADA — mengunci tipe ke 'vendor' seperti lockedType, tapi juga
+   * mengirim id organisasi target supaya addAccount tidak membuat organisasi
+   * vendor baru (lihat targetOrgId di actions.ts), dan field Nama Perusahaan
+   * disembunyikan karena company-nya sudah ada.
+   */
+  vendorOrgId?: string;
 }
 
-export default function AddAccountModal({ isOpen, onClose, roles, lockedType }: AddAccountModalProps) {
+export default function AddAccountModal({ isOpen, onClose, roles, lockedType, vendorOrgId }: AddAccountModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [type, setType] = useState<string>(lockedType || 'pgn');
+  const effectiveLockedType = vendorOrgId ? 'vendor' : lockedType;
+  const [type, setType] = useState<string>(effectiveLockedType || 'pgn');
 
   if (!isOpen) return null;
 
@@ -104,11 +113,12 @@ export default function AddAccountModal({ isOpen, onClose, roles, lockedType }: 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Tipe Akun</label>
-                {lockedType ? (
+                {effectiveLockedType ? (
                   <>
                     <input type="hidden" name="type" value={type} />
+                    {vendorOrgId && <input type="hidden" name="targetOrgId" value={vendorOrgId} />}
                     <p className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm cursor-not-allowed">
-                      {TYPE_LABELS[lockedType]}
+                      {TYPE_LABELS[effectiveLockedType]}
                     </p>
                   </>
                 ) : (
@@ -120,7 +130,6 @@ export default function AddAccountModal({ isOpen, onClose, roles, lockedType }: 
                   >
                     <option value="pgn">PGN</option>
                     <option value="pgsol">PGSOL</option>
-                    <option value="vendor">Vendor</option>
                   </select>
                 )}
               </div>
@@ -163,18 +172,18 @@ export default function AddAccountModal({ isOpen, onClose, roles, lockedType }: 
                   placeholder="Masukkan NIP"
                 />
               </div>
-            ) : (
+            ) : !vendorOrgId ? (
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Nama Perusahaan (Vendor)</label>
-                <input 
-                  type="text" 
-                  name="companyName" 
-                  required 
+                <input
+                  type="text"
+                  name="companyName"
+                  required
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
                   placeholder="Contoh: PT Bangun Persada"
                 />
               </div>
-            )}
+            ) : null}
           </form>
         </div>
 

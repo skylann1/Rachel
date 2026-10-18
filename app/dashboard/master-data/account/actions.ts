@@ -115,13 +115,19 @@ export async function addAccount(formData: FormData) {
     // cuma field yang disembunyikan di modal (lihat Task 15).
     const type = actor.crossOrg ? (formData.get('type') as string) : actor.orgKind;
 
+    // Dipakai superadmin lintas org untuk menambah STAFF TAMBAHAN ke vendor
+    // yang SUDAH ADA (dari halaman Data Vendor), berbeda dengan companyName
+    // yang selalu berarti "bikin organisasi vendor baru". Hanya berlaku di
+    // jalur crossOrg + type vendor — di luar itu diabaikan.
+    const targetOrgId = (actor.crossOrg && type === 'vendor') ? (formData.get('targetOrgId') as string | null) : null;
+
     if (!fullName || !email || !password || !role || !type) {
       return { error: 'Semua field wajib diisi' };
     }
     if (type !== 'vendor' && !nip) {
       return { error: 'NIP wajib diisi untuk user PGN/PGSOL' };
     }
-    if (type === 'vendor' && actor.crossOrg && !companyName) {
+    if (type === 'vendor' && actor.crossOrg && !targetOrgId && !companyName) {
       return { error: 'Nama Perusahaan wajib diisi untuk akun vendor baru' };
     }
 
@@ -131,17 +137,22 @@ export async function addAccount(formData: FormData) {
     if (roleError) return { error: roleError };
 
     // Resolusi org: superadmin bikin org vendor baru (companyName wajib di
-    // atas); admin ter-scope selalu memakai org miliknya sendiri.
+    // atas) KECUALI targetOrgId diisi (menambah staff ke vendor existing);
+    // admin ter-scope selalu memakai org miliknya sendiri.
     let orgId: string;
     if (actor.crossOrg) {
       if (type === 'vendor') {
-        const { data: newOrg, error: orgError } = await adminAuthClient
-          .from('organizations')
-          .insert({ kind: 'vendor', name: companyName })
-          .select('id')
-          .single();
-        if (orgError || !newOrg) return { error: orgError?.message || 'Gagal membuat organisasi vendor baru.' };
-        orgId = newOrg.id;
+        if (targetOrgId) {
+          orgId = targetOrgId;
+        } else {
+          const { data: newOrg, error: orgError } = await adminAuthClient
+            .from('organizations')
+            .insert({ kind: 'vendor', name: companyName })
+            .select('id')
+            .single();
+          if (orgError || !newOrg) return { error: orgError?.message || 'Gagal membuat organisasi vendor baru.' };
+          orgId = newOrg.id;
+        }
       } else {
         const { data: existingOrg } = await adminAuthClient
           .from('organizations')
@@ -190,8 +201,10 @@ export async function addAccount(formData: FormData) {
       if (type === 'vendor') {
         // vendor_profiles.id sekarang = id organisasi (lihat
         // schema_org_backfill_vendor.sql) — hanya buat baris company baru
-        // kalau memang org baru; staff tambahan berbagi org yang sama.
-        if (actor.crossOrg) {
+        // kalau memang org baru; staff tambahan ke targetOrgId berbagi baris
+        // company yang sudah ada, jadi tidak perlu (dan tidak boleh)
+        // di-upsert ulang di sini.
+        if (actor.crossOrg && !targetOrgId) {
           const { error: vendorError } = await adminAuthClient.from('vendor_profiles').upsert({ id: orgId, company_name: companyName });
           if (vendorError) {
             console.error('Error creating vendor profile:', vendorError);
@@ -208,6 +221,7 @@ export async function addAccount(formData: FormData) {
     await logActivity(await createClient(), { actorId: actor.userId, action: 'Membuat akun', entityType: 'account', entityId: data.user?.id ?? null, notes: `${fullName} (${role})` });
 
     revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/dashboard/master-data/vendor');
     revalidatePath('/vendor/dashboard/staff');
     return { success: true };
   } catch (error: any) {
@@ -311,6 +325,7 @@ export async function updateAccount(id: string, formData: FormData) {
     });
 
     revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/dashboard/master-data/vendor');
     revalidatePath('/vendor/dashboard/staff');
     return { success: true };
   } catch (error: any) {
@@ -341,6 +356,7 @@ export async function suspendAccount(id: string, isSuspended: boolean) {
     await logActivity(await createClient(), { actorId: actor.userId, action: isSuspended ? 'Menangguhkan akun' : 'Mengaktifkan kembali akun', entityType: 'account', entityId: id });
 
     revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/dashboard/master-data/vendor');
     revalidatePath('/vendor/dashboard/staff');
     return { success: true };
   } catch (error: any) {
@@ -395,6 +411,7 @@ export async function resetAccountPassword(id: string) {
     await logActivity(await createClient(), { actorId: actor.userId, action: 'Reset password akun', entityType: 'account', entityId: id });
 
     revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/dashboard/master-data/vendor');
     revalidatePath('/vendor/dashboard/staff');
     return { success: true, password: randomPassword, emailSent };
   } catch (error: any) {
@@ -420,6 +437,7 @@ export async function deleteAccount(id: string) {
     await logActivity(await createClient(), { actorId: actor.userId, action: 'Menghapus akun', entityType: 'account', entityId: id });
 
     revalidatePath('/dashboard/master-data/account');
+    revalidatePath('/dashboard/master-data/vendor');
     revalidatePath('/vendor/dashboard/staff');
     return { success: true };
   } catch (error: any) {

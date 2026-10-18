@@ -541,7 +541,7 @@ export default function PTWCreatePage() {
                         <input type="date" value={row.tanggal} onChange={e => updateGasTestRow(i, 'tanggal', e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5" />
                         <input type="time" value={row.waktu} onChange={e => updateGasTestRow(i, 'waktu', e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5" />
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {(['o2', 'toxic', 'combustible'] as const).map(gas => (
                           <div key={gas} className="space-y-1">
                             <input
