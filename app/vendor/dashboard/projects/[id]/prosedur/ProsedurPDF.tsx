@@ -146,7 +146,6 @@ interface ProsedurPDFProps {
     tahapanPekerjaan: { title: string; points: (string | { text: string; kebutuhan?: unknown })[] }[];
     penyelesaianAkhir: string[];
     revisions?: { revNo: number; date: string; note: string }[];
-    vendorSignature?: string | null;
     /** true kalau Prosedur sudah disetujui penuh — cap APPROVED di halaman kontrol. */
     approved?: boolean;
   };

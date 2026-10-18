@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   FileText, ArrowRight, Hammer,
-  UploadCloud, CheckCircle2, X, Info, Download, Plus, Trash2, GripVertical, Boxes, History,
+  CheckCircle2, X, Info, Download, Plus, Trash2, GripVertical, Boxes, History,
   Check, Users, Wrench, Package, HardHat, AlertTriangle
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
@@ -74,21 +74,9 @@ export default function ProsedurKerjaForm() {
   const [docNo, setDocNo] = useState('SOP-K3-001/2026');
   const [contractNo, setContractNo] = useState('006600.PMB-BP/LG.01/OP-CKR/PGAS/V/2026'); 
   const [submissionDate, setSubmissionDate] = useState('2026-06-29');
-  const [projectName, setProjectName] = useState('Perbaikan Pos Security Stasiun Muara Bekasi');
-  const [vendorSignature, setVendorSignature] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState('');
   const [revisions, setRevisions] = useState<any[]>([]);
-  
-  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setVendorSignature(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-  
+
   // Section 1
   const [umum, setUmum] = useState('Pekerjaan Perbaikan Pos Security dilaksanakan untuk memperbaiki kondisi bangunan pos security agar berfungsi dengan baik, aman, dan sesuai standar operasional perusahaan. Seluruh pekerjaan harus dilaksanakan sesuai prosedur kerja, spesifikasi teknis, standar K3, dan peraturan yang berlaku di lokasi kerja.');
 
@@ -117,6 +105,7 @@ export default function ProsedurKerjaForm() {
     async function loadData() {
       if (params.id) {
         const data = await getProsedur(params.id as string);
+        if (data?.project?.name) setProjectName(data.project.name);
         if (data && data.content) {
           setDocId(data.id);
           getMyVendorReviewAssignment(params.id as string, 'procedure', data.id)
@@ -128,7 +117,6 @@ export default function ProsedurKerjaForm() {
           if (content.submissionDate) setSubmissionDate(content.submissionDate);
           setUmum(content.umum || '');
           setScopeOfWork(content.scopeOfWork || '');
-          setVendorSignature(content.vendorSignature || null);
           setRevisions(content.revisions || []);
           if (content.tahapanPekerjaan) setTahapanPekerjaan(normalizeTahapanPekerjaan(content.tahapanPekerjaan));
           if (content.penyelesaianAkhir) setPenyelesaianAkhir(content.penyelesaianAkhir);
@@ -347,7 +335,6 @@ export default function ProsedurKerjaForm() {
       perlengkapanLainnya: derivedSections.perlengkapanLainnya,
       tahapanPekerjaan,
       penyelesaianAkhir,
-      vendorSignature,
       revisions,
       requiredPtwTypes
     };
@@ -379,7 +366,6 @@ export default function ProsedurKerjaForm() {
     perlengkapanLainnya: derivedSections.perlengkapanLainnya,
     tahapanPekerjaan,
     penyelesaianAkhir,
-    vendorSignature,
     revisions
   };
 
@@ -767,30 +753,6 @@ export default function ProsedurKerjaForm() {
               </div>
             </div>
 
-          </div>
-        </section>
-
-        {/* SECTION C: Tanda Tangan */}
-        <section className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
-          <div className="flex items-center gap-2 mb-6">
-            <UploadCloud className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-bold text-slate-800">Section C: Tanda Tangan Digital (Vendor)</h2>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-2">Upload Tanda Tangan Anda (Untuk kolom 'BY') <span className="text-rose-500">*</span></label>
-            <p className="text-xs text-slate-500 mb-4">Pastikan gambar berlatar putih atau transparan (PNG/JPG).</p>
-            <input 
-              type="file" 
-              accept="image/png, image/jpeg"
-              onChange={handleSignatureUpload}
-              className="w-full md:w-1/2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm font-medium"
-            />
-            {vendorSignature && (
-              <div className="mt-4 p-4 bg-slate-100 rounded-xl inline-block">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={vendorSignature} alt="Signature Preview" className="h-16 object-contain mix-blend-multiply" />
-              </div>
-            )}
           </div>
         </section>
 
