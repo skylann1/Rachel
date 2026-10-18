@@ -99,6 +99,10 @@ export const allPermissionModules = [
       { key: 'review_issuer', label: 'Review Tahap PTW Issuer', allowedTypes: ['pgn'] },
       { key: 'numbering_hsse', label: 'Penomoran & Penerbitan PTW (HSSE)', allowedTypes: ['pgn'] },
       { key: 'resume_work', label: 'Membatalkan Stop Work Authority (Resume PTW)', allowedTypes: ['pgn'] },
+      { key: 'field_pengawas', label: 'Dapat Ditugaskan sebagai Pengawas PTW (daily check & safety checklist)', allowedTypes: ['pgn'] },
+      { key: 'assign_pengawas', label: 'Menugaskan / Mengganti Pengawas PTW', allowedTypes: ['pgn'] },
+      { key: 'field_holder', label: 'Dapat Ditugaskan sebagai Pemegang PTW (daily check)', allowedTypes: ['vendor'] },
+      { key: 'assign_holder', label: 'Menugaskan / Mengganti Pemegang PTW', allowedTypes: ['vendor'] },
     ]
   },
   {
