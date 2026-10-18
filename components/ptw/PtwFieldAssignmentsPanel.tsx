@@ -125,7 +125,7 @@ export default function PtwFieldAssignmentsPanel({
                   {canAssign.pemegang && (
                     <button
                       onClick={() => { setModal({ ptwId: ptw.id, peran: 'pemegang' }); setSelectedUserId(''); setAlasan(''); setError(null); }}
-                      className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1 font-medium"
+                      className="text-xs px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1.5 font-medium"
                     >
                       <UserPlus className="w-3 h-3" />
                       {holder ? 'Ganti' : 'Tugaskan'}
@@ -151,7 +151,7 @@ export default function PtwFieldAssignmentsPanel({
                   {canAssign.pengawas && (
                     <button
                       onClick={() => { setModal({ ptwId: ptw.id, peran: 'pengawas' }); setSelectedUserId(''); setAlasan(''); setError(null); }}
-                      className="text-xs px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1 font-medium"
+                      className="text-xs px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 font-medium"
                     >
                       <UserPlus className="w-3 h-3" />
                       {pengawas ? 'Ganti' : 'Tugaskan'}
@@ -224,14 +224,14 @@ export default function PtwFieldAssignmentsPanel({
             <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
               <button
                 onClick={() => setModal(null)}
-                className="px-3 py-2 text-sm rounded-lg bg-slate-100 hover:bg-slate-200"
+                className="px-3 py-2.5 text-sm rounded-lg bg-slate-100 hover:bg-slate-200"
                 disabled={submitting}
               >
                 Batal
               </button>
               <button
                 onClick={handleAssign}
-                className="px-3 py-2 text-sm rounded-lg bg-primary text-white hover:opacity-90 flex items-center gap-2"
+                className="px-4 py-2.5 text-sm rounded-lg bg-primary text-white hover:opacity-90 flex items-center justify-center gap-2 flex-1 sm:flex-none"
                 disabled={submitting || !selectedUserId}
               >
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}

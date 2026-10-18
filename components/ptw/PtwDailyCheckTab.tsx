@@ -75,6 +75,8 @@ export default function PtwDailyCheckTab({
   const [form, setForm] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Hari yang sedang dibuka per PTW di tampilan HP (indeks kolom hari, 0-based). */
+  const [mobileDay, setMobileDay] = useState<Record<string, number>>({});
 
   const nameOf = (userId?: string | null) => {
     if (!userId) return '-';
@@ -171,8 +173,8 @@ export default function PtwDailyCheckTab({
               </span>
             </div>
 
-            {/* Tabel hari 1-7 */}
-            <div className="px-5 py-4 overflow-x-auto">
+            {/* Tabel hari 1-7 — desktop */}
+            <div className="hidden md:block px-5 py-4 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-[11px] font-black uppercase tracking-wider text-slate-400">
@@ -235,6 +237,87 @@ export default function PtwDailyCheckTab({
               </table>
             </div>
 
+            {/* Tampilan HP: chip hari + satu kartu ringkasan per hari */}
+            <div className="md:hidden px-5 py-4 space-y-3">
+              <div className="flex gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
+                {Array.from({ length: PTW_MAX_VALID_DAYS }, (_, i) => i).map((i) => {
+                  const hari = i + 1;
+                  const dayDate = dayDates[i];
+                  const selected = (mobileDay[ptw.id] ?? (todayHari ? todayHari - 1 : 0)) === i;
+                  return (
+                    <button
+                      key={hari}
+                      type="button"
+                      disabled={!dayDate}
+                      onClick={() => setMobileDay((m) => ({ ...m, [ptw.id]: i }))}
+                      aria-pressed={selected}
+                      className={`shrink-0 px-3 py-2 rounded-xl border text-xs font-bold text-left transition-colors disabled:opacity-40 ${
+                        selected ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      Hari {hari}
+                      {dayDate && (
+                        <span className={`block font-normal ${selected ? 'text-white/80' : 'text-slate-400'}`}>
+                          {formatCheckDate(dayDate)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {(() => {
+                const i = mobileDay[ptw.id] ?? (todayHari ? todayHari - 1 : 0);
+                const hari = i + 1;
+                const dayDate = dayDates[i];
+                if (!dayDate) {
+                  return (
+                    <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
+                      Tidak dalam masa berlaku
+                    </div>
+                  );
+                }
+                const holderCheck = checksOfPtw.find((c: any) => c.hari_ke === hari && c.peran === 'pemegang');
+                const pengawasCheck = checksOfPtw.find((c: any) => c.hari_ke === hari && c.peran === 'pengawas');
+                const filledCount = (holderCheck ? 1 : 0) + (pengawasCheck ? 1 : 0);
+                const st = dayRowStatus(dayDate, today, filledCount);
+                return (
+                  <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-slate-700">{formatCheckDate(dayDate)}</span>
+                      <span className={`text-[11px] font-bold border rounded-full px-2 py-0.5 ${STATUS_CHIP[st]}`}>
+                        {STATUS_LABEL[st]}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-slate-50 p-2.5">
+                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Pemegang</p>
+                        {holderCheck ? (
+                          <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                            <span className="font-bold">{holderCheck.inisial || '?'}</span>
+                            <span className="truncate">{nameOf(holderCheck.user_id)}</span>
+                          </p>
+                        ) : (
+                          <p className="text-sm text-slate-300">—</p>
+                        )}
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-2.5">
+                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Pengawas</p>
+                        {pengawasCheck ? (
+                          <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                            <span className="font-bold">{pengawasCheck.inisial || '?'}</span>
+                            <span className="truncate">{nameOf(pengawasCheck.user_id)}</span>
+                          </p>
+                        ) : (
+                          <p className="text-sm text-slate-300">—</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Form pengisian hari ini */}
             {isMyTurn && !alreadyToday && myPeran && (
               <div className="px-5 pb-5">
@@ -262,7 +345,7 @@ export default function PtwDailyCheckTab({
                   <button
                     onClick={() => handle(ptw.id)}
                     disabled={submittingId === ptw.id || (myPeran === 'pemegang' && !(form[ptw.id] || '').trim())}
-                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg bg-primary text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="mt-3 w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-3 sm:py-2 text-sm font-bold rounded-lg bg-primary text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submittingId === ptw.id
                       ? <Loader2 className="w-4 h-4 animate-spin" />
