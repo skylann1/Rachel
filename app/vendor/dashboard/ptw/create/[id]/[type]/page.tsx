@@ -91,11 +91,8 @@ export default function PTWCreatePage() {
     hazards: string[];
   }>({ workers: [], equipment: [], apd: {}, hazards: [] });
 
-  // Mode tampilan tiap blok: ringkas (hanya hasil JSA) vs lengkap (daftar penuh).
-  // Mulai dari `true` (tampil lengkap) supaya sebelum loadData() selesai, blok
-  // tidak sempat terlihat kosong — terutama Sumber Bahaya & APD yang tidak
-  // dilindungi guard `isLoadingRoster`. loadData() akan mempersempitnya begitu
-  // prefill JSA diketahui.
+  // Mode tampilan tiap blok: lengkap (daftar penuh, default) vs ringkas (hanya
+  // butir dari JSA). Vendor yang memilih ringkas lewat tombol di tiap blok.
   const [showAllPekerja, setShowAllPekerja] = useState(true);
   const [showAllPeralatan, setShowAllPeralatan] = useState(true);
   const [showAllApd, setShowAllApd] = useState(true);
@@ -200,17 +197,10 @@ export default function PTWCreatePage() {
         }
       }
 
-      // Mode ringkas per blok mengikuti apa yang BENAR-BENAR diterapkan ke
-      // form, bukan sekadar apa yang ter-fetch dari JSA — pada PTW revisi
-      // (`data` terisi) prefill JSA sengaja dilewati, jadi keempat blok wajib
-      // tampil lengkap agar vendor tidak menghadapi daftar kosong.
-      const appliedPrefill = (!data && hasJsaPrefill)
-        ? { workers: workerPrefill, equipment: equipmentPrefill, apd: apdPrefill, hazards: hazardPrefill }
-        : { workers: [], equipment: [], apd: {} as Record<string, string[]>, hazards: [] as string[] };
-      setShowAllPekerja(appliedPrefill.workers.length === 0);
-      setShowAllPeralatan(appliedPrefill.equipment.length === 0);
-      setShowAllApd(!Object.values(appliedPrefill.apd).some(list => list.length > 0));
-      setShowAllHazards(appliedPrefill.hazards.length === 0);
+      // Semua butir selalu tampil (showAll* mulai dari true dan tidak
+      // dipersempit di sini): hasil prefill JSA hanya tercentang di awal,
+      // butir lain tetap bisa dicentang vendor. Tombol "Tampilkan dari JSA
+      // saja" di tiap blok tetap tersedia sebagai filter opsional.
       setBlockChecked(true);
 
       // Belum ada acuan sama sekali — mulai dari tanggal proyek, dipotong
