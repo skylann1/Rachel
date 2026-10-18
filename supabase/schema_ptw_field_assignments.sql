@@ -302,9 +302,12 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.ptw_user_has_perm(uuid, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.ptw_assign_field_role(uuid, text, uuid, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.ptw_submit_daily_check(uuid, text, text[]) FROM PUBLIC;
+-- Di Supabase, REVOKE FROM PUBLIC saja tidak cukup: anon/authenticated
+-- mendapat EXECUTE lewat default privileges, jadi dicabut eksplisit.
+REVOKE ALL ON FUNCTION public.ptw_user_has_perm(uuid, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.ptw_assign_field_role(uuid, text, uuid, text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.ptw_submit_daily_check(uuid, text, text[]) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.update_ptw_safety_checklist(uuid, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.ptw_assign_field_role(uuid, text, uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.ptw_submit_daily_check(uuid, text, text[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_ptw_safety_checklist(uuid, jsonb) TO authenticated;
