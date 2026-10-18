@@ -1732,7 +1732,10 @@ export default function AdminProjectClient({
             profileById={profileById ?? {}}
             candidates={(fieldCandidates ?? []).map((c) => ({ id: c.id, full_name: c.name }))}
             canAssign={{
-              pemegang: !!permissions?.['ptw']?.includes('assign_holder'),
+              // Pemegang = staf vendor dan hanya boleh ditugaskan admin vendor (aturan
+              // ptw_assign_field_role). Role `admin` PGN dianggap memegang semua izin,
+              // jadi tombolnya muncul padahal RPC pasti menolak — jangan ditawarkan.
+              pemegang: false,
               pengawas: !!permissions?.['ptw']?.includes('assign_pengawas'),
             }}
             onAssign={async ({ ptwId, peran, userId, alasan }) => {
