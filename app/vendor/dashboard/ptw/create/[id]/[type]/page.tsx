@@ -15,6 +15,15 @@ const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
   { ssr: false, loading: () => <div className="h-full w-full bg-slate-100 flex items-center justify-center animate-pulse text-slate-400 font-medium">Memuat Pratinjau Dokumen...</div> }
 );
+
+// react-pdf PDFViewer merender iframe yang mengandalkan plugin PDF bawaan
+// browser desktop — kosong/blank di browser mobile (Chrome Android, Safari
+// iOS). BlobProvider jadi jalur fallback: buka blob PDF di tab baru, yang
+// selalu bisa ditangani browser (viewer PDF native atau download).
+const BlobProvider = dynamic(
+  () => import('@react-pdf/renderer').then(mod => mod.BlobProvider),
+  { ssr: false }
+);
 import {
   PTW_TYPES, APD_ITEMS, PtwType, PTW_GAS_TEST_TYPES, PtwGasTestEntry,
   HOT_WORK_JOB_TYPES, PTW_MAX_VALID_DAYS, PtwGasTestFrequency,
@@ -680,10 +689,42 @@ export default function PTWCreatePage() {
 
         {/* Right Column: PDF Preview */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[70vh] lg:h-[800px] sticky top-24">
-          <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+          <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0 gap-3">
              <div className="flex items-center gap-2 font-bold text-sm text-slate-700">
                <Stamp className="w-4 h-4 text-slate-400" /> Preview Draft PTW (Otomatis)
              </div>
+             {/* Fallback buat browser mobile: PDFViewer di bawah ini kosong/blank
+                 di HP karena gak ada plugin PDF bawaan di dalam iframe-nya. */}
+             <BlobProvider
+               document={
+                 <PtwPDF
+                   projectId={preview.projectId}
+                   ptwType={preview.ptwType}
+                   hazards={preview.hazards}
+                   apd={preview.apd}
+                   pekerja={preview.pekerja}
+                   peralatan={preview.peralatan}
+                   gasTests={preview.gasTests}
+                   validFrom={preview.validFrom}
+                   validTo={preview.validTo}
+                   workStart={preview.workStart}
+                   workEnd={preview.workEnd}
+                   hotWorkTypes={preview.hotWorkTypes}
+                   gasTestFrequency={preview.gasFreq}
+                 />
+               }
+             >
+               {({ url, loading }) => (
+                 <button
+                   type="button"
+                   disabled={loading || !url}
+                   onClick={() => { if (url) window.open(url, '_blank'); }}
+                   className="shrink-0 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors disabled:opacity-50"
+                 >
+                   {loading ? 'Membuat PDF...' : 'Buka & Print'}
+                 </button>
+               )}
+             </BlobProvider>
           </div>
           <div className="flex-1 w-full bg-slate-500">
              <PDFViewer width="100%" height="100%" className="border-none">
