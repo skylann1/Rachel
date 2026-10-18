@@ -49,6 +49,30 @@ export async function savePushSubscription(
   return { error: null };
 }
 
+/**
+ * True kalau endpoint ini tercatat milik pengguna yang sedang login.
+ *
+ * Dipakai push-toggle.tsx untuk menentukan status "Aktif" — subscription
+ * browser (pushManager.getSubscription()) itu level PERANGKAT, bukan level
+ * akun, jadi di device yang sama dipakai gantian beberapa akun, subscription
+ * lama tetap "ada" di mata browser walau pemiliknya di tabel sudah akun
+ * lain. RLS ("Users can read own push subscriptions") sudah membatasi baris
+ * yang terbaca ke milik auth.uid() sendiri, jadi query ini otomatis kosong
+ * kalau endpoint itu tercatat milik akun lain.
+ */
+export async function isMyPushSubscription(endpoint: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || !endpoint) return false;
+
+  const { data } = await supabase
+    .from("push_subscriptions")
+    .select("id")
+    .eq("endpoint", endpoint)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function removePushSubscription(endpoint: string): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

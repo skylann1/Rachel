@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { BellOff, BellRing, Loader2 } from "lucide-react";
 import {
+  isMyPushSubscription,
   removePushSubscription,
   savePushSubscription,
 } from "@/app/dashboard/inbox/push-actions";
@@ -72,7 +73,12 @@ export function PushNotificationToggle() {
       try {
         const registration = await navigator.serviceWorker.getRegistration();
         const subscription = await registration?.pushManager.getSubscription();
-        return subscription ? "on" : "off";
+        if (!subscription) return "off";
+        // Subscription browser ini bisa saja peninggalan akun lain yang
+        // login di perangkat yang sama — "Aktif" hanya kalau tercatat milik
+        // akun yang sedang login sekarang.
+        const mine = await isMyPushSubscription(subscription.endpoint);
+        return mine ? "on" : "off";
       } catch {
         return "off";
       }
