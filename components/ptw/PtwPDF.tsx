@@ -7,6 +7,7 @@ import {
   flattenSafetyChecklist, PtwSafetyChecklistData,
 } from '@/lib/ptw-types';
 import type { PtwSignatories, PtwSignatory } from '@/lib/ptw-signatories';
+import { formatCheckDate, formatCheckTime, type PtwDailyCheck } from '@/lib/ptw-field';
 
 const B = '#000';
 // Form asli hanya mengarsir blok Verifikasi dan tiga kotak di bagian bawah;
@@ -184,6 +185,8 @@ interface PtwPDFProps {
   signatories?: PtwSignatories | null;
   /** Isian Sudah/Belum/Keterangan per hari, kosong kalau belum pernah diisi. */
   checklistData?: PtwSafetyChecklistData;
+  /** Verifikasi harian (Pemegang/Pengawas) untuk PTW ini, dari ptw_daily_checks. */
+  dailyChecks?: PtwDailyCheck[];
 }
 
 const formatDate = (value?: string | null) => {
@@ -218,6 +221,7 @@ export default function PtwPDF({
   siblings = [],
   signatories,
   checklistData = {},
+  dailyChecks = [],
 }: PtwPDFProps) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const typeDef = PTW_TYPES.find(t => t.id === ptwType) || PTW_TYPES[0];
@@ -227,6 +231,10 @@ export default function PtwPDF({
   const hasGasForm = PTW_GAS_FORM_TYPES.includes(ptwType);
   const isHotWork = ptwType === 'panas';
   const hazardColumns = hazardColumnsFor(ptwType);
+
+  // Verifikasi harian: baris per hari-ke (1..7) per peran, untuk kotak Verifikasi di bawah.
+  const dailyCheckByHari = (hari: number, peran: 'pemegang' | 'pengawas') =>
+    dailyChecks.find((c) => c.hari_ke === hari && c.peran === peran);
 
   // Masa berlaku PTW; jatuh kembali ke tanggal proyek untuk baris lama yang
   // dibuat sebelum kolom valid_from/valid_to ada.
@@ -544,24 +552,45 @@ export default function PtwPDF({
                   <Text style={{ width: '35%', fontWeight: 'bold', fontSize: fs_header, paddingVertical: 1, paddingHorizontal: 4 }}>Verifikasi</Text>
                 </View>
 
-                {/* Tanggal & Waktu */}
-                {['Tanggal (DD/MM)', 'Waktu'].map((label) => (
+                {/* Tanggal & Waktu — Tanggal dari check manapun yang ada hari itu; Waktu = waktu verifikasi Pemegang. */}
+                {(['Tanggal (DD/MM)', 'Waktu'] as const).map((label) => (
                   <View key={label} style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: B, height: 10 }}>
                     <View style={{ width: '35%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}><Text>{label}</Text></View>
-                    {[1, 2, 3, 4, 5, 6, 7].map((d) => <View key={d} style={{ width: '8%', borderRightWidth: 1, borderColor: B }} />)}
+                    {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                      const holder = dailyCheckByHari(d, 'pemegang');
+                      const pengawas = dailyCheckByHari(d, 'pengawas');
+                      const tanggal = (holder ?? pengawas)?.tanggal;
+                      const value = label === 'Tanggal (DD/MM)'
+                        ? (tanggal ? formatCheckDate(tanggal) : '')
+                        : (holder?.diisi_pada ? formatCheckTime(holder.diisi_pada) : '');
+                      return (
+                        <View key={d} style={{ width: '8%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 4 }}>{value}</Text>
+                        </View>
+                      );
+                    })}
                     <View style={{ width: '9%' }} />
                   </View>
                 ))}
 
                 {/* Pemegang PTW / Pengawas-Penerbit PTW: dua baris (Nama Inisial, Paraf) */}
-                {['Pemegang PTW', 'Pengawas / Penerbit PTW'].map((label, gi) => (
-                  <View key={label} style={{ flexDirection: 'row', borderBottomWidth: gi === 1 ? 0 : 1, borderColor: B }}>
-                    <View style={{ width: '22%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}><Text>{label}</Text></View>
+                {(['pemegang', 'pengawas'] as const).map((peran, gi) => (
+                  <View key={peran} style={{ flexDirection: 'row', borderBottomWidth: gi === 1 ? 0 : 1, borderColor: B }}>
+                    <View style={{ width: '22%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 4 }}>
+                      <Text>{peran === 'pemegang' ? 'Pemegang PTW' : 'Pengawas / Penerbit PTW'}</Text>
+                    </View>
                     <View style={{ width: '78%' }}>
-                      {['Nama Inisial', 'Paraf'].map((sub, si) => (
+                      {(['Nama Inisial', 'Paraf'] as const).map((sub, si) => (
                         <View key={sub} style={{ flexDirection: 'row', height: 12, borderBottomWidth: si === 0 ? 1 : 0, borderColor: B }}>
                           <View style={{ width: '16.67%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', paddingHorizontal: 3 }}><Text style={{ fontSize: 4 }}>{sub}</Text></View>
-                          {[1, 2, 3, 4, 5, 6, 7].map((d) => <View key={d} style={{ width: '10.26%', borderRightWidth: 1, borderColor: B }} />)}
+                          {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                            const check = dailyCheckByHari(d, peran);
+                            return (
+                              <View key={d} style={{ width: '10.26%', borderRightWidth: 1, borderColor: B, justifyContent: 'center', alignItems: 'center' }}>
+                                <Text style={{ fontSize: 4 }}>{check ? (sub === 'Nama Inisial' ? check.inisial : '✓') : ''}</Text>
+                              </View>
+                            );
+                          })}
                           <View style={{ width: '11.5%' }} />
                         </View>
                       ))}
