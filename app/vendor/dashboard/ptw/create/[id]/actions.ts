@@ -7,7 +7,10 @@ import { PTW_STATUS } from "@/lib/ptw-status";
 import { PTW_TYPES, PTW_MAX_VALID_DAYS, type PtwFormDetails, type PtwType } from "@/lib/ptw-types";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { resetStageAssignments, getStageAssignments } from "@/lib/stage-assignments";
-import { aggregateStepNeeds, StepKebutuhan } from "@/lib/procedure-kebutuhan";
+import {
+  aggregateStepNeeds, aggregatePointNeeds, aggregateKebutuhan, isKebutuhanEmpty,
+  normalizeTahapanPekerjaan, emptyKebutuhan, StepKebutuhan,
+} from "@/lib/procedure-kebutuhan";
 
 /** Tanggal proyek, dipakai sebagai nilai awal masa berlaku PTW di form. */
 export async function getProjectPeriod(projectId: string) {
@@ -21,14 +24,18 @@ export async function getProjectPeriod(projectId: string) {
 }
 
 /**
- * Prefill PTW dari JSA yang sudah disetujui: union kebutuhan semua langkah JSA
- * (pekerja, peralatan, APD). Material sengaja tidak diambil — PTW belum punya
- * slot material (lihat spec prosedur-kebutuhan-ptw-prefill-design). Query
- * memakai id JSA dari kolom status, jadi tidak terpengaruh stage_assignments.
+ * Prefill PTW: union kebutuhan semua langkah JSA yang sudah disetujui
+ * (pekerja, peralatan, APD, bahaya). Material sengaja tidak diambil — PTW
+ * belum punya slot material (lihat spec prosedur-kebutuhan-ptw-prefill-design).
+ *
+ * Jika JSA belum ada / kebutuhannya kosong (mis. JSA disimpan sebelum
+ * kebutuhan Prosedur diisi), dipakai kebutuhan langsung dari Prosedur Kerja
+ * proyek ini sebagai cadangan. Kebutuhan Prosedur berlaku untuk SEMUA tipe
+ * PTW; vendor tinggal menyesuaikan per tipe di form.
  */
 export async function getJsaPrefillNeeds(projectId: string): Promise<StepKebutuhan> {
   const supabase = await createClient();
-  const { data: jsa } = await supabase
+  const { data: jsa, error: jsaError } = await supabase
     .from('jsa')
     .select('id')
     .eq('project_id', projectId)
@@ -36,23 +43,37 @@ export async function getJsaPrefillNeeds(projectId: string): Promise<StepKebutuh
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (jsaError) console.error('getJsaPrefillNeeds jsa error:', jsaError.message);
 
-  if (!jsa?.id) return { workers: [], equipment: [], materials: [], apd: {}, hazards: [] };
+  let fromJsa: StepKebutuhan = emptyKebutuhan();
+  if (jsa?.id) {
+    const { data: steps, error: stepsError } = await supabase
+      .from('jsa_steps')
+      .select('kebutuhan')
+      .eq('jsa_id', jsa.id)
+      .order('step_number', { ascending: true });
+    if (stepsError) console.error('getJsaPrefillNeeds steps error:', stepsError.message);
 
-  const { data: steps } = await supabase
-    .from('jsa_steps')
-    .select('kebutuhan')
-    .eq('jsa_id', jsa.id)
-    .order('step_number', { ascending: true });
+    const parsed = (steps ?? []).map((s) => {
+      if (!s.kebutuhan) return undefined;
+      if (typeof s.kebutuhan === 'string') {
+        try { return JSON.parse(s.kebutuhan); } catch { return undefined; }
+      }
+      return s.kebutuhan as Partial<StepKebutuhan>;
+    });
+    fromJsa = aggregateStepNeeds(parsed);
+  }
+  if (!isKebutuhanEmpty(fromJsa)) return fromJsa;
 
-  const parsed = (steps ?? []).map((s) => {
-    if (!s.kebutuhan) return undefined;
-    if (typeof s.kebutuhan === 'string') {
-      try { return JSON.parse(s.kebutuhan); } catch { return undefined; }
-    }
-    return s.kebutuhan as Partial<StepKebutuhan>;
-  });
-  return aggregateStepNeeds(parsed);
+  // Cadangan: langsung dari Prosedur Kerja (union kebutuhan semua sub-langkah).
+  const { data: proc, error: procError } = await supabase
+    .from('procedures')
+    .select('content')
+    .eq('project_id', projectId)
+    .maybeSingle();
+  if (procError) console.error('getJsaPrefillNeeds procedure error:', procError.message);
+  const sections = normalizeTahapanPekerjaan(proc?.content?.tahapanPekerjaan);
+  return aggregateKebutuhan(sections.map((sec) => aggregatePointNeeds(sec.points)));
 }
 
 export async function getPtw(projectId: string, ptwType: string) {
