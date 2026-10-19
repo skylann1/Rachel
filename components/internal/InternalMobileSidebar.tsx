@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Menu, X, LogOut } from 'lucide-react';
-import Image from "next/image";
+import { SidebarLogo } from "./sidebar-logo";
 import { SidebarNav } from "./sidebar-nav";
 import type { SidebarBadges } from "@/app/dashboard/actions/sidebar-badges";
 import { logout } from "@/app/auth/login/actions";
@@ -50,14 +50,7 @@ export function InternalMobileSidebar({
         {/* Sidebar Header - Logos */}
         <div className="h-20 flex items-center justify-between px-6 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="relative h-8 w-32">
-              <Image
-                src="/assets/logo/main-logo.png"
-                alt="Main Logo"
-                fill
-                className="object-contain object-left brightness-0 invert"
-              />
-            </div>
+            <SidebarLogo orgType={orgType} align="left" />
           </div>
           <button
             onClick={() => setIsOpen(false)}

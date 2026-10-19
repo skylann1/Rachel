@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Image from "next/image";
+import { SidebarLogo } from "./sidebar-logo";
 import Link from "next/link";
 import { SidebarNav } from "./sidebar-nav";
 import { logout } from "@/app/auth/login/actions";
@@ -27,14 +27,7 @@ export function DesktopSidebar({ user, permissions, roleLabel, badges, orgType }
         {isCollapsed ? (
            <div className="font-bold text-xl text-primary">R</div>
         ) : (
-          <div className="relative h-8 w-32">
-            <Image
-              src="/assets/logo/main-logo.png"
-              alt="Main Logo"
-              fill
-              className="object-contain object-center brightness-0 invert"
-            />
-          </div>
+          <SidebarLogo orgType={orgType} />
         )}
       </div>
 
