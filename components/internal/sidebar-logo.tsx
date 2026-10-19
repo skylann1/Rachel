@@ -16,10 +16,10 @@ export function SidebarLogo({ orgType, align = "center" }: { orgType?: "pgn" | "
   const [failed, setFailed] = useState(false);
 
   return (
-    <div className="rounded-lg bg-white px-3 py-1 shadow-sm">
+    <div>
       <div className="relative h-8 w-32">
         {failed ? (
-          <span className="absolute inset-0 flex items-center justify-center text-sm font-extrabold tracking-tight text-slate-800">
+          <span className="absolute inset-0 flex items-center justify-center text-sm font-extrabold tracking-tight text-white">
             PGAS SOLUTION
           </span>
         ) : (
@@ -28,7 +28,7 @@ export function SidebarLogo({ orgType, align = "center" }: { orgType?: "pgn" | "
             alt={logo.alt}
             fill
             onError={() => setFailed(true)}
-            className={`object-contain ${align === "left" ? "object-left" : "object-center"}`}
+            className={`object-contain brightness-0 invert ${align === "left" ? "object-left" : "object-center"}`}
           />
         )}
       </div>
