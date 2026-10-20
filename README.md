@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SIPERMIT K3
+
+Safety Permit (PTW) management web application for PGN HSE.
+
+## Overview
+
+SIPERMIT K3 digitizes the Permit to Work (PTW) process for PGN and its contractors (PGSOL/vendors). It covers the full PTW lifecycle — drafting, approval, safety checks, and closure — along with supporting modules for JSA, procedures, inspections, incidents, and announcements.
+
+## Features
+
+- **Permit to Work (PTW)** — multi-type permits with checklist, signatories, and status tracking
+- **JSA & Procedures** — job safety analysis and procedure documents with PDF export
+- **Inspections** — finding reports with photo evidence
+- **Incidents** — incident reporting and follow-up
+- **Announcements** — news carousel for internal and vendor home pages
+- **Multi-tenant & role-based** — PGN / PGSOL / vendor realms with data-driven roles and assignments
+- **Approval flow** — assignment-driven, fail-closed approvals
+- **Client-side PDF** — `@react-pdf/renderer` for PTW/procedure/JSA/incident documents
+
+## Tech Stack
+
+- Next.js 16 (App Router) · React 19 · TypeScript
+- Tailwind CSS v4
+- Supabase (Postgres, Auth, Storage)
+- `@react-pdf/renderer`, Recharts, Resend, web-push
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create `.env.local`:
 
-## Learn More
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+RESEND_API_KEY=        # optional
+CRON_SECRET=           # required for daily reminder cron
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Database
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Apply SQL files in `supabase/` in the order documented in `supabase/README_org_migration_order.md` and `supabase/README_stage_assignment_migration_order.md`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Scripts
 
-## Deploy on Vercel
+- `npm run dev` — development server
+- `npm run build` — production build
+- `npm run lint` — ESLint
+- `npx tsc --noEmit` — typecheck
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Private — PGN HSE.
