@@ -28,9 +28,6 @@ export async function getInspections() {
         company_name
       ),
       assigned_to,
-      internal_profiles:assigned_to (
-        profiles:id ( full_name )
-      ),
       inspection_photos ( id, image_url )
     `)
     .order('created_at', { ascending: false });
@@ -40,7 +37,23 @@ export async function getInspections() {
     return { data: [], error: error.message };
   }
 
-  return { data: data ?? [], error: null as string | null };
+  // Nama petugas diambil terpisah: embed internal_profiles -> profiles ambigu
+  // bagi PostgREST ("more than one relationship") dan membuat seluruh daftar gagal.
+  const rows = data ?? [];
+  const assigneeIds = [...new Set(rows.map((r) => r.assigned_to).filter(Boolean))] as string[];
+  const names = new Map<string, string>();
+  if (assigneeIds.length > 0) {
+    const { data: people } = await supabase.from('profiles').select('id, full_name').in('id', assigneeIds);
+    (people || []).forEach((p) => names.set(p.id, p.full_name));
+  }
+
+  return {
+    data: rows.map((r) => ({
+      ...r,
+      internal_profiles: r.assigned_to ? { profiles: { full_name: names.get(r.assigned_to) ?? null } } : null,
+    })),
+    error: null as string | null,
+  };
 }
 
 export async function createInspection(formData: FormData) {
@@ -141,12 +154,17 @@ export async function getVendorsAndProjects() {
   
   const { data: vendors } = await supabase.from('vendor_profiles').select('id, company_name');
   const { data: projects } = await supabase.from('projects').select('id, name, vendor_id');
-  const { data: internalUsers } = await supabase.from('internal_profiles').select('id, profiles(full_name)');
-  
-  return { 
-    vendors: vendors || [], 
+  const { data: internal } = await supabase.from('internal_profiles').select('id');
+  const internalIds = (internal || []).map((i) => i.id);
+  const { data: people } = internalIds.length
+    ? await supabase.from('profiles').select('id, full_name').in('id', internalIds)
+    : { data: [] as { id: string; full_name: string }[] };
+  const internalUsers = (people || []).map((p) => ({ id: p.id, profiles: { full_name: p.full_name } }));
+
+  return {
+    vendors: vendors || [],
     projects: projects || [],
-    internalUsers: internalUsers || []
+    internalUsers
   };
 }
 
