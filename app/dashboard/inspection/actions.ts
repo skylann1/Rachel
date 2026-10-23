@@ -37,10 +37,10 @@ export async function getInspections() {
 
   if (error) {
     console.error("getInspections error:", error.message);
-    return [];
+    return { data: [], error: error.message };
   }
 
-  return data;
+  return { data: data ?? [], error: null as string | null };
 }
 
 export async function createInspection(formData: FormData) {

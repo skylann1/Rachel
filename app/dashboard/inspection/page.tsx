@@ -26,6 +26,7 @@ export default function InspectionPage() {
   
   // Data
   const [inspections, setInspections] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [vendors, setVendors] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [internalUsers, setInternalUsers] = useState<any[]>([]);
@@ -54,7 +55,8 @@ export default function InspectionPage() {
   }, []);
 
   async function loadData() {
-    const data = await getInspections();
+    const { data, error: loadError } = await getInspections();
+    setLoadError(loadError);
     const vp = await getVendorsAndProjects();
     setVendors(vp.vendors);
     setProjects(vp.projects);
@@ -298,6 +300,13 @@ export default function InspectionPage() {
           </div>
         </div>
       </div>
+
+      {loadError && (
+        <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-sm text-rose-700">
+          <p className="font-bold">Gagal memuat data inspeksi.</p>
+          <p className="font-mono text-xs mt-1 break-all">{loadError}</p>
+        </div>
+      )}
 
       {/* Grid of Finding Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
