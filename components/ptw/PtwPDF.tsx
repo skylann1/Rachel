@@ -151,6 +151,8 @@ interface PtwPerson { worker_name?: string; worker_role?: string; name?: string;
 interface PtwAsset { name?: string; type?: string; }
 
 /** PTW lain untuk pekerjaan yang sama — bagian D "Permit To Work Lainnya". */
+import { overtimeMinutes, formatDuration, type PtwOvertime } from '@/lib/ptw-overtime';
+
 export interface PtwSibling { ptw_type?: string | null; ptw_number?: string | null; }
 
 interface PtwPDFProps {
@@ -188,6 +190,8 @@ interface PtwPDFProps {
   dailyChecks?: PtwDailyCheck[];
   /** Perpanjangan yang sudah disetujui (ptw.extensions) — tiap perpanjangan dicetak sebagai lembar PTW lengkap bernomor baru. */
   extensions?: PtwExtensionRecord[];
+  /** Lembur PTW (ptw_overtimes); yang berstatus Disetujui dicetak di bagian A. */
+  overtimes?: PtwOvertime[];
   /** ptw.extension_count; kalau lebih besar dari extensions.length, ada perpanjangan lama tanpa catatan nomor. */
   extensionCount?: number;
 }
@@ -227,6 +231,7 @@ export default function PtwPDF({
   dailyChecks = [],
   extensions = [],
   extensionCount,
+  overtimes = [],
 }: PtwPDFProps) {
   const currentDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
   const typeDef = PTW_TYPES.find(t => t.id === ptwType) || PTW_TYPES[0];
@@ -251,16 +256,29 @@ export default function PtwPDF({
   const jamMulai = workStart || '08:00';
   const jamSelesai = workEnd || '17:00';
 
-  // Mode perpanjangan bernomor: tiap perpanjangan = satu lembar PTW lengkap. Perpanjangan lama
-  // (sebelum ada catatan nomor) tetap dicetak sebagai lembar lanjutan checklist per 7 hari.
+  // Tiap perpanjangan dicetak sebagai lembar PTW LENGKAP. Perpanjangan yang sudah punya catatan nomor
+  // (ptw.extensions) memakai nomornya; perpanjangan lama (disetujui sebelum nomor dicatat) diturunkan per
+  // blok 7 hari dan tampil sebagai lembar lengkap dengan nomor "(belum diberi nomor)".
   const sortedExt = [...extensions].sort((a, b) => a.no - b.no);
-  const numberedExt = sortedExt.length > 0 && (extensionCount ?? sortedExt.length) <= sortedExt.length;
+  const fullyNumbered = sortedExt.length > 0 && (extensionCount ?? sortedExt.length) <= sortedExt.length;
   const addDaysStr = (d: string, n: number) => {
-    const x = new Date(`${d}T00:00:00Z`);
+    const x = new Date(`${d.slice(0, 10)}T00:00:00Z`);
     x.setUTCDate(x.getUTCDate() + n);
     return x.toISOString().slice(0, 10);
   };
-  const baseSelesai = numberedExt ? addDaysStr(sortedExt[0].from, -1) : berlakuSelesai;
+  const extSheets: PtwExtensionRecord[] = fullyNumbered
+    ? sortedExt
+    : (totalWeeks > 1 && berlakuMulai && berlakuSelesai)
+      ? Array.from({ length: totalWeeks - 1 }, (_, w) => {
+          const from = addDaysStr(berlakuMulai, (w + 1) * 7);
+          const lastDay = addDaysStr(berlakuMulai, (w + 2) * 7 - 1);
+          const to = lastDay > berlakuSelesai.slice(0, 10) ? berlakuSelesai.slice(0, 10) : lastDay;
+          const match = sortedExt.find((e) => e.from <= to && e.to >= from);
+          return { no: w + 1, number: match?.number ?? '', from, to, decided_at: match?.decided_at ?? null };
+        })
+      : [];
+  const hasExtSheets = extSheets.length > 0;
+  const baseSelesai = hasExtSheets ? addDaysStr(extSheets[0].from, -1) : berlakuSelesai;
 
   // Bagian D — daftar dan urutannya diambil apa adanya dari tiap form; nomor
   // terisi otomatis kalau tipe itu memang diajukan untuk pekerjaan yang sama.
@@ -356,7 +374,7 @@ export default function PtwPDF({
       <View style={styles.sectionBox}>
               <Text style={styles.sectionHeader}>
                 {titleProp ?? (weekIndex === 0
-                  ? (totalWeeks > 1 && !numberedExt ? `E. SAFETY CHECKLIST — HARI KE-1 S/D 7 (PTW DIPERPANJANG, LANJUTAN DI HALAMAN BERIKUTNYA)` : 'E. SAFETY CHECKLIST')
+                  ? (totalWeeks > 1 && !hasExtSheets ? `E. SAFETY CHECKLIST — HARI KE-1 S/D 7 (PTW DIPERPANJANG, LANJUTAN DI HALAMAN BERIKUTNYA)` : 'E. SAFETY CHECKLIST')
                   : `E. SAFETY CHECKLIST — LEMBAR LANJUTAN ${weekIndex} (HARI KE-${off + 1} S/D ${Math.min(off + 7, totalDays)})`)}
               </Text>
 
@@ -546,7 +564,7 @@ export default function PtwPDF({
               <Text style={styles.sectionHeader}>A. UMUM</Text>
               <View style={styles.umumRow}>
                 <Text style={styles.umumLabel}>Nomor</Text>
-                <Text style={styles.umumVal}>: {opts.number || `Draft - ${projectId.slice(0, 8)}`}</Text>
+                <Text style={styles.umumVal}>: {opts.number || (opts.ext ? '(belum diberi nomor)' : `Draft - ${projectId.slice(0, 8)}`)}</Text>
               </View>
               <View style={styles.umumRow}>
                 <Text style={styles.umumLabel}>Tanggal pengesahan</Text>
@@ -563,6 +581,26 @@ export default function PtwPDF({
                   </View>
                 </View>
               </View>
+              {(() => {
+                const dari = (opts.mulai || '').slice(0, 10);
+                const sampai = (opts.selesai || '9999-12-31').slice(0, 10);
+                const lembur = overtimes
+                  .filter((o) => o.status === 'Disetujui' && o.tanggal >= dari && o.tanggal <= sampai)
+                  .sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+                if (lembur.length === 0) return null;
+                return (
+                  <View style={styles.umumRow}>
+                    <Text style={styles.umumLabel}>Lembur (disetujui)</Text>
+                    <View style={[styles.umumVal, { paddingVertical: 1 }]}>
+                      {lembur.map((o) => (
+                        <Text key={o.id} style={{ fontSize: fs }}>
+                          {formatDate(o.tanggal)}: {o.jam_mulai} s/d {o.jam_selesai}{o.jam_selesai <= o.jam_mulai ? ' (+1 hari)' : ''} — {formatDuration(overtimeMinutes(o.jam_mulai, o.jam_selesai))}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })()}
               <View style={styles.umumRow}>
                 <Text style={styles.umumLabel}>Lokasi Pekerjaan</Text>
                 <Text style={styles.umumVal}>: {location || `Area Proyek ${projectName || projectId}`}</Text>
@@ -748,7 +786,7 @@ export default function PtwPDF({
                   <View style={{ width: '40%' }}>
                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 0.5 }}><View style={styles.checkBoxEmpty}/><Text style={{ flex: 1, fontSize: 4, lineHeight: 1.0 }}>Selesai dan diperiksa, lokasi kerja ditinggalkan dalam keadaan aman dan bahwa installasi dapat beroperasi kembali secara normal</Text></View>
                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 0.5 }}><View style={styles.checkBoxEmpty}/><Text style={{ flex: 1, fontSize: 4, lineHeight: 1.0 }}>Tidak teralisasikan dan secara tegas di hentikan</Text></View>
-                     <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 0.5 }}><View style={opts.nextNumber ? styles.checkBoxFilled : styles.checkBoxEmpty}/><Text style={{ flex: 1, fontSize: 4, lineHeight: 1.0 }}>Belum selesai dan akan dilanjutkan pada PTW No. {opts.nextNumber || '…......................................'}</Text></View>
+                     <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 0.5 }}><View style={opts.nextNumber != null ? styles.checkBoxFilled : styles.checkBoxEmpty}/><Text style={{ flex: 1, fontSize: 4, lineHeight: 1.0 }}>Belum selesai dan akan dilanjutkan pada PTW No. {opts.nextNumber || '…......................................'}</Text></View>
                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 0.5 }}><View style={styles.checkBoxEmpty}/><Text style={{ flex: 1, fontSize: 4, lineHeight: 1.0 }}>Beberapa langkah harus diambil sebelum installasi dapat dioperasikan kembali ….........</Text></View>
                   </View>
                   <View style={{ width: '60%', paddingLeft: 10 }}>
@@ -783,15 +821,15 @@ export default function PtwPDF({
         key: 'utama',
         number: ptwNumber,
         mulai: berlakuMulai,
-        selesai: numberedExt ? baseSelesai : berlakuSelesai,
+        selesai: baseSelesai,
         pengesahan: currentDate,
         off: 0,
-        sheetTitle: numberedExt ? 'E. SAFETY CHECKLIST' : undefined,
-        nextNumber: numberedExt ? sortedExt[0].number : null,
+        sheetTitle: hasExtSheets ? 'E. SAFETY CHECKLIST' : undefined,
+        nextNumber: hasExtSheets ? extSheets[0].number : null,
       })}
 
       {/* PERPANJANGAN BERNOMOR — tiap perpanjangan disetujui HSSE dicetak sebagai lembar PTW lengkap dengan nomor barunya. */}
-      {numberedExt && sortedExt.map((ext, k) => {
+      {extSheets.map((ext, k) => {
         const off = ptwValidDayDates(berlakuMulai, addDaysStr(ext.from, -1)).length;
         const hariAkhir = off + ptwValidDayDates(ext.from, ext.to).length;
         return renderFormPage({
@@ -802,35 +840,10 @@ export default function PtwPDF({
           pengesahan: ext.decided_at ? formatDate(ext.decided_at) : currentDate,
           off,
           sheetTitle: `E. SAFETY CHECKLIST — PERPANJANGAN KE-${ext.no} (HARI KE-${off + 1} S/D ${hariAkhir})`,
-          nextNumber: sortedExt[k + 1]?.number ?? null,
+          nextNumber: extSheets[k + 1] ? extSheets[k + 1].number : null,
           ext,
         });
       })}
-      {/* LEMBAR LANJUTAN — PTW diperpanjang melebihi 7 hari. Safety Checklist & Verifikasi
-          untuk hari berikutnya dicetak menyatu di dokumen ini, satu lembar per 7 hari. */}
-      {!numberedExt && Array.from({ length: totalWeeks - 1 }, (_, w) => (
-        <Page key={`lanjutan-${w + 1}`} size="A4" orientation="landscape" style={styles.page}>
-          <View style={[styles.topHeader, { backgroundColor: typeDef.color }]}>
-            <View style={styles.topHeaderLogo}>
-              <Image src="/assets/logo/main-logo.png" style={{ width: '90%', objectFit: 'contain' }} />
-            </View>
-            <View style={styles.topHeaderCenter}>
-              <Text style={[styles.headerTitle, { color: typeDef.textColor }]}>LEMBAR LANJUTAN — {typeDef.title.toUpperCase()}</Text>
-              <Text style={[styles.headerSubtitle, { color: typeDef.textColor }]}>
-                No. PTW {ptwNumber || '-'}  |  Perpanjangan: Hari ke-{(w + 1) * 7 + 1} s/d {Math.min((w + 2) * 7, totalDays)}  |  Berlaku s/d {formatDate(berlakuSelesai)}
-              </Text>
-              <Text style={[styles.headerRegion, { color: typeDef.textColor }]}>{projectName || ''}{location ? ` — ${location}` : ''}</Text>
-            </View>
-          </View>
-          <View style={{ marginTop: 4 }}>
-            <SafetySheet weekIndex={w + 1} />
-          </View>
-          <Text style={[styles.disclaimer, { marginTop: 4 }]}>
-            Lembar lanjutan ini adalah bagian dari PTW No. {ptwNumber || '-'} (halaman {w + 2} dari {totalWeeks} lembar checklist). Hari ke-1 s/d 7 ada pada halaman utama.
-          </Text>
-        </Page>
-      ))}
-
       {hasGasForm && (
         <Page size="A4" orientation="landscape" style={styles.page}>
           <Text style={{ fontSize: fs_title, fontWeight: 'bold', marginBottom: 4 }}>FORMULIR UJI KANDUNGAN GAS</Text>

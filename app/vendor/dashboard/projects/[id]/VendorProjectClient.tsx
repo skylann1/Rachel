@@ -20,6 +20,8 @@ import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel'
 import PtwDailyCheckTab from '@/components/ptw/PtwDailyCheckTab';
 import PtwClosureModal from '@/components/ptw/PtwClosureModal';
 import PtwExtensionModal from '@/components/ptw/PtwExtensionModal';
+import PtwOvertimeModal from '@/components/ptw/PtwOvertimeModal';
+import { OVERTIME_TONE, overtimeMinutes, formatDuration } from '@/lib/ptw-overtime';
 import { requestProjectCompletion } from '@/app/dashboard/projects/[id]/completion-actions';
 import { assignFieldRole, submitDailyCheck } from '@/app/dashboard/projects/[id]/actions';
 import { todayDateString } from '@/lib/site-ops';
@@ -93,7 +95,7 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
 }
 
 export function VendorProjectClient({
-  project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, docChanges, myReviews,
+  project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, docChanges, ptwOvertimes, myReviews,
   ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canAssignHolder, canFillFieldRole,
   canRequestClosure, canRequestCompletion, canRequestExtension,
 }: {
@@ -110,6 +112,8 @@ export function VendorProjectClient({
   /** Jejak audit Prosedur/JSA/PTW proyek ini, terbaru dulu — sama persis yang dilihat PGN/PGSOL di tab Riwayat internal (lihat document_logs). */
   documentLogs?: any[];
   docChanges?: any[];
+  /** Pengajuan lembur PTW (ptw_overtimes) untuk proyek ini. */
+  ptwOvertimes?: any[];
   /** Dokumen yang sedang menunggu review user ini (HSE/PM Vendor) — tombol langsung ke halaman review. */
   myReviews?: { key: string; label: string; href: string }[];
   ptwFieldAssignments?: any[];
@@ -132,6 +136,7 @@ export function VendorProjectClient({
   const [qrModalToken, setQrModalToken] = useState<string | null>(null);
   const [closurePtwId, setClosurePtwId] = useState<string | null>(null);
   const [extensionPtwId, setExtensionPtwId] = useState<string | null>(null);
+  const [overtimePtwId, setOvertimePtwId] = useState<string | null>(null);
   const [completionNote, setCompletionNote] = useState('');
   const [completionLoading, setCompletionLoading] = useState(false);
   const [completionError, setCompletionError] = useState('');
@@ -254,6 +259,22 @@ export function VendorProjectClient({
             validFrom={target.valid_from}
             validTo={target.valid_to}
             onClose={() => setExtensionPtwId(null)}
+          />
+        );
+      })()}
+
+      {overtimePtwId && (() => {
+        const target = ptws.find((p: any) => p.id === overtimePtwId);
+        if (!target || !target.valid_from || !target.valid_to) return null;
+        return (
+          <PtwOvertimeModal
+            ptwId={target.id}
+            ptwTitle={`${ptwTitleById[target.id]}${target.ptw_number ? ` — ${target.ptw_number}` : ''}`}
+            validFrom={target.valid_from}
+            validTo={target.valid_to}
+            workStart={target.work_start}
+            workEnd={target.work_end}
+            onClose={() => setOvertimePtwId(null)}
           />
         );
       })()}
@@ -748,6 +769,31 @@ export function VendorProjectClient({
                             </button>
                           )}
 
+                          {(ptwOvertimes ?? []).some((o: any) => o.ptw_id === row.id) && (
+                            <div className="p-3 bg-slate-50 rounded-lg text-sm border border-slate-200 space-y-2">
+                              <p className="font-bold text-slate-700 flex items-center gap-2"><Clock className="w-4 h-4" /> Lembur</p>
+                              {(ptwOvertimes ?? []).filter((o: any) => o.ptw_id === row.id).map((o: any) => (
+                                <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <span>
+                                    <strong>{new Date(`${o.tanggal}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                                    {' '}· {o.jam_mulai}–{o.jam_selesai} ({formatDuration(overtimeMinutes(o.jam_mulai, o.jam_selesai))})
+                                    {o.status === 'Ditolak' && o.decision_note ? <span className="text-rose-600"> — {o.decision_note}</span> : null}
+                                  </span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${OVERTIME_TONE[o.status as keyof typeof OVERTIME_TONE]}`}>{o.status}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {canRequestExtension && rowStatus === 'Approved' && row.valid_from && row.valid_to && (
+                            <button
+                              onClick={() => setOvertimePtwId(row.id)}
+                              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors"
+                            >
+                              <Clock className="w-4 h-4" /> Ajukan Lembur
+                            </button>
+                          )}
+
                           {canRequestClosure && (rowStatus === 'Approved' || rowStatus === 'Expired') && (
                             <button
                               onClick={() => setClosurePtwId(row.id)}
@@ -794,6 +840,7 @@ export function VendorProjectClient({
                                   dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
                             extensions={row.extensions || []}
                             extensionCount={row.extension_count}
+                            overtimes={(ptwOvertimes ?? []).filter((o: any) => o.ptw_id === row.id)}
                                   jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                   siblings={ptws}
                                   signatories={ptwSignatories?.[row.id]}

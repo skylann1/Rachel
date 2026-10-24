@@ -98,6 +98,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
 
   const documentLogs = await getDocumentLogs(projectId);
   const docChanges = await loadProjectDocumentChanges(supabase, projectId);
+  const { data: ptwOvertimes } = await supabase.from('ptw_overtimes').select('*').eq('project_id', projectId).order('tanggal', { ascending: true });
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
 
@@ -189,6 +190,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       assignmentSlots={assignmentSlots}
       documentLogs={documentLogs}
       docChanges={docChanges}
+      ptwOvertimes={ptwOvertimes ?? []}
       myReviews={myReviews}
       ptwFieldAssignments={ptwFieldAssignments ?? []}
       ptwDailyChecks={ptwDailyChecks ?? []}

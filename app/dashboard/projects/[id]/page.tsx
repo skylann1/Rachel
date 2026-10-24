@@ -106,6 +106,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
 
   const documentLogs = await getDocumentLogs(projectId);
   const docChanges = await loadProjectDocumentChanges(supabase, projectId);
+  const { data: ptwOvertimes } = await supabase.from('ptw_overtimes').select('*').eq('project_id', projectId).order('tanggal', { ascending: true });
 
   // Baris stage_assignments untuk SELURUH tahap pipeline dokumen proyek ini
   // (bukan cuma tahap yang sedang aktif) — dipakai AdminProjectClient untuk
@@ -204,6 +205,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
         equipmentExpiry={equipmentExpiry}
         documentLogs={documentLogs}
         docChanges={docChanges}
+        ptwOvertimes={ptwOvertimes ?? []}
         permissions={permissions}
         siteCheckins={siteCheckins ?? []}
         toolboxMeetings={toolboxMeetings ?? []}

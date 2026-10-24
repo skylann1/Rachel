@@ -20,6 +20,7 @@ import { buildProsedurPdfData } from '@/lib/prosedur-pdf-data';
 import { ChangeLogPanel } from '@/components/prosedur/ChangeLogPanel';
 import { ProsedurReviewerEditor } from '@/components/prosedur/ProsedurReviewerEditor';
 import { readChangeLog } from '@/lib/prosedur-diff';
+import { OVERTIME_TONE, overtimeMinutes, formatDuration } from '@/lib/ptw-overtime';
 import { JsaReviewerEditor } from '@/components/prosedur/JsaReviewerEditor';
 import { PtwReviewerEditor } from '@/components/prosedur/PtwReviewerEditor';
 import PtwPDF from '@/components/ptw/PtwPDF';
@@ -28,7 +29,7 @@ import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
 import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel';
 import PtwDailyCheckTab from '@/components/ptw/PtwDailyCheckTab';
 import { assignFieldRole, submitDailyCheck } from '@/app/dashboard/projects/[id]/actions';
-import { decidePtwClosure, decideProjectCompletion, decidePtwExtension } from '@/app/dashboard/projects/[id]/completion-actions';
+import { decidePtwClosure, decideProjectCompletion, decidePtwExtension, decidePtwOvertime } from '@/app/dashboard/projects/[id]/completion-actions';
 import { getEffectivePtwStatus, PTW_STATUS, PTW_STAGE_PERMISSION, PTW_STAGE_SEQUENCE, ptwStageIndex } from '@/lib/ptw-status';
 import { JSA_STATUS, JSA_STAGE_PERMISSION, isJsaPending, JSA_STAGE_SEQUENCE, jsaStageIndex } from '@/lib/jsa-status';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, isProcedurePending, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
@@ -437,7 +438,7 @@ function ApproveModal({ labelKey, warning, requireNumber, onConfirm, onCancel, i
 }
 
 export default function AdminProjectClient({
-  project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, docChanges, permissions,
+  project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, docChanges, ptwOvertimes, permissions,
   siteCheckins, toolboxMeetings, stageAssignments,
   ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canVerifyClosure, canVerifyCompletion, canVerifyExtension,
 }: {
@@ -449,6 +450,8 @@ export default function AdminProjectClient({
   documentLogs?: any[],
   /** Riwayat perubahan langsung JSA/PTW (document_changes). */
   docChanges?: any[],
+  /** Pengajuan lembur PTW (ptw_overtimes). */
+  ptwOvertimes?: any[],
   /** roles.permissions milik user saat ini — sumber kebenaran VISIBILITY kartu approval (bukan lagi tombolnya), lihat utils/permissions.ts. */
   permissions?: Record<string, string[]> | null,
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
@@ -1337,6 +1340,7 @@ export default function AdminProjectClient({
                             dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
                             extensions={row.extensions || []}
                             extensionCount={row.extension_count}
+                            overtimes={(ptwOvertimes ?? []).filter((o: any) => o.ptw_id === row.id)}
                             jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                             siblings={ptws}
                             signatories={ptwSignatories?.[row.id]}
@@ -1577,6 +1581,46 @@ export default function AdminProjectClient({
                                  )}
                                </div>
                              )}
+                             {rowEffective === PTW_STATUS.aktif && (ptwOvertimes ?? []).some((o: any) => o.ptw_id === row.id) && (
+                               <div className="rounded-xl p-3 mb-4 text-xs space-y-2 border bg-violet-50 border-violet-200 text-violet-900">
+                                 <p className="font-bold">Lembur PTW</p>
+                                 {(ptwOvertimes ?? []).filter((o: any) => o.ptw_id === row.id).map((o: any) => (
+                                   <div key={o.id} className="space-y-1.5 border-t border-violet-100 pt-2 first:border-0 first:pt-0">
+                                     <div className="flex flex-wrap items-center justify-between gap-2">
+                                       <span>
+                                         <strong>{new Date(`${o.tanggal}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                                         {' '}· {o.jam_mulai}–{o.jam_selesai} ({formatDuration(overtimeMinutes(o.jam_mulai, o.jam_selesai))})
+                                       </span>
+                                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${OVERTIME_TONE[o.status as keyof typeof OVERTIME_TONE]}`}>{o.status}</span>
+                                     </div>
+                                     <p><strong>Alasan:</strong> {o.alasan}</p>
+                                     {o.status === 'Ditolak' && o.decision_note && <p className="text-rose-700"><strong>Ditolak:</strong> {o.decision_note}</p>}
+                                     {o.status === 'Menunggu' && (canVerifyExtension ? (
+                                       rejecting === `ot-${o.id}` ? (
+                                         <div className="space-y-2">
+                                           <textarea rows={2} value={decisionNote} onChange={e => setDecisionNote(e.target.value)} placeholder="Alasan penolakan (wajib)" className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white" />
+                                           {decisionError && <p className="text-rose-600 font-medium">{decisionError}</p>}
+                                           <div className="flex gap-2">
+                                             <button disabled={decisionBusy} onClick={() => { setRejecting(null); setDecisionNote(''); setDecisionError(''); }} className="flex-1 py-2 font-bold text-slate-600 bg-white border border-slate-200 rounded-lg">Batal</button>
+                                             <button disabled={decisionBusy || !decisionNote.trim()} onClick={() => runDecision(() => decidePtwOvertime(o.id, false, decisionNote))} className="flex-1 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg">Tolak</button>
+                                           </div>
+                                         </div>
+                                       ) : (
+                                         <div className="space-y-2">
+                                           {decisionError && <p className="text-rose-600 font-medium">{decisionError}</p>}
+                                           <div className="flex gap-2">
+                                             <button disabled={decisionBusy} onClick={() => { setRejecting(`ot-${o.id}`); setDecisionError(''); }} className="flex-1 py-2 font-bold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg">Tolak</button>
+                                             <button disabled={decisionBusy} onClick={() => runDecision(() => decidePtwOvertime(o.id, true))} className="flex-1 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg">{decisionBusy ? 'Memproses...' : 'Setujui Lembur'}</button>
+                                           </div>
+                                         </div>
+                                       )
+                                     ) : (
+                                       <p className="italic text-violet-700">Hanya HSSE yang ditugaskan di proyek ini yang dapat memverifikasi.</p>
+                                     ))}
+                                   </div>
+                                 ))}
+                               </div>
+                             )}
                              {(rowIsClosing || rowIsClosed) && (
                                <div className={`rounded-xl p-3 mb-4 text-xs space-y-1 border ${rowIsClosed ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-sky-50 border-sky-200 text-sky-900'}`}>
                                  {row.closure_finished_at && <p><strong>Pekerjaan selesai:</strong> {new Date(row.closure_finished_at).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
@@ -1639,6 +1683,7 @@ export default function AdminProjectClient({
                                  dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
                             extensions={row.extensions || []}
                             extensionCount={row.extension_count}
+                            overtimes={(ptwOvertimes ?? []).filter((o: any) => o.ptw_id === row.id)}
                                  jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                  siblings={ptws}
                                  signatories={ptwSignatories?.[row.id]}

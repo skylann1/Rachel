@@ -244,3 +244,84 @@ export async function decidePtwExtension(ptwId: string, approve: boolean, note?:
   refresh(ptw.project_id);
   return { success: true };
 }
+
+/** Vendor mengajukan lembur (di luar jam kerja normal PTW) untuk satu tanggal. */
+export async function requestPtwOvertime(params: {
+  ptwId: string; tanggal: string; mulai: string; selesai: string; alasan: string;
+}): Promise<Result> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Silakan login terlebih dahulu." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(params.tanggal)) return { success: false, error: "Tanggal lembur tidak valid." };
+
+  const ptw = await loadPtw(supabase, params.ptwId);
+  if (!ptw) return { success: false, error: "PTW tidak ditemukan." };
+
+  const { error } = await supabase.rpc("ptw_request_overtime", {
+    p_ptw_id: params.ptwId,
+    p_tanggal: params.tanggal,
+    p_mulai: params.mulai,
+    p_selesai: params.selesai,
+    p_alasan: params.alasan,
+  });
+  if (error) return { success: false, error: error.message };
+
+  await logDocumentEvent(supabase, {
+    docType: "ptw", docId: params.ptwId, projectId: ptw.project_id, actorId: user.id,
+    action: `Lembur PTW Diajukan (${params.tanggal} ${params.mulai}–${params.selesai})`, notes: params.alasan,
+  });
+  await notifyAssignees({
+    projectId: ptw.project_id,
+    docType: "ptw",
+    stageKey: "ptw.numbering_hsse",
+    type: "action_required",
+    title: "Lembur PTW Menunggu Verifikasi",
+    message: `Vendor mengajukan lembur PTW ${ptw.ptw_number ?? ""} pada proyek "${ptw.project?.name}" tanggal ${params.tanggal}, ${params.mulai}–${params.selesai}.`,
+    link: `/dashboard/projects/${ptw.project_id}`,
+  });
+
+  refresh(ptw.project_id);
+  return { success: true };
+}
+
+/** HSSE menyetujui / menolak pengajuan lembur. */
+export async function decidePtwOvertime(overtimeId: string, approve: boolean, note?: string): Promise<Result> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Silakan login terlebih dahulu." };
+
+  const { data: ot } = await supabase
+    .from("ptw_overtimes")
+    .select("id, ptw_id, project_id, tanggal, jam_mulai, jam_selesai")
+    .eq("id", overtimeId)
+    .maybeSingle();
+  if (!ot) return { success: false, error: "Pengajuan lembur tidak ditemukan." };
+  const ptw = await loadPtw(supabase, ot.ptw_id);
+
+  const { error } = await supabase.rpc("ptw_decide_overtime", {
+    p_overtime_id: overtimeId,
+    p_approve: approve,
+    p_note: note?.trim() || null,
+  });
+  if (error) return { success: false, error: error.message };
+
+  await logDocumentEvent(supabase, {
+    docType: "ptw", docId: ot.ptw_id, projectId: ot.project_id, actorId: user.id,
+    action: approve ? "Lembur PTW Disetujui" : "Lembur PTW Ditolak",
+    notes: `${ot.tanggal} ${ot.jam_mulai}–${ot.jam_selesai}${note?.trim() ? ` — ${note.trim()}` : ""}`,
+  });
+  if (ptw?.project?.vendor_id) {
+    await notifyOrgMembers({
+      orgId: ptw.project.vendor_id,
+      type: approve ? "approval" : "warning",
+      title: approve ? "Lembur PTW Disetujui" : "Lembur PTW Ditolak",
+      message: approve
+        ? `Lembur PTW ${ptw.ptw_number ?? ""} tanggal ${ot.tanggal} (${ot.jam_mulai}–${ot.jam_selesai}) pada proyek "${ptw.project.name}" disetujui.`
+        : `Lembur PTW ${ptw.ptw_number ?? ""} tanggal ${ot.tanggal} pada proyek "${ptw.project.name}" ditolak: ${note?.trim()}.`,
+      link: `/vendor/dashboard/projects/${ot.project_id}`,
+    });
+  }
+
+  refresh(ot.project_id);
+  return { success: true };
+}
