@@ -24,7 +24,7 @@ export default async function VendorStaffPage(props: { searchParams?: Promise<{ 
   const limit = 5;
   const offset = (page - 1) * limit;
 
-  const { data: roles } = await supabase.from('roles').select('name, is_system, type').eq('type', 'vendor').order('name');
+  const { data: roles } = await supabase.from('roles').select('name, is_system, type').eq('type', 'vendor').or(`org_id.is.null,org_id.eq.${orgId}`).order('name');
   const availableRoles = roles || [];
 
   // Nama perusahaan dibaca dari `organizations` lewat `profiles.org_id`:

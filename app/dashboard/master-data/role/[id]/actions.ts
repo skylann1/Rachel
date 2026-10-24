@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
-import { assertSameRoleType, sanitizePermissionsForType, type RoleActor } from '@/lib/role-access';
+import { assertSameRoleType, sanitizePermissionsForType, orgRoleName, roleDisplayName, type RoleActor } from '@/lib/role-access';
 import { allPermissionModules } from '../constants';
 import { logActivity } from '@/lib/activity-log';
 import { diffFields, diffPermissions } from '@/lib/activity-diff';
@@ -25,7 +25,7 @@ export async function updateRolePermissions(
     const allowed = await hasPermissionForUser(authClient, user.id, 'masterData', 'manage_role');
     if (!allowed) return { error: 'Anda tidak memiliki izin untuk mengelola role.' };
 
-    const { data: actorProfile } = await authClient.from('profiles').select('type').eq('id', user.id).single();
+    const { data: actorProfile } = await authClient.from('profiles').select('type, org_id').eq('id', user.id).single();
     const crossOrg = actorProfile?.type === 'pgn';
 
     const supabase = createAdminClient();
@@ -35,7 +35,7 @@ export async function updateRolePermissions(
     // crossOrg) cuma boleh mengubah role dengan tipe & is_system yang sama
     // dengan organisasinya sendiri, dan tidak boleh memindahkan role ke
     // tipe lain.
-    const actor: RoleActor = { userId: user.id, type: actorProfile?.type ?? null, crossOrg };
+    const actor: RoleActor = { userId: user.id, type: actorProfile?.type ?? null, orgId: actorProfile?.org_id ?? null, crossOrg };
     const typeResult = await assertSameRoleType(supabase, actor, id);
     if (typeResult.error) return { error: typeResult.error };
 
@@ -49,6 +49,8 @@ export async function updateRolePermissions(
       }
     }
 
+    // Role org: nama selalu diberi akhiran org (unik global), apa pun yang dikirim klien.
+    const nextName = crossOrg ? name : orgRoleName(roleDisplayName(name, actor.orgId), actor.orgId as string);
     const nextPermissions = sanitizePermissionsForType(permissions, type, allPermissionModules);
     const { data: beforeRole } = await supabase
       .from('roles')
@@ -59,7 +61,7 @@ export async function updateRolePermissions(
     const { error } = await supabase
       .from('roles')
       .update({
-        name,
+        name: nextName,
         description,
         type,
         permissions: nextPermissions
@@ -76,7 +78,7 @@ export async function updateRolePermissions(
       metadata: {
         changes: diffFields(
           beforeRole ?? {},
-          { name, description, type },
+          { name: nextName, description, type },
           { name: 'Nama role', description: 'Deskripsi', type: 'Tipe' },
         ),
         permissions: diffPermissions(beforeRole?.permissions, nextPermissions),

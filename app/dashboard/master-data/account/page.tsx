@@ -78,7 +78,7 @@ export default async function AccountManagementPage(props: { searchParams?: Prom
   // khusus internal (pgn) + PGSOL.
   let rolesQuery = supabase.from('roles').select('name, is_system, type').order('name');
   if (!crossOrg) {
-    rolesQuery = rolesQuery.eq('type', actorType ?? '__none__');
+    rolesQuery = rolesQuery.eq('type', actorType ?? '__none__').or(`org_id.is.null,org_id.eq.${actorOrgId}`);
   } else {
     rolesQuery = rolesQuery.neq('type', 'vendor');
   }

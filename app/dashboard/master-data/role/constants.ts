@@ -130,7 +130,7 @@ export const allPermissionModules = [
       { key: 'view_account', label: 'Melihat Data Akun', allowedTypes: ['pgn', 'pgsol'] },
       { key: 'manage_account', label: 'Mengelola Data Akun', allowedTypes: ['pgn'] },
       { key: 'manage_org_staff', label: 'Mengelola Staff Organisasi Sendiri', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
-      { key: 'manage_role', label: 'Mengelola Role & Permission', allowedTypes: ['pgn'] },
+      { key: 'manage_role', label: 'Mengelola Role & Permission (PGN: semua role; PGSOL/Vendor: role organisasi sendiri)', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'view_project', label: 'Melihat Master Proyek', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'manage_project', label: 'Mengelola Master Proyek', allowedTypes: ['pgn'] },
     ]

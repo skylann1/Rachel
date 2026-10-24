@@ -235,3 +235,5 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
     `ptw_request_extension` / `ptw_decide_extension` diganti. Menggantikan batas "total 7 hari"
     di item 16. Idempotent. Bergantung pada item 14 dan 16. **Jalankan SEBELUM deploy.**
     Sudah diterapkan di project Supabase live lewat MCP pada 2026-10-19.
+
+8. `schema_role_org_scope.sql` — menambah `roles.org_id` (role milik organisasi). Harus dijalankan SEBELUM deploy kode "Role & Permission per organisasi"; tanpa kolom ini halaman Role error. Idempotent.

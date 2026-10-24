@@ -18,6 +18,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 export interface RoleActor {
   userId: string;
   type: string | null; // tipe organisasi aktor sendiri ('pgn' | 'pgsol' | 'vendor')
+  orgId: string | null; // organisasi aktor — role org-scoped cuma boleh menyentuh roles.org_id yang sama
   crossOrg: boolean; // true kalau aktor bertipe 'pgn' — boleh kelola role tipe apa pun
 }
 
@@ -34,8 +35,8 @@ export type AssertSameRoleTypeResult =
  */
 export async function assertSameRoleType(adminAuthClient: ReturnType<typeof createAdminClient>, actor: RoleActor, roleId: string): Promise<AssertSameRoleTypeResult> {
   if (actor.crossOrg) return { error: null, targetType: null };
-  const { data: target } = await adminAuthClient.from('roles').select('type, is_system').eq('id', roleId).single();
-  if (!target || target.type !== actor.type) {
+  const { data: target } = await adminAuthClient.from('roles').select('type, is_system, org_id').eq('id', roleId).single();
+  if (!target || target.type !== actor.type || !actor.orgId || target.org_id !== actor.orgId) {
     return { error: 'Role ini bukan bagian dari organisasi Anda.' };
   }
   if (target.is_system) {
@@ -75,4 +76,15 @@ export function sanitizePermissionsForType(
     if (filtered.length > 0) sanitized[mod.id] = filtered;
   }
   return sanitized;
+}
+
+/** Nama role org-scoped disimpan dengan akhiran `_<6 hex org_id>` supaya unik global (profiles.role mereferensi roles.name). */
+export function orgRoleName(baseName: string, orgId: string): string {
+  const slug = baseName.toLowerCase().trim().replace(/\s+/g, '_');
+  return `${slug}_${orgId.replace(/-/g, '').slice(0, 6)}`;
+}
+
+/** Nama untuk ditampilkan: buang akhiran org kalau role ini milik organisasi. */
+export function roleDisplayName(name: string, orgId?: string | null): string {
+  return orgId ? name.replace(/_[0-9a-f]{6}$/, '') : name;
 }

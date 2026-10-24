@@ -1,5 +1,6 @@
 'use client';
 
+import { roleDisplayName } from '@/lib/role-access';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Save, Shield, Loader2 } from 'lucide-react';
@@ -8,7 +9,7 @@ import { useRouter } from 'next/navigation';
 
 export default function RolePermissionsClient({ role, allModules }: { role: any, allModules: any[] }) {
   const [loading, setLoading] = useState(false);
-  const [name, setName] = useState(role.name);
+  const [name, setName] = useState(roleDisplayName(role.name, role.org_id));
   const [description, setDescription] = useState(role.description || '');
   const [type, setType] = useState(role.type || 'pgn');
   const [permissions, setPermissions] = useState<Record<string, string[]>>(role.permissions || {});

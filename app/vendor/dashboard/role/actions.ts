@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermissionForUser } from '@/utils/permissions';
-import { assertSameRoleType, type RoleActor } from '@/lib/role-access';
+import { assertSameRoleType, orgRoleName, roleDisplayName, type RoleActor } from '@/lib/role-access';
 
 const VALID_ROLE_TYPES = ['pgn', 'pgsol', 'vendor'];
 
@@ -25,9 +25,12 @@ async function requireRoleAccess(): Promise<{ error: string | null; actor: RoleA
   const allowed = await hasPermissionForUser(supabase, user.id, 'masterData', 'manage_role');
   if (!allowed) return { error: 'Anda tidak memiliki izin untuk mengelola role.', actor: null };
 
-  const { data: profile } = await supabase.from('profiles').select('type').eq('id', user.id).single();
+  const { data: profile } = await supabase.from('profiles').select('type, org_id').eq('id', user.id).single();
   const type = profile?.type ?? null;
-  return { error: null, actor: { userId: user.id, type, crossOrg: type === 'pgn' } };
+  const crossOrg = type === 'pgn';
+  // Role sekarang milik organisasi (roles.org_id): aktor non-PGN tanpa org tidak punya ruang lingkup.
+  if (!crossOrg && !profile?.org_id) return { error: 'Organisasi Anda belum tertaut. Hubungi administrator.', actor: null };
+  return { error: null, actor: { userId: user.id, type, orgId: profile?.org_id ?? null, crossOrg } };
 }
 
 export async function addRole(formData: FormData) {
@@ -54,7 +57,8 @@ export async function addRole(formData: FormData) {
     const { error } = await adminClient
       .from('roles')
       .insert({
-        name: name.toLowerCase().replace(/\s+/g, '_'), // Normalize name to lower snake_case
+        name: actor.crossOrg ? name.toLowerCase().replace(/\s+/g, '_') : orgRoleName(name, actor.orgId as string), // snake_case; role org diberi akhiran org agar unik global
+        org_id: actor.crossOrg ? null : actor.orgId,
         description: description,
         type: type,
         is_system: false, // User created roles are never system roles
@@ -100,7 +104,8 @@ export async function updateRole(id: string, formData: FormData) {
     const { error } = await adminClient
       .from('roles')
       .update({
-        name: name.toLowerCase().replace(/\s+/g, '_'), // Normalize name to lower snake_case
+        name: actor.crossOrg ? name.toLowerCase().replace(/\s+/g, '_') : orgRoleName(name, actor.orgId as string), // snake_case; role org diberi akhiran org agar unik global
+        org_id: actor.crossOrg ? null : actor.orgId,
         description: description,
         type: type,
       })

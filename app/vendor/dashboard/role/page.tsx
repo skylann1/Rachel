@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { allPermissionModules } from './constants';
 import AddRoleModal from './AddRoleModal';
 import { deleteRole } from './actions';
+import { roleDisplayName } from '@/lib/role-access';
 
 export default function RolePermissionPage() {
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
@@ -16,12 +17,18 @@ export default function RolePermissionPage() {
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [myOrgId, setMyOrgId] = useState<string | null>(null);
+  const [isPgn, setIsPgn] = useState(false);
   const supabase = createClient();
 
   const fetchData = async () => {
     setLoading(true);
-    // Fetch roles (only vendor)
-    const { data: rolesData } = await supabase.from('roles').select('*').eq('type', 'vendor').order('created_at');
+    // Role global (org_id null) tampil read-only; role milik organisasi sendiri bisa dikelola.
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: actorProfile } = await supabase.from('profiles').select('org_id').eq('id', user?.id).single();
+    setMyOrgId(actorProfile?.org_id ?? null);
+    const { data: rolesData } = await supabase.from('roles').select('*').eq('type', 'vendor')
+      .or(`org_id.is.null,org_id.eq.${actorProfile?.org_id ?? '00000000-0000-0000-0000-000000000000'}`).order('created_at');
     
     // Fetch profile counts
     const { data: profilesData } = await supabase.from('profiles').select('role');
@@ -70,6 +77,8 @@ export default function RolePermissionPage() {
     usersCount: roleCounts[r.name] || 0
   }));
 
+  // PGN boleh kelola semua; org lain hanya role dengan org_id miliknya (role global read-only).
+  const canManage = (r: any) => isPgn || (!!myOrgId && r.org_id === myOrgId);
   const selectedRole = liveRoles.find(r => r.id === selectedRoleId) || liveRoles[0];
 
   return (
@@ -129,7 +138,7 @@ export default function RolePermissionPage() {
                       <div className="flex items-center">
                         <div>
                         <div className="text-sm font-bold text-slate-800 flex items-center gap-2 capitalize">
-                          {role.name}
+                          {roleDisplayName(role.name, role.org_id)}
                           {role.is_system && (
                             <span className="bg-slate-100 text-slate-500 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold">System</span>
                           )}
@@ -153,10 +162,12 @@ export default function RolePermissionPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className={`flex justify-end gap-2 transition-opacity ${selectedRoleId === role.id ? 'opacity-100' : 'opacity-100 sm:opacity-0 group-hover:opacity-100'}`}>
-                        <Link href={`/vendor/dashboard/role/${role.id}`} className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" title="Kelola Role & Permission" onClick={(e) => e.stopPropagation()}>
+                        {canManage(role) && (
+                          <Link href={`/vendor/dashboard/role/${role.id}`} className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" title="Kelola Role & Permission" onClick={(e) => e.stopPropagation()}>
                           <Settings2 className="w-4 h-4" />
                         </Link>
-                        {!role.is_system && (
+                        )}
+                        {!role.is_system && canManage(role) && (
                           <button 
                             disabled={isDeleting === role.id}
                             onClick={(e) => handleDelete(e, role.id, role.name)}
@@ -181,7 +192,7 @@ export default function RolePermissionPage() {
             <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Preview Hak Akses</h3>
-                <p className="text-xs text-slate-500 mt-1">Role: <span className="font-bold text-primary">{selectedRole.name}</span></p>
+                <p className="text-xs text-slate-500 mt-1">Role: <span className="font-bold text-primary">{roleDisplayName(selectedRole.name, selectedRole.org_id)}</span></p>
               </div>
             </div>
 
@@ -214,10 +225,14 @@ export default function RolePermissionPage() {
                 );
               })}
             </div>
+            {canManage(selectedRole) ? (
             <Link href={`/vendor/dashboard/role/${selectedRole.id}`} className="mt-6 flex items-center justify-center gap-2 w-full bg-slate-100 hover:bg-primary/10 hover:text-primary text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors border border-slate-200 hover:border-primary/30">
-              Kelola Akses {selectedRole.name}
+              Kelola Akses {roleDisplayName(selectedRole.name, selectedRole.org_id)}
               <ArrowRight className="w-4 h-4" />
             </Link>
+            ) : (
+              <p className="mt-6 text-xs text-slate-500 text-center">Role global — hanya dapat dikelola oleh PGN.</p>
+            )}
           </div>
         )}
 

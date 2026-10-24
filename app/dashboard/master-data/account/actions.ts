@@ -89,8 +89,8 @@ async function assertAssignableRole(
   if (role === 'admin') {
     return 'Role admin tidak dapat diberikan dari halaman ini.';
   }
-  const { data: roleRow } = await adminAuthClient.from('roles').select('type').eq('name', role).single();
-  if (!roleRow || !actor.orgKind || roleRow.type !== actor.orgKind) {
+  const { data: roleRow } = await adminAuthClient.from('roles').select('type, org_id').eq('name', role).single();
+  if (!roleRow || !actor.orgKind || roleRow.type !== actor.orgKind || (roleRow.org_id && roleRow.org_id !== actor.orgId)) {
     return 'Role ini tidak tersedia untuk organisasi Anda.';
   }
   return null;
