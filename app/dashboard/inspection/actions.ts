@@ -70,6 +70,17 @@ export async function createInspection(formData: FormData) {
   const activity_type = normalizeActivityType(formData.get("activity_type"));
   const is_project_activity = activity_type !== 'Non-Proyek';
   const assigned_to = formData.get("assigned_to") as string;
+  // Field lengkap (schema_inspection_detail_fields.sql) — semua opsional.
+  const text = (k: string) => ((formData.get(k) as string | null) || '').trim() || null;
+  const description = text("description");
+  const category = text("category");
+  const root_cause = text("root_cause");
+  const immediate_action = text("immediate_action");
+  const recommendation = text("recommendation");
+  const reference_std = text("reference_std");
+  const due_date = text("due_date");
+  const foundRaw = text("found_at");
+  const found_at = foundRaw ? new Date(foundRaw).toISOString() : null;
   
   // Multi-foto: satu laporan bisa punya banyak foto (inspection_photos),
   // foto pertama tetap diduplikasi ke inspections.image_url supaya kode
@@ -97,6 +108,14 @@ export async function createInspection(formData: FormData) {
       image_url,
       is_project_activity,
       activity_type,
+      description,
+      category,
+      found_at,
+      root_cause,
+      immediate_action,
+      recommendation,
+      reference_std,
+      due_date,
       assigned_to: assigned_to || user?.id // Default to reporter if not explicitly assigned
     })
     .select()
@@ -122,7 +141,7 @@ export async function createInspection(formData: FormData) {
       inspection_id: data.id,
       actor_id: user?.id,
       action: 'Laporan Temuan Baru Dibuat & Ditugaskan',
-      notes: `Prioritas: ${priority}, Lokasi: ${location}`
+      notes: `Prioritas: ${priority}, Lokasi: ${location}${due_date ? `, Batas perbaikan: ${due_date}` : ''}`
     });
 
     if (target_vendor) {
@@ -133,7 +152,7 @@ export async function createInspection(formData: FormData) {
         type: 'warning',
         title: `Temuan K3 Baru: ${finding_type}${activity_type === 'Audit / Kunjungan' ? ' (Audit / Kunjungan)' : ''}`,
         message: `Temuan baru "${title}" dilaporkan di lokasi "${location}" dengan prioritas ${priority}.`,
-        link: `/vendor/dashboard/inspection`,
+        link: `/vendor/dashboard/inspection/${data.id}`,
       });
     }
 
@@ -143,10 +162,11 @@ export async function createInspection(formData: FormData) {
         type: 'action_required',
         title: 'Tugas Inspeksi Baru',
         message: `Anda ditugaskan untuk menindaklanjuti temuan "${title}" di lokasi "${location}".`,
-        link: `/dashboard/inspection`,
+        link: `/dashboard/inspection/${data.id}`,
       });
     }
   }
+  return { id: data?.id as string | undefined };
 }
 
 export async function getVendorsAndProjects() {

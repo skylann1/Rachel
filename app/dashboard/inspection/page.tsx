@@ -1,10 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { ModalPortal } from '@/components/ui/modal-portal';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2, Download, History, UserPlus } from 'lucide-react';
-import { getInspections, getVendorsAndProjects, createInspection, delegateInspection, getInspectionLogs, validateInspection, closeInspectionDirectly } from './actions';
-import { uploadImage } from '@/utils/supabase/storage';
+import { getInspections, getVendorsAndProjects, delegateInspection, getInspectionLogs, validateInspection, closeInspectionDirectly } from './actions';
 import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
 import { resolveInspectionGallery } from '@/lib/inspection-photos';
 import { ACTIVITY_TYPES, ACTIVITY_TYPE_META, normalizeActivityType, type ActivityType } from '@/lib/inspection-activity';
@@ -18,7 +18,6 @@ export default function InspectionPage() {
   const [vendorFilter, setVendorFilter] = useState('');
 
   // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDisposisiModalOpen, setIsDisposisiModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isValidasiModalOpen, setIsValidasiModalOpen] = useState(false);
@@ -37,19 +36,11 @@ export default function InspectionPage() {
   // States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [galleryPhotos, setGalleryPhotos] = useState<string[] | null>(null);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [selectedInspection, setSelectedInspection] = useState<any>(null);
   
-  // Form toggles
-  const [activityType, setActivityType] = useState<ActivityType>('Proyek');
   const [activityFilter, setActivityFilter] = useState<'All' | ActivityType>('All');
-  // Non-Proyek = area internal tanpa vendor; Proyek & Audit/Kunjungan boleh menunjuk vendor.
-  const isProjectActivity = activityType !== 'Non-Proyek';
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     loadData();
   }, []);
@@ -97,35 +88,6 @@ export default function InspectionPage() {
     
     return matchesStatus && matchesSearch && matchesLocation && matchesVendor && matchesActivity;
   });
-
-  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    if (imageFiles.length === 0) {
-      alert('Unggah minimal satu foto temuan.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    const formData = new FormData(e.currentTarget);
-    formData.append('activity_type', activityType);
-
-    try {
-      const uploadedUrls = await Promise.all(imageFiles.map((file) => uploadImage(file, 'inspections')));
-      uploadedUrls.forEach((url) => { if (url) formData.append('image_urls', url); });
-
-      await createInspection(formData);
-      alert("Laporan hasil inspeksi berhasil dikirim!");
-      setIsModalOpen(false);
-      setImageFiles([]);
-      await loadData();
-    } catch (err) {
-      console.error(err);
-      alert('Gagal membuat laporan temuan K3.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleDisposisi = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -234,13 +196,13 @@ export default function InspectionPage() {
             <Download className="w-4 h-4" />
             Export PDF/Excel
           </button>
-          <button 
-            onClick={() => setIsModalOpen(true)}
+          <Link
+            href="/dashboard/inspection/new"
             className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm shadow-primary/30"
           >
             <Plus className="w-5 h-5" />
             Lapor Hasil Inspeksi
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -370,6 +332,9 @@ export default function InspectionPage() {
             </div>
             
             <div className="border-t border-slate-100 p-4 bg-slate-50 flex gap-2">
+               <Link href={`/dashboard/inspection/${item.id}`} className="px-3 py-2 text-xs font-bold text-primary bg-white border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors whitespace-nowrap">
+                  Detail
+               </Link>
                <button onClick={() => openHistory(item)} className="px-3 py-2 text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors" title="Log History">
                   <History className="w-4 h-4" />
                </button>
@@ -397,162 +362,6 @@ export default function InspectionPage() {
           </div>
         ))}
       </div>
-
-      {/* Modal Lapor Temuan */}
-      {isModalOpen && (
-        <ModalPortal zIndex={100}>
-          <form onSubmit={handleCreate} className="bg-white rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl h-[90vh] md:h-auto md:max-h-[90vh] animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Camera className="w-5 h-5 text-primary" /> Lapor Hasil Inspeksi Baru</h2>
-                <p className="text-sm text-slate-500 mt-1">Catat temuan inspeksi untuk kegiatan proyek atau non-proyek.</p>
-              </div>
-              <button type="button" onClick={() => { setIsModalOpen(false); setImageFiles([]); }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto space-y-5">
-               {/* Tipe Kegiatan */}
-               <div>
-                  <span className="text-sm font-semibold text-slate-700 block mb-2">Tipe Kegiatan <span className="text-rose-500">*</span></span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Tipe Kegiatan">
-                    {ACTIVITY_TYPES.map(t => {
-                      const meta = ACTIVITY_TYPE_META[t];
-                      const selected = activityType === t;
-                      return (
-                        <button
-                          key={t}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          onClick={() => setActivityType(t)}
-                          className={`text-left rounded-xl border p-3 transition-all ${selected ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
-                        >
-                          <span className={`block text-sm font-bold ${selected ? 'text-primary' : 'text-slate-700'}`}>{meta.label}</span>
-                          <span className="block text-xs text-slate-500 mt-0.5 leading-snug">{meta.desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-               </div>
-
-               {/* Upload Foto */}
-               <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-2">Foto Temuan <span className="text-rose-500">*</span></label>
-                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={(e) => setImageFiles((prev) => [...prev, ...Array.from(e.target.files || [])])} />
-                  {imageFiles.length === 0 ? (
-                    <div onClick={() => fileInputRef.current?.click()} className="w-full h-32 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-50 hover:bg-slate-100 hover:border-primary/50 transition-colors cursor-pointer overflow-hidden">
-                       <UploadCloud className="w-6 h-6 mb-2" />
-                       <span className="text-sm font-medium">Klik untuk upload foto temuan (bisa lebih dari satu)</span>
-                       <span className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB per foto</span>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {imageFiles.map((file, i) => (
-                        <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={URL.createObjectURL(file)} alt={`Preview ${i + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => setImageFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                            className="absolute top-1 right-1 p-1 bg-slate-900/70 text-white rounded-full opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-primary/50 hover:text-primary transition-colors"
-                      >
-                        <UploadCloud className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
-               </div>
-               
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 <div>
-                    <label className="text-sm font-semibold text-slate-700 block mb-2">Jenis Temuan <span className="text-rose-500">*</span></label>
-                    <select name="finding_type" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
-                      <option value="Unsafe Condition">Unsafe Condition (Kondisi Tidak Aman)</option>
-                      <option value="Unsafe Act">Unsafe Act (Tindakan Tidak Aman)</option>
-                      <option value="Near Miss">Near Miss (Hampir Celaka)</option>
-                    </select>
-                 </div>
-                 <div>
-                    <label className="text-sm font-semibold text-slate-700 block mb-2">Priority (Keparahan) <span className="text-rose-500">*</span></label>
-                    <select name="priority" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
-                      <option value="Low">Low (Bisa ditoleransi sementara)</option>
-                      <option value="Medium">Medium (Perlu segera diperbaiki)</option>
-                      <option value="High">High (Berpotensi cedera)</option>
-                      <option value="Critical">Critical (Stop Work Authority!)</option>
-                    </select>
-                 </div>
-               </div>
-
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 <div>
-                    <label className="text-sm font-semibold text-slate-700 block mb-2">Lokasi Temuan <span className="text-rose-500">*</span></label>
-                    <input name="location" required type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm" placeholder="Contoh: Area Boiler 1 / Pantri Kantor" />
-                 </div>
-                 
-                 {isProjectActivity ? (
-                   <div>
-                      <label className="text-sm font-semibold text-slate-700 block mb-2">Vendor Terkait (Opsional)</label>
-                      <select name="target_vendor" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
-                        <option value="">Tidak ada / Pilih Vendor</option>
-                        {vendors.map(v => (
-                          <option key={v.id} value={v.id}>{v.company_name}</option>
-                        ))}
-                      </select>
-                   </div>
-                 ) : (
-                   <div>
-                      <label className="text-sm font-semibold text-slate-700 block mb-2">Catatan Keterlibatan</label>
-                      <input type="text" readOnly value="Tanggung Jawab Internal" className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500" />
-                   </div>
-                 )}
-               </div>
-
-               <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-2">Tugaskan Kepada (Opsional)</label>
-                  <select name="assigned_to" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm">
-                    <option value="">Tugaskan ke Diri Sendiri (Default)</option>
-                    {internalUsers.map(user => (
-                      <option key={user.id} value={user.id}>{user.profiles.full_name}</option>
-                    ))}
-                  </select>
-               </div>
-
-               <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-2">Deskripsi Temuan <span className="text-rose-500">*</span></label>
-                  <textarea 
-                     name="title"
-                     required
-                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 outline-none transition-all text-sm resize-none" 
-                     rows={4} 
-                     placeholder="Deskripsikan dengan detail apa yang terjadi dan mengapa hal tersebut tidak aman..."
-                  ></textarea>
-               </div>
-            </div>
-
-            <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
-              <button type="button" onClick={() => { setIsModalOpen(false); setImageFiles([]); }} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors">Batal</button>
-              <button 
-                type="submit"
-                disabled={isSubmitting}
-                className="px-5 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-xl transition-colors shadow-sm shadow-primary/30 flex items-center gap-2"
-              >
-                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} 
-                 {isSubmitting ? 'Submitting...' : 'Lapor Hasil'}
-              </button>
-            </div>
-          </form>
-        </ModalPortal>
-      )}
 
       {/* Modal Disposisi */}
       {isDisposisiModalOpen && (
