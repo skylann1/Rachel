@@ -422,7 +422,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
   if (!preparerProp?.nama && signatories?.preparer?.nama) preparer.nama = signatories.preparer.nama;
   if (!preparerProp?.jabatan && signatories?.preparer?.jabatan) preparer.jabatan = signatories.preparer.jabatan;
   const approver = signatories?.approver ?? null;
-  const trail: { label: string; nama: string; status: string; tanggal: string }[] = signatories?.trail ?? [];
+  const trail: { label: string; nama: string; jabatan?: string; status: string; tanggal: string }[] = signatories?.trail ?? [];
   const finalApproved = !!approver;
   const teamRows = (team && team.length > 0) ? team : Array.from({ length: 4 }).map(() => ({ nama: '', jabatan: '' }));
 
@@ -430,7 +430,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
         
-        <View fixed style={styles.fixedHeader}>
+        <View fixed style={styles.fixedHeader} render={({ pageNumber }) => (<>
           {/* Title Box - 3 columns: Logo | Company+Title | Revisi */}
           <View style={styles.titleBox}>
             <View style={styles.titleLeft}>
@@ -463,7 +463,8 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
           </View>
         </View>
 
-        {/* Approval Section */}
+        {/* Blok persetujuan hanya di halaman pertama; halaman lanjutan cukup judul + info + header tabel */}
+        {pageNumber === 1 && (
         <View style={styles.approvalSection}>
           <View style={styles.approvalCol}>
             <Text style={styles.approvalTitle}>Disiapkan Oleh</Text>
@@ -506,6 +507,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
             </View>
           </View>
         </View>
+        )}
 
         {/* ===== MAIN TABLE HEADER ===== */}
         <View style={[styles.table, { borderBottomWidth: 0 }]}>
@@ -574,7 +576,7 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
             <View style={[styles.tCell, styles.colParaf]}><Text style={styles.italic}>Tanda tangan penanggung jawab pekerjaan</Text></View>
           </View>
         </View>
-      </View>
+      </>)} />
 
       {/* ===== TABLE BODY ===== */}
       <View style={[styles.table, { borderTopWidth: 0 }]}>
@@ -606,60 +608,51 @@ export default function JsaPDF({ projectId, steps, signatories, preparer: prepar
           
         </View>
 
-        {/* Team Penyusun JSA */}
+        {/* Tim Penyusun + Jejak Persetujuan — satu tabel */}
         <View style={[styles.teamSection, { marginTop: 6 }]} wrap={false}>
-          <Text style={styles.teamTitle}>Team Penyusun JSA</Text>
+          <Text style={styles.teamTitle}>Tim Penyusun & Jejak Persetujuan</Text>
           <View style={styles.teamHeaderRow}>
-            <View style={[styles.teamCellHeader, { width: '6%' }]}><Text>No</Text></View>
-            <View style={[styles.teamCellHeader, { width: '32%' }]}><Text>Nama</Text></View>
-            <View style={[styles.teamCellHeader, { width: '32%' }]}><Text>Jabatan</Text></View>
-            <View style={[styles.teamCellHeader, { width: '30%', borderRightWidth: 0 }]}><Text>Tanda Tangan</Text></View>
+            <View style={[styles.teamCellHeader, { width: '5%' }]}><Text>No</Text></View>
+            <View style={[styles.teamCellHeader, { width: '16%' }]}><Text>Tahap</Text></View>
+            <View style={[styles.teamCellHeader, { width: '27%' }]}><Text>Nama</Text></View>
+            <View style={[styles.teamCellHeader, { width: '22%' }]}><Text>Jabatan</Text></View>
+            <View style={[styles.teamCellHeader, { width: '15%' }]}><Text>Tanda Tangan / Status</Text></View>
+            <View style={[styles.teamCellHeader, { width: '15%', borderRightWidth: 0 }]}><Text>Tanggal</Text></View>
           </View>
           {teamRows.map((member: any, i: number) => (
-            <View key={i} style={styles.teamRow}>
-              <View style={[styles.teamCell, { width: '6%' }]}><Text style={styles.textCenter}>{i + 1}</Text></View>
-              <View style={[styles.teamCell, { width: '32%' }]}><Text>{member?.nama || ''}</Text></View>
-              <View style={[styles.teamCell, { width: '32%' }]}><Text>{member?.jabatan || ''}</Text></View>
-              <View style={[styles.teamCell, { width: '30%', borderRightWidth: 0, alignItems: 'center' }]}>
+            <View key={`t-${i}`} style={styles.teamRow}>
+              <View style={[styles.teamCell, { width: '5%' }]}><Text style={styles.textCenter}>{i + 1}</Text></View>
+              <View style={[styles.teamCell, { width: '16%' }]}><Text>Penyusun</Text></View>
+              <View style={[styles.teamCell, { width: '27%' }]}><Text>{member?.nama || ''}</Text></View>
+              <View style={[styles.teamCell, { width: '22%' }]}><Text>{member?.jabatan || ''}</Text></View>
+              <View style={[styles.teamCell, { width: '15%', alignItems: 'center' }]}>
                 <Text style={[styles.signatureStamp, { fontSize: 6 }]}>{preparerSigned && (member?.nama || '') ? 'DISIAJUKAN' : ''}</Text>
               </View>
+              <View style={[styles.teamCell, { width: '15%', borderRightWidth: 0 }]}><Text></Text></View>
+            </View>
+          ))}
+          {trail.map((t, i) => (
+            <View key={`r-${i}`} style={styles.teamRow}>
+              <View style={[styles.teamCell, { width: '5%' }]}><Text style={styles.textCenter}>{teamRows.length + i + 1}</Text></View>
+              <View style={[styles.teamCell, { width: '16%' }]}><Text>{t.label}</Text></View>
+              <View style={[styles.teamCell, { width: '27%' }]}><Text>{t.nama || '-'}</Text></View>
+              <View style={[styles.teamCell, { width: '22%' }]}><Text>{t.jabatan || ''}</Text></View>
+              <View style={[styles.teamCell, { width: '15%', alignItems: 'center' }]}>
+                {t.status === 'approved' ? (
+                  <Image src="/assets/signed-by.png" style={{ height: 14, objectFit: 'contain' }} />
+                ) : (
+                  <Text style={{
+                    fontWeight: 'bold',
+                    color: t.status === 'rejected' ? '#dc2626' : '#94a3b8',
+                  }}>
+                    {t.status === 'rejected' ? 'Ditolak' : t.status === 'pending' ? 'Menunggu' : 'Belum ditugaskan'}
+                  </Text>
+                )}
+              </View>
+              <View style={[styles.teamCell, { width: '15%', borderRightWidth: 0 }]}><Text>{t.tanggal || ''}</Text></View>
             </View>
           ))}
         </View>
-
-        {/* Jejak persetujuan — seluruh tahap berurutan, bukan hanya tiga blok tanda tangan */}
-        {trail.length > 0 && (
-          <View style={[styles.teamSection, { marginTop: 6 }]} wrap={false}>
-            <Text style={styles.teamTitle}>Jejak Persetujuan</Text>
-            <View style={styles.teamHeaderRow}>
-              <View style={[styles.teamCellHeader, { width: '6%' }]}><Text>No</Text></View>
-              <View style={[styles.teamCellHeader, { width: '24%' }]}><Text>Tahap</Text></View>
-              <View style={[styles.teamCellHeader, { width: '40%' }]}><Text>Penanggung Jawab</Text></View>
-              <View style={[styles.teamCellHeader, { width: '14%' }]}><Text>Status</Text></View>
-              <View style={[styles.teamCellHeader, { width: '16%', borderRightWidth: 0 }]}><Text>Tanggal</Text></View>
-            </View>
-            {trail.map((t, i) => (
-              <View key={i} style={styles.teamRow}>
-                <View style={[styles.teamCell, { width: '6%' }]}><Text style={styles.textCenter}>{i + 1}</Text></View>
-                <View style={[styles.teamCell, { width: '24%' }]}><Text>{t.label}</Text></View>
-                <View style={[styles.teamCell, { width: '40%' }]}><Text>{t.nama || '-'}</Text></View>
-                <View style={[styles.teamCell, { width: '14%', alignItems: 'center' }]}>
-                  {t.status === 'approved' ? (
-                    <Image src="/assets/signed-by.png" style={{ height: 14, objectFit: 'contain' }} />
-                  ) : (
-                    <Text style={{
-                      fontWeight: 'bold',
-                      color: t.status === 'rejected' ? '#dc2626' : '#94a3b8',
-                    }}>
-                      {t.status === 'rejected' ? 'Ditolak' : t.status === 'pending' ? 'Menunggu' : 'Belum ditugaskan'}
-                    </Text>
-                  )}
-                </View>
-                <View style={[styles.teamCell, { width: '16%', borderRightWidth: 0 }]}><Text>{t.tanggal || ''}</Text></View>
-              </View>
-            ))}
-          </View>
-        )}
 
         {/* Keterangan tingkat risiko (RPN) — sama dengan warna kolom RPN di tabel */}
         <View style={[styles.teamSection, { marginTop: 6 }]} wrap={false}>

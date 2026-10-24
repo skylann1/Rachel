@@ -26,6 +26,7 @@ export interface JsaSignatory {
 export interface JsaTrailRow {
   label: string;
   nama: string;
+  jabatan: string;
   status: 'approved' | 'rejected' | 'pending' | 'none';
   tanggal: string;
 }
@@ -51,7 +52,7 @@ const TRAIL_STAGES: { key: string; label: string }[] = [
 ];
 
 function trailRow(label: string, rows: StageAssignmentRowWithName[]): JsaTrailRow {
-  if (rows.length === 0) return { label, nama: '', status: 'none', tanggal: '' };
+  if (rows.length === 0) return { label, nama: '', jabatan: '', status: 'none', tanggal: '' };
   const status: JsaTrailRow['status'] =
     rows.some(r => r.status === 'rejected') ? 'rejected'
     : rows.every(r => r.status === 'approved') ? 'approved'
@@ -60,6 +61,7 @@ function trailRow(label: string, rows: StageAssignmentRowWithName[]): JsaTrailRo
   return {
     label,
     nama: rows.map(r => r.assignee_name || 'Tidak diketahui').join(', '),
+    jabatan: rows.map(r => r.assignee_jabatan || getRoleLabel(r.assignee_role)).filter(Boolean).join(', '),
     status,
     tanggal: status === 'approved' && decided.length > 0 ? formatTanggal(decided[decided.length - 1]) : '',
   };
