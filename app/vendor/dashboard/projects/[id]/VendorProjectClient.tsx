@@ -792,6 +792,8 @@ export function VendorProjectClient({
                                   gasTestFrequency={row.gas_test_frequency || {}}
                                   checklistData={row.safety_checklist || {}}
                                   dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
+                            extensions={row.extensions || []}
+                            extensionCount={row.extension_count}
                                   jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                   siblings={ptws}
                                   signatories={ptwSignatories?.[row.id]}

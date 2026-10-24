@@ -88,7 +88,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
             valid_from, valid_to, work_start, work_end, hot_work_types, gas_test_frequency,
             field_token, stopped_at, stopped_reason, stopped_by_name, safety_checklist,
             closure_requested_at, closure_finished_at, closure_checklist, closure_note, closure_rejection_note, closed_at,
-            extension_requested_to, extension_reason, extension_requested_at, extension_rejection_note, extension_count ),
+            extension_requested_to, extension_reason, extension_requested_at, extension_rejection_note, extension_count, extensions ),
       procedures ( id, status, content )
     `)
     .eq('id', projectId)

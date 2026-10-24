@@ -484,6 +484,8 @@ export default function AdminProjectClient({
   // Verifikasi penutupan PTW / penyelesaian proyek. `rejecting` = id PTW (atau 'project') yang sedang mengisi catatan penolakan.
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [decisionNote, setDecisionNote] = useState('');
+  // Nomor PTW perpanjangan per PTW (diinput HSSE; usulan awal = nomor PTW + "-n").
+  const [extNumbers, setExtNumbers] = useState<Record<string, string>>({});
   const [decisionBusy, setDecisionBusy] = useState(false);
   const [decisionError, setDecisionError] = useState('');
 
@@ -1333,6 +1335,8 @@ export default function AdminProjectClient({
                             gasTestFrequency={row.gas_test_frequency || {}}
                             checklistData={row.safety_checklist || {}}
                             dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
+                            extensions={row.extensions || []}
+                            extensionCount={row.extension_count}
                             jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                             siblings={ptws}
                             signatories={ptwSignatories?.[row.id]}
@@ -1559,10 +1563,12 @@ export default function AdminProjectClient({
                                      </div>
                                    ) : (
                                      <div className="space-y-2 pt-2">
+                                       <label className="block font-bold">Nomor PTW perpanjangan (diinput HSSE) <span className="text-rose-600">*</span></label>
+                                       <input value={extNumbers[row.id] ?? `${row.ptw_number ?? ''}-${(row.extension_count ?? 0) + 2}`} onChange={e => setExtNumbers(prev => ({ ...prev, [row.id]: e.target.value }))} placeholder="mis. PTW-2026-006-2" className="w-full text-xs border border-sky-200 rounded-lg px-2 py-1.5 bg-white font-mono" />
                                        {decisionError && <p className="text-rose-600 font-medium">{decisionError}</p>}
                                        <div className="flex gap-2">
                                          <button disabled={decisionBusy} onClick={() => { setRejecting(`ext-${row.id}`); setDecisionError(''); }} className="flex-1 py-2 font-bold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg">Tolak</button>
-                                         <button disabled={decisionBusy} onClick={() => runDecision(() => decidePtwExtension(row.id, true))} className="flex-1 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg">{decisionBusy ? 'Memproses...' : 'Setujui Perpanjangan'}</button>
+                                         <button disabled={decisionBusy} onClick={() => runDecision(() => decidePtwExtension(row.id, true, undefined, extNumbers[row.id] ?? `${row.ptw_number ?? ''}-${(row.extension_count ?? 0) + 2}`))} className="flex-1 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg">{decisionBusy ? 'Memproses...' : 'Setujui Perpanjangan'}</button>
                                        </div>
                                      </div>
                                    )
@@ -1631,6 +1637,8 @@ export default function AdminProjectClient({
                                  gasTestFrequency={row.gas_test_frequency || {}}
                                  checklistData={row.safety_checklist || {}}
                                  dailyChecks={(ptwDailyChecks ?? []).filter((c: any) => c.ptw_id === row.id)}
+                            extensions={row.extensions || []}
+                            extensionCount={row.extension_count}
                                  jsaNumber={jsa?.id ? `JSA-${jsa.id.slice(0, 8).toUpperCase()}` : null}
                                  siblings={ptws}
                                  signatories={ptwSignatories?.[row.id]}

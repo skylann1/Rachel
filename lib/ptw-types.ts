@@ -615,3 +615,15 @@ export function ptwValidDayDates(validFrom?: string | null, validTo?: string | n
     return toLocalIsoDate(d);
   });
 }
+
+/** Satu perpanjangan PTW yang sudah disetujui (kolom ptw.extensions) — dicetak sebagai lembar PTW lengkap bernomor baru. */
+export interface PtwExtensionRecord {
+  no: number;
+  /** Nomor PTW perpanjangan, diinput HSSE (mis. PTW-2026-006-2). */
+  number: string;
+  /** Tanggal mulai perpanjangan (hari setelah masa berlaku sebelumnya), YYYY-MM-DD. */
+  from: string;
+  to: string;
+  reason?: string | null;
+  decided_at?: string | null;
+}

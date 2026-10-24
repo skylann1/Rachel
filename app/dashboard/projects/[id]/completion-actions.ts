@@ -206,7 +206,7 @@ export async function requestPtwExtension(params: { ptwId: string; newValidTo: s
 }
 
 /** HSSE menyetujui (valid_to diperbarui) atau menolak perpanjangan PTW. */
-export async function decidePtwExtension(ptwId: string, approve: boolean, note?: string): Promise<Result> {
+export async function decidePtwExtension(ptwId: string, approve: boolean, note?: string, number?: string): Promise<Result> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Silakan login terlebih dahulu." };
@@ -214,17 +214,20 @@ export async function decidePtwExtension(ptwId: string, approve: boolean, note?:
   const ptw = await loadPtw(supabase, ptwId);
   if (!ptw) return { success: false, error: "PTW tidak ditemukan." };
 
+  if (approve && !number?.trim()) return { success: false, error: "Nomor PTW perpanjangan wajib diisi." };
+
   const { error } = await supabase.rpc("ptw_decide_extension", {
     p_ptw_id: ptwId,
     p_approve: approve,
     p_note: note?.trim() || null,
+    p_number: approve ? number!.trim() : null,
   });
   if (error) return { success: false, error: error.message };
 
   await logDocumentEvent(supabase, {
     docType: "ptw", docId: ptwId, projectId: ptw.project_id, actorId: user.id,
     action: approve ? "Perpanjangan PTW Disetujui" : "Perpanjangan PTW Ditolak",
-    notes: note?.trim() || null,
+    notes: approve ? `Nomor perpanjangan: ${number!.trim()}` : (note?.trim() || null),
   });
   if (ptw.project?.vendor_id) {
     await notifyOrgMembers({
@@ -232,7 +235,7 @@ export async function decidePtwExtension(ptwId: string, approve: boolean, note?:
       type: "approval",
       title: approve ? "Perpanjangan PTW Disetujui" : "Perpanjangan PTW Ditolak",
       message: approve
-        ? `Perpanjangan PTW ${ptw.ptw_number ?? ""} pada proyek "${ptw.project.name}" disetujui. Masa berlaku diperbarui.`
+        ? `Perpanjangan PTW ${ptw.ptw_number ?? ""} pada proyek "${ptw.project.name}" disetujui dengan nomor ${number!.trim()}. Masa berlaku diperbarui.`
         : `Perpanjangan PTW ${ptw.ptw_number ?? ""} pada proyek "${ptw.project.name}" ditolak: ${note?.trim()}.`,
       link: `/vendor/dashboard/projects/${ptw.project_id}`,
     });
