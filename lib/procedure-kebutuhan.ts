@@ -42,6 +42,8 @@ export interface StepKebutuhan {
 export interface TahapanPoint {
   text: string;
   kebutuhan?: StepKebutuhan;
+  /** Gambar ilustrasi opsional untuk sub-langkah ini (URL publik storage); tampil di PDF. */
+  imageUrl?: string;
 }
 
 export interface TahapanSection {
@@ -75,6 +77,7 @@ export function normalizeTahapanPekerjaan(raw: unknown): TahapanSection[] {
         return {
           text: typeof p.text === 'string' ? p.text : '',
           kebutuhan: p.kebutuhan ? { ...emptyKebutuhan(), ...p.kebutuhan } : emptyKebutuhan(),
+          ...(typeof p.imageUrl === 'string' && p.imageUrl ? { imageUrl: p.imageUrl } : {}),
         };
       }
       // Legacy: points masih array string.

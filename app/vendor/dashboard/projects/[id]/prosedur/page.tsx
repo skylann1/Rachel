@@ -5,11 +5,12 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   FileText, ArrowRight, Hammer,
   CheckCircle2, X, Info, Download, Plus, Trash2, GripVertical, Boxes, History,
-  Check, Users, Wrench, Package, HardHat, AlertTriangle
+  Check, Users, Wrench, Package, HardHat, AlertTriangle, ImagePlus, Loader2
 } from 'lucide-react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
 import { saveProsedur, getProsedur } from './actions';
+import { uploadImage } from '@/utils/supabase/storage';
 import { getMyVendorReviewAssignment } from '@/app/vendor/dashboard/approval/actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
 import { getWorkers, WorkerItem } from '@/app/vendor/dashboard/pekerja/actions';
@@ -167,6 +168,8 @@ export default function ProsedurKerjaForm() {
   const [rosterMaterial, setRosterMaterial] = useState<MaterialItem[]>([]);
   // Kebutuhan panel yang sedang terbuka, kunci "{sectionIndex}-{pointIndex}".
   const [openKebutuhan, setOpenKebutuhan] = useState<string | null>(null);
+  // Kunci `${sIdx}-${pIdx}` sub-langkah yang gambarnya sedang diunggah.
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([getWorkers(), getEquipment(), getMaterials()])
@@ -231,6 +234,37 @@ export default function ProsedurKerjaForm() {
     const newTahapan = [...tahapanPekerjaan];
     newTahapan[sectionIndex].points[pointIndex].text = newText;
     setTahapanPekerjaan(newTahapan);
+  };
+
+  // Gambar opsional per sub-langkah (muncul di PDF). url undefined = hapus.
+  const setPointImage = (sectionIndex: number, pointIndex: number, url?: string) => {
+    setTahapanPekerjaan(prev =>
+      prev.map((section, sIdx) =>
+        sIdx !== sectionIndex ? section : {
+          ...section,
+          points: section.points.map((p, pIdx) => {
+            if (pIdx !== pointIndex) return p;
+            const { imageUrl: _old, ...rest } = p;
+            return url ? { ...rest, imageUrl: url } : rest;
+          }),
+        }
+      )
+    );
+  };
+
+  const handlePointImageFile = async (sectionIndex: number, pointIndex: number, file?: File | null) => {
+    if (!file) return;
+    const key = `${sectionIndex}-${pointIndex}`;
+    setUploadingImage(key);
+    try {
+      const url = await uploadImage(file, 'procedures');
+      if (!url) throw new Error('upload gagal');
+      setPointImage(sectionIndex, pointIndex, url);
+    } catch {
+      alert('Gagal mengunggah gambar. Coba lagi.');
+    } finally {
+      setUploadingImage(null);
+    }
   };
 
   const removeTahapanPoint = (sectionIndex: number, pointIndex: number) => {
@@ -611,11 +645,30 @@ export default function ProsedurKerjaForm() {
                                     </span>
                                   )}
                                 </button>
+                                <label
+                                  title="Tambah gambar (opsional) — tampil di PDF"
+                                  className={`p-2 rounded-lg border transition-colors cursor-pointer ${point.imageUrl ? 'bg-primary text-white border-primary' : 'text-slate-400 hover:text-primary border-slate-200 hover:border-primary bg-white'}`}
+                                >
+                                  {uploadingImage === kebutuhanKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+                                  <input type="file" accept="image/*" className="hidden" disabled={uploadingImage === kebutuhanKey}
+                                    onChange={(e) => { handlePointImageFile(sIdx, pIdx, e.target.files?.[0]); e.target.value = ''; }} />
+                                </label>
                                 <button type="button" onClick={() => removeTahapanPoint(sIdx, pIdx)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg">
                                   <X className="w-4 h-4" />
                                 </button>
                               </div>
                             </div>
+
+                            {point.imageUrl && (
+                              <div className="ml-9 mt-2 relative inline-block">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={point.imageUrl} alt={`Gambar langkah ${sIdx + 1}.${pIdx + 1}`} className="max-h-40 rounded-lg border border-slate-200" />
+                                <button type="button" onClick={() => setPointImage(sIdx, pIdx)} title="Hapus gambar"
+                                  className="absolute -top-2 -right-2 p-1 bg-slate-900/80 text-white rounded-full">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
 
                             {kebutuhanOpen && (
                               <div className="ml-9 mt-2 w-[calc(100%-2rem)] border border-primary/20 rounded-xl bg-slate-50 p-4 space-y-3">

@@ -143,7 +143,7 @@ interface ProsedurPDFProps {
     tools: string[];
     apd: string[];
     perlengkapanLainnya: string[];
-    tahapanPekerjaan: { title: string; points: (string | { text: string; kebutuhan?: unknown })[] }[];
+    tahapanPekerjaan: { title: string; points: (string | { text: string; kebutuhan?: unknown; imageUrl?: string })[] }[];
     penyelesaianAkhir: string[];
     revisions?: { revNo: number; date: string; note: string }[];
     /** true kalau Prosedur sudah disetujui penuh — cap APPROVED di halaman kontrol. */
@@ -365,6 +365,9 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
                         <Text style={styles.bulletPoint}>•</Text>
                         <Text style={styles.bulletText}>{pt.text}</Text>
                       </View>
+                      {pt.imageUrl && (
+                        <Image src={pt.imageUrl} style={{ marginLeft: 25, marginTop: 4, marginBottom: 2, maxWidth: 260, maxHeight: 170, objectFit: 'contain' }} />
+                      )}
                       {kebutuhanLine && (
                         <Text style={styles.kebutuhanText}>
                           Kebutuhan: {kebutuhanLine}
