@@ -118,3 +118,26 @@ export function diffJsaSteps(a: JsaStepData[], b: JsaStepData[]): FieldChange[] 
   }
   return out;
 }
+
+const flatApd = (k?: StepKebutuhan) => Object.values(k?.apd || {}).flat();
+
+/**
+ * Sinkronkan kolom APD pada "Faktor Positif" dengan APD di Kebutuhan langkah:
+ * butir yang baru dicentang ditambahkan, yang dilepas dihapus, teks yang
+ * diketik manual tetap dipertahankan.
+ */
+export function syncApdControl(prev: StepKebutuhan | undefined, next: StepKebutuhan | undefined, current: string): string {
+  const before = flatApd(prev), after = flatApd(next);
+  const removed = before.filter((x) => !after.includes(x));
+  const added = after.filter((x) => !before.includes(x));
+  const tokens = (current || '').split(/\s*,\s*/).map((t) => t.trim()).filter(Boolean).filter((t) => !removed.includes(t));
+  for (const a of added) if (!tokens.includes(a)) tokens.push(a);
+  return tokens.join(', ');
+}
+
+/** Isi awal: kalau kolom APD faktor positif masih kosong tapi kebutuhan punya APD, isi dari kebutuhan. */
+export function seedApdControl(step: JsaStepData): JsaStepData {
+  if ((step.faktorPositif?.apd || '').trim()) return step;
+  const items = flatApd(step.kebutuhan);
+  return items.length ? { ...step, faktorPositif: { ...step.faktorPositif, apd: items.join(', ') } } : step;
+}

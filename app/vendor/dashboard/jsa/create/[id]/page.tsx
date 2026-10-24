@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import JsaPDF from './JsaPDF';
 import { saveJsa, getJsa } from './actions';
 import JsaStepCard, { stepIssues, stepWarnings, type ControlDetail, type JsaStepData } from './JsaStepCard';
+import { syncApdControl, seedApdControl } from '@/lib/jsa-steps';
 import { DEFAULT_RISK, RPN_LEVELS, calculateRisk, rpnLevel } from '@/lib/jsa-risk';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
 import { aggregatePointNeeds, aggregateKebutuhan, isKebutuhanEmpty, hasStoredKebutuhan, emptyKebutuhan, StepKebutuhan, TahapanSection } from '@/lib/procedure-kebutuhan';
@@ -157,6 +158,7 @@ export default function JSACreatePage() {
           });
         }
 
+        finalSteps = finalSteps.map(seedApdControl);
         setJsaSteps(finalSteps.length > 0 ? finalSteps : [{ id: 1, langkah: '', jenisBahaya: 'Fisika', sebab: '', potensiBahaya: '', faktorPositif: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, inherentRisk: {...defaultRisk}, mitigasi: { eliminasi: '', substitusi: '', rekayasa: '', administrasi: '', apd: '' }, residualRisk: {...defaultRisk} }]);
         
         if (data && data.procedureSteps) {
@@ -213,9 +215,12 @@ export default function JSACreatePage() {
       step.id === id ? { ...step, [which]: calculateRisk({ ...step[which], [field]: value }) } : step));
 
   const toggleStepKebutuhan = (stepIdx: number, mutate: (k: StepKebutuhan) => StepKebutuhan) => {
-    setJsaSteps(prev => prev.map((s, i) =>
-      i === stepIdx ? { ...s, kebutuhan: mutate({ ...emptyKebutuhan(), ...s.kebutuhan }) } : s
-    ));
+    setJsaSteps(prev => prev.map((s, i) => {
+      if (i !== stepIdx) return s;
+      const nextK = mutate({ ...emptyKebutuhan(), ...s.kebutuhan });
+      // APD di Kebutuhan otomatis ikut mengisi kolom APD pada Faktor Positif.
+      return { ...s, kebutuhan: nextK, faktorPositif: { ...s.faktorPositif, apd: syncApdControl(s.kebutuhan, nextK, s.faktorPositif.apd) } };
+    }));
   };
 
   const handleSimpan = async () => {

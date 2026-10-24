@@ -6,6 +6,7 @@ import { Pencil, X, Plus, Loader2 } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import JsaStepCard, { type ControlDetail, type JsaStepData } from '@/app/vendor/dashboard/jsa/create/[id]/JsaStepCard';
 import { DEFAULT_RISK, calculateRisk } from '@/lib/jsa-risk';
+import { syncApdControl } from '@/lib/jsa-steps';
 import { emptyKebutuhan } from '@/lib/procedure-kebutuhan';
 import { loadJsaForEdit, editJsaAsReviewer, getProjectRoster } from '@/app/dashboard/approval/doc-edit-actions';
 import { KebutuhanEditor, type ProjectRoster } from '@/components/prosedur/KebutuhanEditor';
@@ -88,7 +89,7 @@ export function JsaReviewerEditor({ jsaId, label = 'Ubah Dokumen' }: { jsaId: st
                       langkahLocked={false}
                       canRemove={steps.length > 1}
                       canDuplicate
-                      kebutuhan={<KebutuhanEditor roster={roster} value={step.kebutuhan} onChange={(k) => patch(step.id, { kebutuhan: k })} />}
+                      kebutuhan={<KebutuhanEditor roster={roster} value={step.kebutuhan} onChange={(k) => patch(step.id, { kebutuhan: k, faktorPositif: { ...step.faktorPositif, apd: syncApdControl(step.kebutuhan, k, step.faktorPositif.apd) } })} />}
                       onPatch={(p) => patch(step.id, p)}
                       onRisk={(which, field, value) => setSteps((prev) => prev.map((s) => (s.id === step.id ? { ...s, [which]: calculateRisk({ ...s[which], [field]: value }) } : s)))}
                       onControl={(which, field, value) => setSteps((prev) => prev.map((s) => (s.id === step.id ? { ...s, [which]: { ...s[which], [field]: value } } : s)))}
