@@ -18,6 +18,7 @@ export async function getInspections() {
       status,
       image_url,
       created_at,
+      due_date,
       is_project_activity,
       activity_type,
       reported_by,

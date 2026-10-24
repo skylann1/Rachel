@@ -239,3 +239,5 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
 8. `schema_role_org_scope.sql` — menambah `roles.org_id` (role milik organisasi). Harus dijalankan SEBELUM deploy kode "Role & Permission per organisasi"; tanpa kolom ini halaman Role error. Idempotent.
 
 9. `schema_inspection_detail_fields.sql` — kolom detail Inspeksi Temuan (`description`, `category`, `found_at`, `root_cause`, `immediate_action`, `recommendation`, `reference_std`, `due_date`). Jalankan SEBELUM deploy form lapor lengkap & halaman detail inspeksi; tanpa ini membuat laporan baru gagal dan halaman detail kosong. Idempotent, kolom nullable.
+
+   Catatan: sejak fitur SLA, daftar inspeksi (internal & vendor) juga membaca `due_date` — migrasi ini wajib dijalankan sebelum deploy, kalau tidak daftar render kosong. Cron `/api/cron/inspection-sla` (vercel.json) memakai `CRON_SECRET` yang sama dengan cron PTW.

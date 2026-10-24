@@ -4,9 +4,17 @@ import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import { Camera, AlertTriangle, CheckCircle, Clock, MapPin, UploadCloud, X, ArrowRight, Loader2, Inbox } from 'lucide-react';
 import { getVendorInspections } from './actions';
+import { dueState } from '@/lib/inspection-fields';
 import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
 import { resolveInspectionGallery } from '@/lib/inspection-photos';
 import { ACTIVITY_TYPE_META, normalizeActivityType } from '@/lib/inspection-activity';
+
+const SLA_TONE = {
+  ok: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  warn: 'bg-amber-50 text-amber-700 border-amber-200',
+  late: 'bg-rose-50 text-rose-700 border-rose-200',
+  none: 'hidden',
+};
 
 export default function VendorInspectionPage() {
   const [filter, setFilter] = useState('All');
@@ -30,6 +38,7 @@ export default function VendorInspectionPage() {
         location: d.location,
         date: new Date(d.created_at).toLocaleString('id-ID'),
         status: d.status,
+        due_date: d.due_date,
         priority: d.priority,
         image,
         photos,
@@ -126,6 +135,9 @@ export default function VendorInspectionPage() {
                <div className="mt-auto space-y-2 text-xs font-medium text-slate-600">
                  <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {item.location}</div>
                  <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-slate-400" /> {item.date}</div>
+                 {dueState(item.due_date, item.status).tone !== 'none' && (
+                   <div><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-bold ${SLA_TONE[dueState(item.due_date, item.status).tone]}`}>SLA: {dueState(item.due_date, item.status).label}</span></div>
+                 )}
                </div>
             </div>
             

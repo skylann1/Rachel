@@ -5,9 +5,17 @@ import { ModalPortal } from '@/components/ui/modal-portal';
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Camera, AlertTriangle, CheckCircle, Clock, MapPin, Building2, UploadCloud, X, Loader2, Download, History, UserPlus } from 'lucide-react';
 import { getInspections, getVendorsAndProjects, delegateInspection, getInspectionLogs, validateInspection, closeInspectionDirectly } from './actions';
+import { dueState } from '@/lib/inspection-fields';
 import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
 import { resolveInspectionGallery } from '@/lib/inspection-photos';
 import { ACTIVITY_TYPES, ACTIVITY_TYPE_META, normalizeActivityType, type ActivityType } from '@/lib/inspection-activity';
+
+const SLA_TONE = {
+  ok: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  warn: 'bg-amber-50 text-amber-700 border-amber-200',
+  late: 'bg-rose-50 text-rose-700 border-rose-200',
+  none: 'hidden',
+};
 
 export default function InspectionPage() {
   const [filter, setFilter] = useState('All');
@@ -64,6 +72,7 @@ export default function InspectionPage() {
         hasVendor: !!d.target_vendor,
         date: new Date(d.created_at).toLocaleString('id-ID'),
         status: d.status,
+        due_date: d.due_date,
         priority: d.priority,
         image,
         photos,
@@ -325,6 +334,9 @@ export default function InspectionPage() {
                  <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {item.location}</div>
                  <div className="flex items-center gap-2"><Building2 className="w-3.5 h-3.5 text-slate-400" /> {item.vendor}</div>
                  <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-slate-400" /> {item.date}</div>
+                 {dueState(item.due_date, item.status).tone !== 'none' && (
+                   <div><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-bold ${SLA_TONE[dueState(item.due_date, item.status).tone]}`}>SLA: {dueState(item.due_date, item.status).label}</span></div>
+                 )}
                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100 text-slate-500 font-bold">
                    <UserPlus className="w-3.5 h-3.5 text-primary" /> Disposisi: <span className="text-primary">{item.assigned_to}</span>
                  </div>

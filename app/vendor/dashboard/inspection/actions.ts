@@ -28,6 +28,7 @@ export async function getVendorInspections() {
       vendor_response,
       vendor_evidence_url,
       created_at,
+      due_date,
       inspection_photos ( id, image_url )
     `)
     .eq('target_vendor', vendorOrgId)
