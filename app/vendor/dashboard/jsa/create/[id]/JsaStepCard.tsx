@@ -64,7 +64,7 @@ export function stepWarnings(step: JsaStepData): string[] {
   const inh = step.inherentRisk.rpn;
   const res = step.residualRisk.rpn;
   if (res > inh) w.push('Residual Risk lebih tinggi dari Inherent Risk — mitigasi seharusnya menurunkan risiko, bukan menaikkannya.');
-  if (inh >= 5 && !hasControl(step.mitigasi)) w.push('Risiko awal sudah Sedang atau lebih, tetapi pengendalian tambahan (mitigasi) kosong.');
+  if (inh >= 5 && !hasControl(step.mitigasi)) w.push('Risiko awal sudah Moderate atau lebih, tetapi pengendalian tambahan (mitigasi) kosong.');
   if (res >= 10) w.push(`Residual Risk masih ${rpnLevel(res).label} (RPN ${res}) — pertimbangkan pengendalian tambahan lebih tinggi pada hirarki.`);
   if (inh >= 5 && res === inh && hasControl(step.mitigasi)) w.push('Mitigasi diisi tetapi nilai Residual Risk sama dengan Inherent — perbarui nilai residual setelah mitigasi.');
   return w;

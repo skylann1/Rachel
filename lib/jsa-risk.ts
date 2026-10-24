@@ -3,7 +3,9 @@
 // Perhitungan & klasifikasi risiko JSA — satu sumber untuk form isian
 // (jsa/create/[id]/page.tsx) dan PDF (JsaPDF.tsx), supaya warna/ambang RPN
 // tidak menyimpang antara layar dan dokumen. Ambang warna mengikuti
-// conditional-formatting template JSA EXAMPLE.xlsx.
+// conditional-formatting template JSA EXAMPLE.xlsx. Tingkat & penamaan mengikuti
+// Matriks Pertamina (Severity S1–S5 × Kemungkinan L1–L5): 1–3 Low, 4 Low to
+// Moderate, 5–9 Moderate, 10–14 Moderate to High, ≥15 High.
 
 export interface JsaRisk {
   severity: number;
@@ -35,7 +37,7 @@ export function calculateRisk<T extends Pick<JsaRisk, 'severity' | 'intensitas' 
 }
 
 export interface RpnLevel {
-  key: 'rendah' | 'sedang' | 'tinggi' | 'sangat-tinggi';
+  key: 'low' | 'low-moderate' | 'moderate' | 'moderate-high' | 'high';
   label: string;
   hex: string;
   /** Warna teks di atas latar `hex` supaya tetap terbaca. */
@@ -45,11 +47,11 @@ export interface RpnLevel {
 }
 
 export const RPN_LEVELS: { min: number; level: RpnLevel; range: string }[] = [
-  { min: 15, range: '≥ 15', level: { key: 'sangat-tinggi', label: 'Sangat Tinggi', hex: '#FF0000', ink: '#FFFFFF', badge: 'bg-rose-600 text-white' } },
-  { min: 10, range: '10 – 14', level: { key: 'tinggi', label: 'Tinggi', hex: '#FFC000', ink: '#000000', badge: 'bg-orange-400 text-slate-900' } },
-  { min: 5, range: '5 – 9', level: { key: 'sedang', label: 'Sedang', hex: '#FFFF00', ink: '#000000', badge: 'bg-yellow-300 text-slate-900' } },
-  { min: 4, range: '4', level: { key: 'rendah', label: 'Rendah', hex: '#92D050', ink: '#000000', badge: 'bg-lime-400 text-slate-900' } },
-  { min: 1, range: '1 – 3', level: { key: 'rendah', label: 'Rendah', hex: '#00B050', ink: '#FFFFFF', badge: 'bg-emerald-500 text-white' } },
+  { min: 15, range: '≥ 15', level: { key: 'high', label: 'High', hex: '#FF0000', ink: '#FFFFFF', badge: 'bg-rose-600 text-white' } },
+  { min: 10, range: '10 – 14', level: { key: 'moderate-high', label: 'Moderate to High', hex: '#FFC000', ink: '#000000', badge: 'bg-orange-400 text-slate-900' } },
+  { min: 5, range: '5 – 9', level: { key: 'moderate', label: 'Moderate', hex: '#FFFF00', ink: '#000000', badge: 'bg-yellow-300 text-slate-900' } },
+  { min: 4, range: '4', level: { key: 'low-moderate', label: 'Low to Moderate', hex: '#92D050', ink: '#000000', badge: 'bg-lime-400 text-slate-900' } },
+  { min: 1, range: '1 – 3', level: { key: 'low', label: 'Low', hex: '#00B050', ink: '#FFFFFF', badge: 'bg-emerald-500 text-white' } },
 ];
 
 export function rpnLevel(rpn: number): RpnLevel {
