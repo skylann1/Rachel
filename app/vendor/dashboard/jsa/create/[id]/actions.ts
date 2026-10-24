@@ -6,6 +6,7 @@ import { notifyAssignees } from "@/app/dashboard/inbox/actions";
 import { JSA_STATUS } from "@/lib/jsa-status";
 import { APPROVED_PROCEDURE } from "@/lib/project-stage";
 import { logDocumentEvent } from "@/lib/document-logs";
+import { syncProjectRiskFromJsa } from "@/lib/jsa-project-risk";
 import { resetStageAssignments } from "@/lib/stage-assignments";
 import { normalizeTahapanPekerjaan, TahapanSection } from "@/lib/procedure-kebutuhan";
 
@@ -119,6 +120,9 @@ export async function saveJsa(projectId: string, jsaData: any) {
     const { error: stepError } = await supabase.from('jsa_steps').insert(stepsToInsert);
     if (stepError) throw new Error(stepError.message);
   }
+
+  // Kategori risiko proyek menyesuaikan Inherent Risk tertinggi di JSA.
+  await syncProjectRiskFromJsa(supabase, projectId, jsaData.steps ?? [], user?.id);
 
   await logDocumentEvent(supabase, {
     docType: 'jsa', docId: jsaId, projectId, actorId: user?.id,

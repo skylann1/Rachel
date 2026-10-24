@@ -45,3 +45,14 @@ export function riskCardClasses(level: unknown): string {
     ? `border-l-4 ${RISK_META[parsed].accent} ${RISK_META[parsed].tint}`
     : 'border-l-4 border-l-slate-200 bg-white';
 }
+
+/**
+ * Kategori Risiko Proyek dari RPN tertinggi di JSA (matriks Pertamina):
+ * 1–4 (Low, Low to Moderate) → low; 5–9 (Moderate) → moderate;
+ * ≥10 (Moderate to High, High) → high — sengaja konservatif untuk K3.
+ */
+export function riskLevelFromRpn(maxRpn: number): RiskLevel {
+  if (maxRpn >= 10) return 'high';
+  if (maxRpn >= 5) return 'moderate';
+  return 'low';
+}

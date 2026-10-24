@@ -8,6 +8,7 @@ import { JSA_STAGE_SEQUENCE } from "@/lib/jsa-status";
 import { PTW_STAGE_SEQUENCE } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { getStageAssignments } from "@/lib/stage-assignments";
+import { syncProjectRiskFromJsa } from "@/lib/jsa-project-risk";
 import { recordDocumentChange } from "@/lib/document-changes";
 import { summarizeChanges } from "@/lib/prosedur-diff";
 import { parseJsaStepRow, serializeJsaStep, sanitizeJsaSteps, diffJsaSteps } from "@/lib/jsa-steps";
@@ -131,6 +132,7 @@ export async function editJsaAsReviewer(jsaId: string, rawSteps: unknown, note?:
     action: `Diubah langsung oleh ${actorLabel}`, notes: note?.trim() ? `${summary}. Catatan: ${note.trim()}` : summary,
   });
   await notifyVendor(current.project_id, actorLabel, 'JSA', changes.length, `/vendor/dashboard/jsa/create/${current.project_id}`);
+  await syncProjectRiskFromJsa(supabase, current.project_id, newSteps, user.id);
   void stage;
   revalidatePath(`/dashboard/projects/${current.project_id}`);
   revalidatePath(`/vendor/dashboard/projects/${current.project_id}`);
