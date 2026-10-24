@@ -368,7 +368,7 @@ export default function PTWCreatePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8">
 
         {/* Left Column: Form Settings */}
         <div className="space-y-6">
@@ -687,8 +687,8 @@ export default function PTWCreatePage() {
 
         </div>
 
-        {/* Right Column: PDF Preview */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[70vh] lg:h-[800px] sticky top-24">
+        {/* Preview di bawah form supaya area pengisian lebar */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[80vh] lg:h-[900px]">
           <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0 gap-3">
              <div className="flex items-center gap-2 font-bold text-sm text-slate-700">
                <Stamp className="w-4 h-4 text-slate-400" /> Preview Draft PTW (Otomatis)
