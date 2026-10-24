@@ -12,6 +12,7 @@ import { ProjectDiscussion } from '@/components/project-discussion';
 import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
+import { buildProsedurPdfData } from '@/lib/prosedur-pdf-data';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
 import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel';
@@ -541,16 +542,7 @@ export function VendorProjectClient({
                           Buka & Print Dokumen
                         </button>
                       ) : (
-                        <BlobProvider document={<ProsedurPDF data={{ 
-                          ...prosedur.content, 
-                          projectName: prosedur.content.projectName || project.name || 'Proyek',
-                          apd: prosedur.content.apd || prosedur.content.selectedApd || [],
-                          tools: prosedur.content.tools || [],
-                          perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
-                          tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
-                          revisions: prosedur.content.revisions || [],
-                          approved: prosedur.status === 'Prosedur Disetujui',
-                        }} />}>
+                        <BlobProvider document={<ProsedurPDF data={buildProsedurPdfData({ content: prosedur.content, status: prosedur.status, projectName: project.name, contractNumber: project.contract_number, vendorName: vendorProfile?.company_name, docId: prosedur.id, logs: documentLogs })} />}>
                           {({ url, loading }) => (
                             <button 
                               disabled={loading}

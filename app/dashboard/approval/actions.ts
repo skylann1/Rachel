@@ -89,7 +89,7 @@ export async function getProcedureById(id: string) {
     .from('procedures')
     .select(`
       id, status, created_at, content, project_id,
-      projects ( name, vendor_profiles ( company_name ) )
+      projects ( name, contract_number, vendor_profiles ( company_name ) )
     `)
     .eq('id', id)
     .single();

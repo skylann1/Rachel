@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { normalizeTahapanPekerjaan, kebutuhanSummary } from '@/lib/procedure-kebutuhan';
+import type { ProsedurPdfData } from '@/lib/prosedur-pdf-data';
 
 // Create styles
 const styles = StyleSheet.create({
@@ -76,6 +77,7 @@ const styles = StyleSheet.create({
   revCol4: { width: '15%' },
   revCol5: { width: '15%' },
   revCol6: { width: '15%' },
+  sigCol: { width: '20%' },
 
   revEmptyRow: { height: 20 },
   revDataRow: { height: 40 },
@@ -133,22 +135,13 @@ const styles = StyleSheet.create({
 });
 
 interface ProsedurPDFProps {
-  data: {
-    projectName: string;
-    docNo: string;
-    contractNo: string;
-    submissionDate: string;
-    umum: string;
-    scopeOfWork: string;
-    tools: string[];
-    apd: string[];
-    perlengkapanLainnya: string[];
-    tahapanPekerjaan: { title: string; points: (string | { text: string; kebutuhan?: unknown; imageUrl?: string })[] }[];
-    penyelesaianAkhir: string[];
-    revisions?: { revNo: number; date: string; note: string }[];
-    /** true kalau Prosedur sudah disetujui penuh — cap APPROVED di halaman kontrol. */
-    approved?: boolean;
-  };
+  data: ProsedurPdfData;
+}
+
+function formatHistoryDate(iso: string) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 }
 
 /** Cap APPROVED di satu kotak tanda tangan. */
@@ -231,15 +224,13 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
             <View style={[styles.cell, styles.revCol6, styles.revEmptyRow]}></View>
           </View>
 
+          {/* Tanda tangan: 3 kotak — Vendor, PGSOL, PGN. Cap APPROVED hanya muncul setelah tahap terakhir perusahaan itu lolos. */}
           <View style={styles.tableRow}>
             <View style={[styles.cell, styles.revCol1, styles.revDataRow]}><Text style={styles.textCenter}>A</Text></View>
             <View style={[styles.cellLeftAlign, styles.revCol2, styles.revDataRow, { justifyContent: 'center' }]}><Text style={styles.textNormal}>Issued for Review</Text></View>
-            <View style={[styles.cell, styles.revCol3, styles.revDataRow]}>
-              {data.approved ? <ApprovedStamp /> : <Text style={styles.textBoldCenter}>APPROVED</Text>}
-            </View>
-            <View style={[styles.cell, styles.revCol4, styles.revDataRow]}>{data.approved && <ApprovedStamp />}</View>
-            <View style={[styles.cell, styles.revCol5, styles.revDataRow]}>{data.approved && <ApprovedStamp />}</View>
-            <View style={[styles.cell, styles.revCol6, styles.revDataRow]}>{data.approved && <ApprovedStamp />}</View>
+            <View style={[styles.cell, styles.sigCol, styles.revDataRow]}>{data.approvals.vendor && <ApprovedStamp />}</View>
+            <View style={[styles.cell, styles.sigCol, styles.revDataRow]}>{data.approvals.pgsol && <ApprovedStamp />}</View>
+            <View style={[styles.cell, styles.sigCol, styles.revDataRow]}>{data.approvals.pgn && <ApprovedStamp />}</View>
           </View>
           <View style={styles.tableRow}>
             <View style={[styles.cell, styles.revCol1]}>
@@ -248,18 +239,9 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
             <View style={[styles.cell, styles.revCol2]}>
               <Text style={styles.textBoldCenter}>DESCRIPTION</Text>
             </View>
-            <View style={{ width: '60%', flexDirection: 'column' }}>
-              <View style={{ flexDirection: 'row' }}>
-                <View style={[styles.cell, { width: '25%' }]}><Text style={styles.textBoldCenter}>BY</Text></View>
-                <View style={[styles.cell, { width: '25%' }]}><Text style={styles.textBoldCenter}>CHKD</Text></View>
-                <View style={[styles.cell, { width: '25%' }]}><Text style={styles.textBoldCenter}>APVD</Text></View>
-                <View style={[styles.cell, { width: '25%' }]}><Text style={styles.textBoldCenter}>APVD</Text></View>
-              </View>
-              <View style={{ flexDirection: 'row' }}>
-                <View style={[styles.cell, { width: '75%' }]}><Text style={styles.textBoldCenter}>PT. PGAS Solution</Text></View>
-                <View style={[styles.cell, { width: '25%' }]}><Text style={styles.textBoldCenter}>PGN</Text></View>
-              </View>
-            </View>
+            <View style={[styles.cell, styles.sigCol]}><Text style={styles.textBoldCenter}>{data.vendorName}</Text></View>
+            <View style={[styles.cell, styles.sigCol]}><Text style={styles.textBoldCenter}>PT. PGAS Solution</Text></View>
+            <View style={[styles.cell, styles.sigCol]}><Text style={styles.textBoldCenter}>PGN</Text></View>
           </View>
         </View>
       </Page>
@@ -397,6 +379,38 @@ export const ProsedurPDF: React.FC<ProsedurPDFProps> = ({ data }) => {
           )}
         </View>
 
+      </Page>
+
+      {/* HALAMAN TERAKHIR: RIWAYAT PERSETUJUAN & PERUBAHAN */}
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.revisiTitle}>RIWAYAT REVIEW & PERSETUJUAN</Text>
+        <Text style={[styles.textNormal, { marginBottom: 10 }]}>Status dokumen: {data.status}</Text>
+        <View style={styles.revisiTable}>
+          <View style={styles.revisiRow}>
+            <View style={[styles.revisiHeader, { width: '6%' }]}><Text>NO</Text></View>
+            <View style={[styles.revisiHeader, { width: '22%' }]}><Text>TANGGAL & WAKTU</Text></View>
+            <View style={[styles.revisiHeader, { width: '30%' }]}><Text>TAHAP / AKTIVITAS</Text></View>
+            <View style={[styles.revisiHeader, { width: '42%' }]}><Text>OLEH</Text></View>
+          </View>
+          {data.history.length === 0 ? (
+            <View style={styles.revisiRow}>
+              <View style={[styles.revisiCell, { width: '100%', alignItems: 'center', justifyContent: 'center' }]}><Text style={styles.placeholderText}>Belum ada riwayat.</Text></View>
+            </View>
+          ) : data.history.map((h, i) => (
+            <View key={i} style={styles.revisiRow} wrap={false}>
+              <View style={[styles.revisiCell, { width: '6%', alignItems: 'center', justifyContent: 'center' }]}><Text style={styles.textCenter}>{i + 1}</Text></View>
+              <View style={[styles.revisiCell, { width: '22%', justifyContent: 'center' }]}><Text style={{ fontSize: 8 }}>{formatHistoryDate(h.at)}</Text></View>
+              <View style={[styles.revisiCell, { width: '30%', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 8 }}>{h.action}</Text>
+                {h.notes ? <Text style={{ fontSize: 7, color: '#555', marginTop: 2 }}>{h.notes}</Text> : null}
+              </View>
+              <View style={[styles.revisiCell, { width: '42%', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold' }}>{h.actor}</Text>
+                {h.jabatan ? <Text style={{ fontSize: 7, color: '#555' }}>{h.jabatan}</Text> : null}
+              </View>
+            </View>
+          ))}
+        </View>
       </Page>
     </Document>
   );

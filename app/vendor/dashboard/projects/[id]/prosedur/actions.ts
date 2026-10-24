@@ -5,6 +5,7 @@ import { notifyAssignees } from "@/app/dashboard/inbox/actions";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { resetStageAssignments, getStageAssignments } from "@/lib/stage-assignments";
+import { diffProsedurContent, summarizeChanges, readChangeLog, type ChangeLogEntry } from "@/lib/prosedur-diff";
 
 export async function saveProsedur(projectId: string, payload: any) {
   // "Jenis PTW yang Dibutuhkan" wajib minimal 1 — sebelumnya cuma dicek di
@@ -21,7 +22,7 @@ export async function saveProsedur(projectId: string, payload: any) {
   // check if procedure already exists
   const { data: existing } = await supabase
     .from('procedures')
-    .select('id')
+    .select('id, content')
     .eq('project_id', projectId)
     .single();
 
@@ -55,9 +56,31 @@ export async function saveProsedur(projectId: string, payload: any) {
       throw new Error('Prosedur Kerja tidak bisa diajukan ulang karena sudah berjalan ke tahap berikutnya.');
     }
 
+    // Jejak perubahan: bandingkan isi pengajuan ulang dengan versi sebelumnya
+    // dan pertahankan changeLog lama (payload form tidak membawanya).
+    const previousLog = readChangeLog(existing.content);
+    const changes = diffProsedurContent(existing.content, payload);
+    let changeLog = previousLog;
+    if (changes.length > 0) {
+      const { data: me } = user
+        ? await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+        : { data: null };
+      const entry: ChangeLogEntry = {
+        id: crypto.randomUUID(),
+        at: new Date().toISOString(),
+        actorId: user?.id ?? null,
+        actorName: me?.full_name || 'Vendor',
+        actorLabel: 'Vendor (pengajuan ulang)',
+        summary: summarizeChanges(changes),
+        note: null,
+        changes,
+      };
+      changeLog = [...previousLog, entry];
+    }
+
     const { data: updated, error } = await supabase
       .from('procedures')
-      .update({ content: payload, status: PROCEDURE_STATUS.reviewHseVendor })
+      .update({ content: { ...payload, changeLog }, status: PROCEDURE_STATUS.reviewHseVendor })
       .eq('id', existing.id)
       .eq('status', current.status)
       .select('id');
@@ -123,7 +146,7 @@ export async function getProsedur(projectId: string) {
 
   const { data: project } = await supabase
     .from('projects')
-    .select('name, location, contract_number')
+    .select('name, location, contract_number, vendor_profiles ( company_name )')
     .eq('id', projectId)
     .maybeSingle();
 

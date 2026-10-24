@@ -10,6 +10,11 @@ import {
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { ProsedurPDF } from './ProsedurPDF';
 import { saveProsedur, getProsedur } from './actions';
+import { editProsedurAsReviewer } from '@/app/dashboard/approval/prosedur-edit-actions';
+import { getDocumentLogs } from '@/app/dashboard/approval/actions';
+import { ChangeLogPanel } from '@/components/prosedur/ChangeLogPanel';
+import { buildProsedurPdfData } from '@/lib/prosedur-pdf-data';
+import { readChangeLog, type ChangeLogEntry } from '@/lib/prosedur-diff';
 import { uploadImage } from '@/utils/supabase/storage';
 import { getMyVendorReviewAssignment } from '@/app/vendor/dashboard/approval/actions';
 import { VendorInternalReviewActions } from '@/components/vendor/VendorInternalReviewActions';
@@ -73,7 +78,14 @@ export default function ProsedurKerjaForm() {
 
   // --- Form State ---
   const [docNo, setDocNo] = useState('SOP-K3-001/2026');
-  const [contractNo, setContractNo] = useState('006600.PMB-BP/LG.01/OP-CKR/PGAS/V/2026'); 
+  // Nomor kontrak selalu diambil dari proyek (master) — bukan input manual.
+  const [contractNo, setContractNo] = useState('');
+  const [docStatus, setDocStatus] = useState<string>('Draft');
+  const [vendorName, setVendorName] = useState('');
+  const [docLogs, setDocLogs] = useState<any[]>([]);
+  const [changeLog, setChangeLog] = useState<ChangeLogEntry[]>([]);
+  const [reviewNote, setReviewNote] = useState('');
+  const [isSavingReview, setIsSavingReview] = useState(false);
   const [submissionDate, setSubmissionDate] = useState('2026-06-29');
   const [projectName, setProjectName] = useState('');
   const [revisions, setRevisions] = useState<any[]>([]);
@@ -107,6 +119,11 @@ export default function ProsedurKerjaForm() {
       if (params.id) {
         const data = await getProsedur(params.id as string);
         if (data?.project?.name) setProjectName(data.project.name);
+        if (data?.project?.contract_number) setContractNo(data.project.contract_number);
+        const vp: any = Array.isArray((data?.project as any)?.vendor_profiles) ? (data.project as any).vendor_profiles[0] : (data?.project as any)?.vendor_profiles;
+        if (vp?.company_name) setVendorName(vp.company_name);
+        if (data?.status) setDocStatus(data.status);
+        getDocumentLogs(params.id as string).then(setDocLogs).catch(() => {});
         if (data && data.content) {
           setDocId(data.id);
           getMyVendorReviewAssignment(params.id as string, 'procedure', data.id)
@@ -114,7 +131,8 @@ export default function ProsedurKerjaForm() {
             .catch(() => {});
           const content = data.content;
           setDocNo(content.docNo || '');
-          setContractNo(content.contractNo || '');
+          setContractNo(data.project?.contract_number || content.contractNo || '');
+          setChangeLog(readChangeLog(content));
           if (content.submissionDate) setSubmissionDate(content.submissionDate);
           setUmum(content.umum || '');
           setScopeOfWork(content.scopeOfWork || '');
@@ -388,19 +406,39 @@ export default function ProsedurKerjaForm() {
     }
   };
 
-  const pdfData = {
-    projectName,
-    docNo,
-    contractNo,
-    submissionDate,
-    umum,
-    scopeOfWork,
-    tools: derivedSections.tools,
-    apd: derivedSections.apd,
-    perlengkapanLainnya: derivedSections.perlengkapanLainnya,
-    tahapanPekerjaan,
-    penyelesaianAkhir,
-    revisions
+  const pdfData = buildProsedurPdfData({
+    content: {
+      docNo, submissionDate, umum, scopeOfWork,
+      tools: derivedSections.tools,
+      apd: derivedSections.apd,
+      perlengkapanLainnya: derivedSections.perlengkapanLainnya,
+      tahapanPekerjaan, penyelesaianAkhir, revisions,
+    },
+    status: docStatus, projectName, contractNumber: contractNo, vendorName, docId, logs: docLogs,
+  });
+
+  // Reviewer (HSE/PM Vendor) boleh mengubah langsung — status tidak berubah, perubahan tercatat.
+  const handleReviewerSave = async () => {
+    if (!docId) return;
+    setIsSavingReview(true);
+    try {
+      const res = await editProsedurAsReviewer(docId, {
+        docNo, submissionDate, umum, scopeOfWork,
+        tools: derivedSections.tools,
+        selectedApd: derivedSections.apd,
+        perlengkapanLainnya: derivedSections.perlengkapanLainnya,
+        tahapanPekerjaan, penyelesaianAkhir, requiredPtwTypes,
+      }, reviewNote);
+      setReviewNote('');
+      alert(res.changed === 0 ? 'Tidak ada perubahan untuk disimpan.' : `${res.changed} perubahan disimpan dan tercatat di riwayat.`);
+      const fresh = await getProsedur(params.id as string);
+      setChangeLog(readChangeLog(fresh?.content));
+      getDocumentLogs(params.id as string).then(setDocLogs).catch(() => {});
+    } catch (err) {
+      alert((err as Error).message || 'Gagal menyimpan perubahan.');
+    } finally {
+      setIsSavingReview(false);
+    }
   };
 
   return (
@@ -443,6 +481,8 @@ export default function ProsedurKerjaForm() {
           </p>
         </div>
       )}
+
+      <ChangeLogPanel entries={changeLog} />
 
       <form onSubmit={handleSubmit} className="space-y-8">
         
@@ -838,9 +878,25 @@ export default function ProsedurKerjaForm() {
           )}
 
           {isReviewing ? (
-            <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 md:max-w-sm">
-              Anda reviewer untuk dokumen ini — gunakan <strong>Setujui</strong> atau <strong>Tolak</strong> di kotak review di atas. Tombol ajukan hanya untuk penyusun dokumen.
-            </p>
+            <div className="w-full md:max-w-md space-y-2">
+              <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                Anda reviewer untuk dokumen ini — ubah isi langsung lalu <strong>Simpan Perubahan</strong>, atau gunakan <strong>Setujui</strong> / <strong>Tolak</strong> di kotak review di atas. Semua perubahan tercatat di riwayat.
+              </p>
+              <input
+                value={reviewNote}
+                onChange={(e) => setReviewNote(e.target.value)}
+                placeholder="Catatan perubahan (opsional)"
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <button
+                type="button"
+                onClick={handleReviewerSave}
+                disabled={isSavingReview}
+                className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white px-6 py-3 rounded-2xl font-bold text-sm"
+              >
+                {isSavingReview && <Loader2 className="w-4 h-4 animate-spin" />} Simpan Perubahan (tanpa mengubah status)
+              </button>
+            </div>
           ) : (
           <button
             disabled={isSaving}

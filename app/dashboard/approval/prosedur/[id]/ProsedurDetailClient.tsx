@@ -9,6 +9,10 @@ import { ArrowLeft, XCircle, FileText, Loader2 } from 'lucide-react';
 import { approveProcedure, rejectProcedure } from '../../actions';
 import { PROCEDURE_STATUS, PROCEDURE_STAGE_PERMISSION, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from '@/lib/procedure-status';
 import { StageRail } from '@/components/internal/stage-rail';
+import { ChangeLogPanel } from '@/components/prosedur/ChangeLogPanel';
+import { ProsedurReviewerEditor } from '@/components/prosedur/ProsedurReviewerEditor';
+import { buildProsedurPdfData } from '@/lib/prosedur-pdf-data';
+import { readChangeLog } from '@/lib/prosedur-diff';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
@@ -27,7 +31,7 @@ function RejectionNote({ note }: { note: string }) {
   );
 }
 
-export default function ProsedurDetailClient({ prosedur, permissions }: { prosedur: any, permissions: Record<string, string[]> | null }) {
+export default function ProsedurDetailClient({ prosedur, permissions, logs }: { prosedur: any, permissions: Record<string, string[]> | null, logs: any[] }) {
   const router = useRouter();
   const [isApproving, setIsApproving] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -64,22 +68,16 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
       ? 'Dokumen prosedur kerja ini telah disetujui.'
       : 'Dokumen prosedur kerja ini dikembalikan ke vendor untuk revisi.';
 
-  const pdfData = prosedur.content ? {
-    projectName: prosedur.projects?.name || 'Proyek',
-    docNo: prosedur.content.docNo || '-',
-    contractNo: prosedur.content.contractNo || '-',
-    submissionDate: prosedur.content.submissionDate || '-',
-    umum: prosedur.content.umum || '',
-    scopeOfWork: prosedur.content.scopeOfWork || '',
-    tools: prosedur.content.tools || [],
-    apd: prosedur.content.selectedApd || prosedur.content.apd || [],
-    perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
-    tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
-    penyelesaianAkhir: prosedur.content.penyelesaianAkhir || [],
-    revisions: prosedur.content.revisions || [],
-    vendorSignature: prosedur.content.vendorSignature || null,
-    approved: prosedur.status === PROCEDURE_STATUS.approved,
-  } : null;
+  const vendorProfile: any = Array.isArray(prosedur.projects?.vendor_profiles) ? prosedur.projects.vendor_profiles[0] : prosedur.projects?.vendor_profiles;
+  const pdfData = prosedur.content ? buildProsedurPdfData({
+    content: prosedur.content,
+    status: prosedur.status,
+    projectName: prosedur.projects?.name,
+    contractNumber: prosedur.projects?.contract_number,
+    vendorName: vendorProfile?.company_name,
+    docId: prosedur.id,
+    logs,
+  }) : null;
 
   const handleApprove = async () => {
     setIsApproving(true);
@@ -175,6 +173,7 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
                   {isApproving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Setujui Prosedur
                 </button>
+                <ProsedurReviewerEditor procedureId={prosedur.id} content={prosedur.content} />
                 <button
                   onClick={() => setRejectModalOpen(true)}
                   className="w-full px-5 py-2.5 rounded-xl font-bold text-sm text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 transition-colors shadow-sm"
@@ -192,7 +191,8 @@ export default function ProsedurDetailClient({ prosedur, permissions }: { prosed
           )}
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-4 sm:p-6 space-y-5">
+          <ChangeLogPanel entries={readChangeLog(prosedur.content)} />
           <div className="w-full bg-slate-100 rounded-xl overflow-hidden border border-slate-200" style={{ height: '800px' }}>
             {pdfData ? (
               <PDFViewer width="100%" height="100%" className="border-none">

@@ -16,6 +16,10 @@ import { approveProcedure, rejectProcedure, approveJsa, rejectJsa, approvePtw, r
 import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
+import { buildProsedurPdfData } from '@/lib/prosedur-pdf-data';
+import { ChangeLogPanel } from '@/components/prosedur/ChangeLogPanel';
+import { ProsedurReviewerEditor } from '@/components/prosedur/ProsedurReviewerEditor';
+import { readChangeLog } from '@/lib/prosedur-diff';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
@@ -1065,25 +1069,18 @@ export default function AdminProjectClient({
                        <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
                          {isProsedurTahapHsePgsol ? 'Teruskan ke PM PGSOL' : isProsedurTahapReviewPgsol ? 'Teruskan ke HSSE PGN' : isProsedurTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui SOP'}
                        </button>
+                       <ProsedurReviewerEditor procedureId={prosedur.id} content={prosedur.content} />
                        <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
                      </div>
                    ) : undefined}
                  >
+                   <ChangeLogPanel entries={readChangeLog(prosedur?.content)} />
                    <DocPreview label="Pratinjau Prosedur Kerja" defaultOpen={canApproveProsedur}>
                      {prosedur?.content?.prosedur_html ? (
                         <div className="prose prose-slate max-w-none p-6 border border-slate-200 rounded-xl bg-white shadow-sm" dangerouslySetInnerHTML={{ __html: prosedur.content.prosedur_html }} />
                      ) : prosedur?.content ? (
                        <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
-                          <ProsedurPDF data={{
-                            ...prosedur.content,
-                            projectName: prosedur.content.projectName || project.name || 'Proyek',
-                            apd: prosedur.content.apd || prosedur.content.selectedApd || [],
-                            tools: prosedur.content.tools || [],
-                            perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
-                            tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
-                            revisions: prosedur.content.revisions || [],
-                            approved: prosedur.status === 'Prosedur Disetujui',
-                          }} />
+                          <ProsedurPDF data={buildProsedurPdfData({ content: prosedur.content, status: prosedur.status, projectName: project.name, contractNumber: project.contract_number, vendorName: project.vendor_profiles?.company_name, docId: prosedur.id, logs: documentLogs })} />
                        </PDFViewer>
                      ) : (
                        <div className="p-12 text-center text-slate-500">Format dokumen tidak valid.</div>
@@ -1391,16 +1388,7 @@ export default function AdminProjectClient({
                             Buka & Print Dokumen
                           </button>
                         ) : (
-                          <BlobProvider document={<ProsedurPDF data={{ 
-                            ...prosedur.content, 
-                            projectName: prosedur.content.projectName || project.name || 'Proyek',
-                            apd: prosedur.content.apd || prosedur.content.selectedApd || [],
-                            tools: prosedur.content.tools || [],
-                            perlengkapanLainnya: prosedur.content.perlengkapanLainnya || [],
-                            tahapanPekerjaan: prosedur.content.tahapanPekerjaan || [],
-                            revisions: prosedur.content.revisions || [],
-                            approved: prosedur.status === 'Prosedur Disetujui',
-                          }} />}>
+                          <BlobProvider document={<ProsedurPDF data={buildProsedurPdfData({ content: prosedur.content, status: prosedur.status, projectName: project.name, contractNumber: project.contract_number, vendorName: project.vendor_profiles?.company_name, docId: prosedur.id, logs: documentLogs })} />}>
                             {({ url, loading }) => (
                               <button 
                                 disabled={loading}
