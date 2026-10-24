@@ -173,7 +173,7 @@ export default function ProsedurDetailClient({ prosedur, permissions, logs }: { 
                   {isApproving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Setujui Prosedur
                 </button>
-                <ProsedurReviewerEditor procedureId={prosedur.id} content={prosedur.content} />
+                <ProsedurReviewerEditor procedureId={prosedur.id} projectId={prosedur.project_id} content={prosedur.content} />
                 <button
                   onClick={() => setRejectModalOpen(true)}
                   className="w-full px-5 py-2.5 rounded-xl font-bold text-sm text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 transition-colors shadow-sm"

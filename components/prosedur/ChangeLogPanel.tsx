@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { GitCompare, ChevronDown, ChevronRight, Plus, Minus, Pencil } from 'lucide-react';
 import type { ChangeLogEntry, FieldChange } from '@/lib/prosedur-diff';
 
+const DOC_LABEL: Record<string, string> = { jsa: 'JSA', ptw: 'PTW', procedure: 'Prosedur' };
+
 function fmt(iso: string) {
   return new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 }
@@ -53,6 +55,7 @@ export function ChangeLogPanel({ entries }: { entries: ChangeLogEntry[] }) {
                 {isOpen ? <ChevronDown className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-slate-800">
+                    {(e as any).docType && <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mr-1.5">{DOC_LABEL[(e as any).docType] ?? (e as any).docType}</span>}
                     {e.actorName} <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 border border-sky-100 rounded px-1.5 py-0.5 ml-1">{e.actorLabel}</span>
                   </p>
                   <p className="text-[11px] text-slate-400">{fmt(e.at)}</p>

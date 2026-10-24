@@ -7,6 +7,7 @@ import { getJsaSignatories } from '@/lib/jsa-signatories';
 import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { worstExpiry } from '@/lib/document-expiry';
 import { getDocumentLogs } from '@/app/dashboard/approval/actions';
+import { loadProjectDocumentChanges } from '@/lib/document-changes';
 import { getStageAssignmentsWithNames, StageAssignmentRowWithName } from '@/lib/stage-assignments';
 import { getFieldCandidates } from './actions';
 import { PROCEDURE_STAGE_SEQUENCE } from '@/lib/procedure-status';
@@ -104,6 +105,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
   }
 
   const documentLogs = await getDocumentLogs(projectId);
+  const docChanges = await loadProjectDocumentChanges(supabase, projectId);
 
   // Baris stage_assignments untuk SELURUH tahap pipeline dokumen proyek ini
   // (bukan cuma tahap yang sedang aktif) — dipakai AdminProjectClient untuk
@@ -201,6 +203,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
         workerExpiry={workerExpiry}
         equipmentExpiry={equipmentExpiry}
         documentLogs={documentLogs}
+        docChanges={docChanges}
         permissions={permissions}
         siteCheckins={siteCheckins ?? []}
         toolboxMeetings={toolboxMeetings ?? []}

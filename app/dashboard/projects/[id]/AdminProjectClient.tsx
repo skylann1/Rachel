@@ -20,6 +20,8 @@ import { buildProsedurPdfData } from '@/lib/prosedur-pdf-data';
 import { ChangeLogPanel } from '@/components/prosedur/ChangeLogPanel';
 import { ProsedurReviewerEditor } from '@/components/prosedur/ProsedurReviewerEditor';
 import { readChangeLog } from '@/lib/prosedur-diff';
+import { JsaReviewerEditor } from '@/components/prosedur/JsaReviewerEditor';
+import { PtwReviewerEditor } from '@/components/prosedur/PtwReviewerEditor';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import CheckinQrModal from '@/components/ptw/CheckinQrModal';
 import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
@@ -435,7 +437,7 @@ function ApproveModal({ labelKey, warning, requireNumber, onConfirm, onCancel, i
 }
 
 export default function AdminProjectClient({
-  project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, permissions,
+  project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, docChanges, permissions,
   siteCheckins, toolboxMeetings, stageAssignments,
   ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canVerifyClosure, canVerifyCompletion, canVerifyExtension,
 }: {
@@ -445,6 +447,8 @@ export default function AdminProjectClient({
   equipmentExpiry?: Record<string, string>,
   /** Full Prosedur/JSA/PTW audit trail for this project, newest first — see document_logs. */
   documentLogs?: any[],
+  /** Riwayat perubahan langsung JSA/PTW (document_changes). */
+  docChanges?: any[],
   /** roles.permissions milik user saat ini — sumber kebenaran VISIBILITY kartu approval (bukan lagi tombolnya), lihat utils/permissions.ts. */
   permissions?: Record<string, string[]> | null,
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
@@ -1069,7 +1073,7 @@ export default function AdminProjectClient({
                        <button onClick={() => setApproveTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
                          {isProsedurTahapHsePgsol ? 'Teruskan ke PM PGSOL' : isProsedurTahapReviewPgsol ? 'Teruskan ke HSSE PGN' : isProsedurTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui SOP'}
                        </button>
-                       <ProsedurReviewerEditor procedureId={prosedur.id} content={prosedur.content} />
+                       <ProsedurReviewerEditor procedureId={prosedur.id} projectId={project.id} content={prosedur.content} />
                        <button onClick={() => setRejectTarget({ type: 'prosedur', id: prosedur.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak SOP</button>
                      </div>
                    ) : undefined}
@@ -1138,6 +1142,7 @@ export default function AdminProjectClient({
                            <button onClick={() => setApproveTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">
                              {isTahapHsePgsol ? 'Teruskan ke PM PGSOL' : isTahapReviewPgsol ? 'Teruskan ke HSSE PGN' : isTahapHssePgn ? 'Teruskan ke PM Zona' : 'Setujui JSA'}
                            </button>
+                           <JsaReviewerEditor jsaId={jsa.id} />
                            <button onClick={() => setRejectTarget({ type: 'jsa', id: jsa.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak JSA</button>
                          </>
                        )}
@@ -1195,6 +1200,7 @@ export default function AdminProjectClient({
                         />
                       </div>
                     )}
+                    <ChangeLogPanel entries={(docChanges || []).filter((c: any) => c.docType === 'jsa' && c.docId === jsa?.id)} />
                     <DocPreview label="Pratinjau JSA" defaultOpen={canApproveJsa}>
                       <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
                          <JsaPDF projectId={project.id} projectInfo={{ name: project.name, contract_number: project.contract_number, location: project.location, companyName: project.vendor_profiles?.company_name }} signatories={jsaSignatories} preparerSigned={!!jsa && jsa.status !== 'Draft'} preparer={{ satker: project.vendor_profiles?.company_name }} steps={jsa?.jsa_steps?.map((step: any) => {
@@ -1238,6 +1244,7 @@ export default function AdminProjectClient({
                      actions={rowCanApprove ? (
                        <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-56">
                          <button onClick={() => setApproveTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm shadow-emerald-200">Setujui PTW</button>
+                         <PtwReviewerEditor ptwId={row.id} />
                          <button onClick={() => setRejectTarget({ type: 'ptw', id: row.id })} disabled={isLoading} className="w-full px-5 py-2.5 text-sm font-bold text-center text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-xl transition-colors shadow-sm">Tolak PTW</button>
                        </div>
                      ) : undefined}
@@ -1300,6 +1307,7 @@ export default function AdminProjectClient({
                           </div>
                         </div>
                       </div>
+                      <ChangeLogPanel entries={(docChanges || []).filter((c: any) => c.docType === 'ptw' && c.docId === row.id)} />
                       <DocPreview label="Pratinjau PTW" defaultOpen={rowCanApprove}>
                         <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
                           <PtwPDF
@@ -1894,6 +1902,8 @@ export default function AdminProjectClient({
                 <p className="text-xs text-slate-500">Jejak audit pengajuan, review, dan persetujuan Prosedur, JSA, dan PTW</p>
               </div>
             </div>
+
+            <div className="mb-5"><ChangeLogPanel entries={docChanges || []} /></div>
 
             {!documentLogs || documentLogs.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-16 gap-2 text-slate-400">

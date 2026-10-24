@@ -13,6 +13,7 @@ import dynamic from 'next/dynamic';
 import JsaPDF from '@/app/vendor/dashboard/jsa/create/[id]/JsaPDF';
 import { ProsedurPDF } from '@/app/vendor/dashboard/projects/[id]/prosedur/ProsedurPDF';
 import { buildProsedurPdfData } from '@/lib/prosedur-pdf-data';
+import { ChangeLogPanel } from '@/components/prosedur/ChangeLogPanel';
 import PtwPDF from '@/components/ptw/PtwPDF';
 import PtwSafetyCheckTab from '@/components/ptw/PtwSafetyCheckTab';
 import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel';
@@ -92,7 +93,7 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
 }
 
 export function VendorProjectClient({
-  project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, myReviews,
+  project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, docChanges, myReviews,
   ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canAssignHolder, canFillFieldRole,
   canRequestClosure, canRequestCompletion, canRequestExtension,
 }: {
@@ -108,6 +109,7 @@ export function VendorProjectClient({
   assignmentSlots: any[];
   /** Jejak audit Prosedur/JSA/PTW proyek ini, terbaru dulu — sama persis yang dilihat PGN/PGSOL di tab Riwayat internal (lihat document_logs). */
   documentLogs?: any[];
+  docChanges?: any[];
   /** Dokumen yang sedang menunggu review user ini (HSE/PM Vendor) — tombol langsung ke halaman review. */
   myReviews?: { key: string; label: string; href: string }[];
   ptwFieldAssignments?: any[];
@@ -1032,6 +1034,8 @@ export function VendorProjectClient({
                 <p className="text-xs text-slate-500">Jejak audit pengajuan, review, dan persetujuan Prosedur, JSA, dan PTW</p>
               </div>
             </div>
+
+            <div className="mb-5"><ChangeLogPanel entries={docChanges || []} /></div>
 
             {!documentLogs || documentLogs.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-16 gap-2 text-slate-400">

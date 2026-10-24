@@ -6,6 +6,7 @@ import { getPtwSignatories } from '@/lib/ptw-signatories';
 import { hasPermission } from '@/utils/permissions';
 import { getStageAssignments, getEligibleAssignees, getPassedStageKeys, VENDOR_STAGE_KEYS, STAGE_KEY_PERMISSION } from '@/lib/stage-assignments';
 import { getDocumentLogs } from '@/app/dashboard/approval/actions';
+import { loadProjectDocumentChanges } from '@/lib/document-changes';
 import { getFieldCandidates } from '@/app/dashboard/projects/[id]/actions';
 import { PROCEDURE_STATUS } from '@/lib/procedure-status';
 import { JSA_STATUS } from '@/lib/jsa-status';
@@ -96,6 +97,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   if (error || !project) return notFound();
 
   const documentLogs = await getDocumentLogs(projectId);
+  const docChanges = await loadProjectDocumentChanges(supabase, projectId);
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
 
@@ -186,6 +188,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       canEditSafetyChecklist={canEditSafetyChecklist}
       assignmentSlots={assignmentSlots}
       documentLogs={documentLogs}
+      docChanges={docChanges}
       myReviews={myReviews}
       ptwFieldAssignments={ptwFieldAssignments ?? []}
       ptwDailyChecks={ptwDailyChecks ?? []}

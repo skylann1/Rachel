@@ -243,3 +243,5 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
    Catatan: sejak fitur SLA, daftar inspeksi (internal & vendor) juga membaca `due_date` — migrasi ini wajib dijalankan sebelum deploy, kalau tidak daftar render kosong. Cron `/api/cron/inspection-sla` (vercel.json) memakai `CRON_SECRET` yang sama dengan cron PTW.
 
 10. `schema_locations.sql` — tabel `locations` (Master Lokasi) + `projects.location_id`. Jalankan SEBELUM deploy; tanpa ini form Buat Proyek gagal (dropdown lokasi kosong, createProject menolak). Idempotent. Proyek lama tetap memakai teks `projects.location`. Beri permission `masterData.manage_location` ke role PGN yang boleh mengelola lokasi (admin otomatis punya).
+
+11. `schema_document_changes.sql` — tabel `document_changes` (riwayat perubahan langsung JSA/PTW oleh reviewer). Jalankan SEBELUM deploy; tanpa ini tombol "Ubah Dokumen" JSA/PTW menolak menyimpan (sengaja, supaya tidak ada perubahan tanpa jejak) dan panel riwayat kosong. Prosedur Kerja tidak butuh migrasi ini (riwayatnya di `procedures.content.changeLog`). Idempotent.

@@ -34,7 +34,7 @@ export const EDITABLE_CONTENT_KEYS = [
 ] as const;
 
 const MAX_TEXT = 600;
-const clip = (s: string) => (s.length > MAX_TEXT ? `${s.slice(0, MAX_TEXT)}…` : s);
+export const clip = (s: string) => (s.length > MAX_TEXT ? `${s.slice(0, MAX_TEXT)}…` : s);
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const strList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 const lines = (v: unknown) => str(v).split('\n').map((l) => l.replace(/^\s*-\s*/, '').trim()).filter(Boolean);
@@ -47,7 +47,7 @@ type Paired<T> =
   | { t: 'add'; b: T };
 
 /** Diff berbasis LCS; baris yang dihapus lalu ditambah di celah yang sama dipasangkan jadi "change". */
-function diffList<T>(a: T[], b: T[], key: (x: T) => string): Paired<T>[] {
+export function diffList<T>(a: T[], b: T[], key: (x: T) => string): Paired<T>[] {
   const n = a.length, m = b.length;
   const dp = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
   for (let i = n - 1; i >= 0; i--) {

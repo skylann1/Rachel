@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Pencil, X, Plus, Trash2, Loader2, ImageOff } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import { editProsedurAsReviewer } from '@/app/dashboard/approval/prosedur-edit-actions';
+import { getProjectRoster } from '@/app/dashboard/approval/doc-edit-actions';
+import { KebutuhanEditor, type ProjectRoster } from '@/components/prosedur/KebutuhanEditor';
 import { normalizeTahapanPekerjaan, emptyKebutuhan, deriveDocumentSections, type TahapanSection } from '@/lib/procedure-kebutuhan';
 
 const field = 'w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary';
@@ -13,11 +15,12 @@ const lbl = 'text-xs font-bold text-slate-600 block mb-1.5';
 /**
  * Reviewer (PGSOL/PGN) mengubah isi Prosedur langsung, tanpa harus menolak.
  * Status tidak berubah; server mencatat diff-nya ke riwayat perubahan dokumen.
- * Kebutuhan (pekerja/alat/APD) per langkah tidak diubah di sini — kalau
- * salahnya banyak/di situ, gunakan Tolak & Kembalikan.
+ * Kebutuhan per langkah (pekerja/alat/material/APD/bahaya) ikut bisa diubah,
+ * dipilih dari master data vendor proyek.
  */
-export function ProsedurReviewerEditor({ procedureId, content, label = 'Ubah Dokumen' }: {
+export function ProsedurReviewerEditor({ procedureId, projectId, content, label = 'Ubah Dokumen' }: {
   procedureId: string;
+  projectId: string;
   content: any;
   label?: string;
 }) {
@@ -33,6 +36,7 @@ export function ProsedurReviewerEditor({ procedureId, content, label = 'Ubah Dok
   const [tahapan, setTahapan] = useState<TahapanSection[]>([]);
   const [penyelesaian, setPenyelesaian] = useState('');
   const [note, setNote] = useState('');
+  const [roster, setRoster] = useState<ProjectRoster | null>(null);
 
   const openEditor = () => {
     const c = content || {};
@@ -45,6 +49,7 @@ export function ProsedurReviewerEditor({ procedureId, content, label = 'Ubah Dok
     setNote('');
     setError(null);
     setOpen(true);
+    getProjectRoster(projectId).then(setRoster).catch(() => setRoster(null));
   };
 
   const mapSection = (i: number, fn: (s: TahapanSection) => TahapanSection) =>
@@ -120,6 +125,8 @@ export function ProsedurReviewerEditor({ procedureId, content, label = 'Ubah Dok
                             onChange={(e) => mapSection(si, (s) => ({ ...s, points: s.points.map((p, i) => (i === pi ? { ...p, text: e.target.value } : p)) }))} />
                           <button type="button" title="Hapus langkah" onClick={() => mapSection(si, (s) => ({ ...s, points: s.points.filter((_, i) => i !== pi) }))} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"><Trash2 className="w-4 h-4" /></button>
                         </div>
+                        <KebutuhanEditor roster={roster} value={pt.kebutuhan}
+                          onChange={(k) => mapSection(si, (s) => ({ ...s, points: s.points.map((p, i) => (i === pi ? { ...p, kebutuhan: k } : p)) }))} />
                         {pt.imageUrl && (
                           <div className="flex items-center gap-2">
                             {/* eslint-disable-next-line @next/next/no-img-element */}

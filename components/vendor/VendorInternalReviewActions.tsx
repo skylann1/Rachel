@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Loader2, ShieldQuestion } from 'lucide-react';
+import { JsaReviewerEditor } from '@/components/prosedur/JsaReviewerEditor';
+import { PtwReviewerEditor } from '@/components/prosedur/PtwReviewerEditor';
 import { getMyVendorReviewAssignment, approveVendorInternalReview, rejectVendorInternalReview, type VendorReviewDocType } from '@/app/vendor/dashboard/approval/actions';
 
 export function VendorInternalReviewActions({ projectId, docType, docId }: {
@@ -110,6 +112,8 @@ export function VendorInternalReviewActions({ projectId, docType, docId }: {
             <XCircle className="w-4 h-4" />
             Tolak
           </button>
+          {docType === 'jsa' && <div className="w-48"><JsaReviewerEditor jsaId={docId} /></div>}
+          {docType === 'ptw' && <div className="w-48"><PtwReviewerEditor ptwId={docId} /></div>}
         </div>
       ) : (
         <div className="space-y-3">
