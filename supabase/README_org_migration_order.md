@@ -241,3 +241,5 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
 9. `schema_inspection_detail_fields.sql` — kolom detail Inspeksi Temuan (`description`, `category`, `found_at`, `root_cause`, `immediate_action`, `recommendation`, `reference_std`, `due_date`). Jalankan SEBELUM deploy form lapor lengkap & halaman detail inspeksi; tanpa ini membuat laporan baru gagal dan halaman detail kosong. Idempotent, kolom nullable.
 
    Catatan: sejak fitur SLA, daftar inspeksi (internal & vendor) juga membaca `due_date` — migrasi ini wajib dijalankan sebelum deploy, kalau tidak daftar render kosong. Cron `/api/cron/inspection-sla` (vercel.json) memakai `CRON_SECRET` yang sama dengan cron PTW.
+
+10. `schema_locations.sql` — tabel `locations` (Master Lokasi) + `projects.location_id`. Jalankan SEBELUM deploy; tanpa ini form Buat Proyek gagal (dropdown lokasi kosong, createProject menolak). Idempotent. Proyek lama tetap memakai teks `projects.location`. Beri permission `masterData.manage_location` ke role PGN yang boleh mengelola lokasi (admin otomatis punya).

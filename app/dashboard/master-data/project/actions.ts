@@ -20,12 +20,19 @@ export async function createProject(formData: FormData) {
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   const contract_number = formData.get("contract_number") as string;
-  const location = formData.get("location") as string;
+  const location_id = formData.get("location_id") as string;
   const start_date = formData.get("start_date") as string;
   const end_date = formData.get("end_date") as string;
   const vendor_id = formData.get("vendor_id") as string;
   const risk_level = parseRiskLevel(formData.get("risk"));
   if (!risk_level) throw new Error("Pilih Kategori Risiko Proyek.");
+
+  // Lokasi dipilih dari Master Lokasi; teks projects.location diturunkan dari
+  // namanya supaya seluruh kode lain yang membaca projects.location tetap jalan.
+  if (!location_id) throw new Error("Pilih Lokasi / Stasiun proyek.");
+  const { data: locationRow } = await supabase.from('locations').select('name, is_active').eq('id', location_id).maybeSingle();
+  if (!locationRow || !locationRow.is_active) throw new Error("Lokasi tidak ditemukan atau sudah nonaktif.");
+  const location = locationRow.name as string;
 
   const { data: project, error } = await supabase
     .from('projects')
@@ -34,6 +41,7 @@ export async function createProject(formData: FormData) {
       description,
       contract_number,
       location,
+      location_id,
       start_date,
       end_date,
       vendor_id,

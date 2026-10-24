@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, HardHat, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen, Megaphone, Activity, AlertOctagon, Mail } from 'lucide-react';
+import { LayoutDashboard, HardHat, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen, Megaphone, Activity, AlertOctagon, Mail, MapPin } from 'lucide-react';
 import type { SidebarBadges } from '@/app/dashboard/actions/sidebar-badges';
 
 const menuUtama = [
@@ -37,6 +37,7 @@ const masterData = [
   { name: 'Role & Permission', href: '/dashboard/master-data/role', icon: Shield, permission: { module: 'masterData', action: 'manage_role' } },
   { name: 'News & Pengumuman', href: '/dashboard/master-data/announcement', icon: Megaphone, permission: { module: 'announcement', action: 'manage' } },
   { name: 'Data Vendor', href: '/dashboard/master-data/vendor', icon: Building2, permission: { module: 'masterData', action: 'view_vendor' } },
+  { name: 'Master Lokasi', href: '/dashboard/master-data/location', icon: MapPin, permission: { module: 'masterData', action: 'manage_location' } },
   { name: 'Data Proyek', href: '/dashboard/master-data/project', icon: Briefcase, permission: { module: 'masterData', action: 'view_project' } },
 ];
 

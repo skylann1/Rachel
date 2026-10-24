@@ -11,7 +11,7 @@ import type {
   OnlineUser, ActivityFeedRow, FeedFilters, FeedPage, SecurityAlert, UserDetail, UserSession,
 } from './types';
 
-const ACTIVITY_CATEGORIES = ['auth', 'vendor', 'account', 'role', 'project', 'announcement', 'pgsol_assignment'];
+const ACTIVITY_CATEGORIES = ['auth', 'vendor', 'account', 'role', 'project', 'announcement', 'location', 'pgsol_assignment'];
 const DOCUMENT_CATEGORIES = ['procedure', 'jsa', 'ptw'];
 // Batas baris per request di Supabase (max_rows) — tidak ada gunanya meminta lebih.
 const MAX_PAGE = 1000;

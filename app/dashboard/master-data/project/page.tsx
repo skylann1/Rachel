@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import ProjectClient from './ProjectClient';
 import { getProjectStage } from '@/lib/project-stage';
+import { getActiveLocations } from '../location/actions';
 
 export default async function ProjectManagementPage() {
   const supabase = await createClient();
@@ -21,6 +22,8 @@ export default async function ProjectManagementPage() {
   const { data: vendors } = await supabase
     .from('vendor_profiles')
     .select('id, company_name');
+
+  const locations = await getActiveLocations();
 
   // Document status per project, so each card can show which stage the K3
   // paperwork is at and who has to act next.
@@ -74,6 +77,7 @@ export default async function ProjectManagementPage() {
     <ProjectClient
       initialProjects={projectsWithStage}
       vendors={vendors || []}
+      locations={locations}
     />
   );
 }

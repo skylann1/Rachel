@@ -27,6 +27,7 @@ export type ActivityEntityType =
   | 'role'
   | 'project'
   | 'announcement'
+  | 'location'
   | 'pgsol_assignment';
 
 export async function logActivity(supabase: any, params: {

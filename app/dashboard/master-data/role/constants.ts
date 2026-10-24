@@ -133,6 +133,7 @@ export const allPermissionModules = [
       { key: 'manage_role', label: 'Mengelola Role & Permission (PGN: semua role; PGSOL/Vendor: role organisasi sendiri)', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'view_project', label: 'Melihat Master Proyek', allowedTypes: ['pgn', 'pgsol', 'vendor'] },
       { key: 'manage_project', label: 'Mengelola Master Proyek', allowedTypes: ['pgn'] },
+      { key: 'manage_location', label: 'Mengelola Master Lokasi (Stasiun / Area Kerja)', allowedTypes: ['pgn'] },
     ]
   },
   {

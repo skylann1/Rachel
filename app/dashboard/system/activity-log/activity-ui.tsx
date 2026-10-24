@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Activity, Users, LogIn, Building2, Shield, Briefcase, Megaphone, UserCog,
-  FileText, ShieldAlert, Stamp,
+  FileText, ShieldAlert, Stamp, MapPin
 } from 'lucide-react';
 
 /** Potongan UI yang dipakai bersama tab Online, tab Riwayat, drawer detail user, dan panel peringatan. */
@@ -52,6 +52,7 @@ export const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: str
   role: Shield,
   project: Briefcase,
   announcement: Megaphone,
+  location: MapPin,
   pgsol_assignment: UserCog,
   procedure: FileText,
   jsa: ShieldAlert,
@@ -65,6 +66,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   role: 'Role',
   project: 'Proyek',
   announcement: 'Pengumuman',
+  location: 'Lokasi',
   pgsol_assignment: 'HSE & PM PGSOL',
   procedure: 'Prosedur Kerja',
   jsa: 'JSA',

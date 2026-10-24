@@ -11,6 +11,7 @@ import { RISK_META, parseRiskLevel, riskCardClasses } from '@/lib/project-risk';
 interface ProjectClientProps {
   initialProjects: any[];
   vendors: any[];
+  locations: { id: string; name: string; code: string | null; region: string | null }[];
 }
 
 /** Filter options describe the workflow stage, not the raw enum. */
@@ -29,7 +30,7 @@ const STAGE_ICON: Record<StageTone, React.ElementType> = {
   'rejected': X,
 };
 
-export default function ProjectClient({ initialProjects, vendors }: ProjectClientProps) {
+export default function ProjectClient({ initialProjects, vendors, locations }: ProjectClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -346,16 +347,20 @@ export default function ProjectClient({ initialProjects, vendors }: ProjectClien
                   />
                 </div>
 
-                {/* Lokasi Pekerjaan */}
+                {/* Lokasi Pekerjaan — dari Master Lokasi */}
                 <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-2">Lokasi Pekerjaan <span className="text-rose-500">*</span></label>
-                  <input 
-                    type="text" 
-                    name="location"
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Lokasi / Stasiun <span className="text-rose-500">*</span></label>
+                  <select
+                    name="location_id"
                     required
-                    placeholder="Contoh: Stasiun Muara Bekasi"
+                    defaultValue=""
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm"
-                  />
+                  >
+                    <option value="" disabled>{locations.length === 0 ? 'Belum ada lokasi — tambahkan di Master Lokasi' : 'Pilih stasiun / lokasi'}</option>
+                    {locations.map(l => (
+                      <option key={l.id} value={l.id}>{l.name}{l.region ? ` — ${l.region}` : ''}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Tanggal Mulai & Selesai */}
