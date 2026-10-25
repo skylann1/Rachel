@@ -232,6 +232,20 @@ async function writeProcedureSections(c: Ctx, proc: { id: string; status: string
   return true;
 }
 
+/** Sinkron gagal tidak boleh menggagalkan simpan dokumen, tapi vendor perlu tahu supaya dokumen lain dicek manual. */
+async function reportSyncFailure(projectId: string, source: string, err: unknown) {
+  try {
+    const admin = createAdminClient();
+    const { data: proj } = await admin.from('projects').select('name, vendor_id').eq('id', projectId).maybeSingle();
+    if (!proj?.vendor_id) return;
+    await notifyOrgMembers({
+      orgId: proj.vendor_id, type: 'warning', title: 'Sinkronisasi Dokumen Gagal',
+      message: `Perubahan ${source} pada proyek "${proj.name}" tersimpan, tetapi gagal diteruskan otomatis ke dokumen lain (${err instanceof Error ? err.message : 'kesalahan tidak dikenal'}). Periksa Prosedur / JSA / PTW secara manual.`,
+      link: `/vendor/dashboard/projects/${projectId}`,
+    });
+  } catch (e) { console.error('reportSyncFailure error:', e); }
+}
+
 // ------------------------------------------------------------- entry points
 
 /** Prosedur berubah → perbarui JSA (langkah + kebutuhan) dan PTW. */
@@ -274,6 +288,7 @@ export async function syncFromProcedure(projectId: string, oldContent: any, newC
     await syncPtws(c, projDelta, 'Prosedur Kerja');
   } catch (e) {
     console.error('syncFromProcedure error:', e);
+    await reportSyncFailure(projectId, 'Prosedur Kerja', e);
   }
 }
 
@@ -304,6 +319,7 @@ export async function syncFromJsa(projectId: string, oldSteps: JsaStepData[], ne
     await syncPtws(c, projDelta, 'JSA');
   } catch (e) {
     console.error('syncFromJsa error:', e);
+    await reportSyncFailure(projectId, 'JSA', e);
   }
 }
 
@@ -349,5 +365,6 @@ export async function syncFromPtw(projectId: string, ptwId: string, before: PtwE
     void ptwId;
   } catch (e) {
     console.error('syncFromPtw error:', e);
+    await reportSyncFailure(projectId, 'PTW', e);
   }
 }

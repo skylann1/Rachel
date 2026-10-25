@@ -536,7 +536,7 @@ export function VendorProjectClient({
                   />
                 </div>
 
-                <ReviewFlagBanner flag={reviewFlags?.[prosedur?.id]} />
+                <ReviewFlagBanner flag={reviewFlags?.[prosedur?.id]} kind="procedure" docId={prosedur?.id} />
 
                 {prosedurStatus === 'Rejected' && prosedurLastNote && (
                   <div className="p-4 bg-rose-50 rounded-xl text-sm text-rose-700 font-medium border border-rose-100">
@@ -619,7 +619,7 @@ export function VendorProjectClient({
                   </div>
                 )}
 
-                <ReviewFlagBanner flag={reviewFlags?.[jsa?.id]} />
+                <ReviewFlagBanner flag={reviewFlags?.[jsa?.id]} kind="jsa" docId={jsa?.id} />
 
                 <div className="flex gap-4">
                   {(jsaStatus === 'Pending' || jsaStatus === 'Approved' || jsaStatus === 'Rejected') && (
@@ -724,7 +724,7 @@ export function VendorProjectClient({
                             </div>
                           )}
 
-                          <ReviewFlagBanner flag={reviewFlags?.[row.id]} />
+                          <ReviewFlagBanner flag={reviewFlags?.[row.id]} kind="ptw" docId={row.id} />
 
                           {rowStatus === 'Stopped' && (
                             <div className="p-3 bg-red-50 rounded-lg text-sm text-red-800 font-medium border border-red-200 space-y-1">
