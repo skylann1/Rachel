@@ -469,6 +469,15 @@ export async function getMyTasks(): Promise<TaskItem[]> {
           `)
           .in('id', projectIds);
 
+        // Pengajuan lembur yang masih menunggu keputusan HSSE (ptw_overtimes).
+        const { data: pendingOvertimes } = canVerifyExtension && hsseProjects.size > 0
+          ? await supabase
+              .from('ptw_overtimes')
+              .select('id, ptw_id, project_id, tanggal, jam_mulai, jam_selesai, requested_at')
+              .in('project_id', Array.from(hsseProjects))
+              .eq('status', 'Menunggu')
+          : { data: [] as any[] };
+
         for (const proj of (projs || []) as any[]) {
           const vendor = Array.isArray(proj.vendor_profiles) ? proj.vendor_profiles[0] : proj.vendor_profiles;
           const vendorName = vendor?.company_name || 'Internal';
@@ -509,6 +518,26 @@ export async function getMyTasks(): Promise<TaskItem[]> {
                 timeInQueue: formatTimeInQueue(since),
               });
             }
+          }
+
+          for (const ot of (pendingOvertimes || []).filter((o: any) => o.project_id === proj.id)) {
+            const ptw = ptws.find((p: any) => p.id === ot.ptw_id);
+            if (!ptw || ptw.status !== PTW_STATUS.aktif) continue;
+            const typeTitle = PTW_TYPES.find(t => t.id === ptw.ptw_type)?.title.split('(')[0].trim() || ptw.ptw_type;
+            const label = `${typeTitle}${ptw.ptw_number ? ` (${ptw.ptw_number})` : ''}`;
+            const since = ot.requested_at || new Date().toISOString();
+            tasks.push({
+              id: `overtime-${ot.id}`,
+              title: `Verifikasi Lembur PTW — ${label}`,
+              type: 'PTW',
+              projectName: proj.name,
+              vendorName,
+              date: since,
+              url: `/dashboard/projects/${proj.id}`,
+              status: `Lembur ${ot.tanggal}, ${ot.jam_mulai}–${ot.jam_selesai}`,
+              urgency: getUrgency(since) === 'Low' ? 'Medium' : 'High',
+              timeInQueue: formatTimeInQueue(since),
+            });
           }
 
           if (canVerifyCompletion && pmProjects.has(proj.id) && proj.completion_requested_at && proj.status !== 'Selesai') {
