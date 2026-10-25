@@ -251,3 +251,5 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
 13. `schema_ptw_overtime.sql` — tabel `ptw_overtimes` + fungsi `ptw_request_overtime` / `ptw_decide_overtime` (pengajuan lembur PTW, diverifikasi HSSE). Hanya menambah; jalankan sebelum deploy, kalau tidak tombol "Ajukan Lembur" error. Memakai izin `request_extension` (vendor) dan `verify_extension` (HSSE). Idempotent.
 
 14. `schema_doc_sync_flags.sql` — kolom `needs_review_since` / `needs_review_reason` pada `procedures`, `jsa`, `ptw` (penanda "perlu ditinjau ulang" dari sinkronisasi Prosedur/JSA/PTW). Hanya menambah kolom nullable; kode fail-soft sebelum migrasi (banner baru muncul setelahnya). Idempotent.
+
+15. `schema_announcements_advanced.sql` — News tingkat lanjut: kolom `content`, `category`, `audience`, `publish_at`, `expires_at`, `is_pinned`, `is_mandatory`, `attachments`, `notified_at` pada `announcements` + tabel `announcement_reads` (pelacakan pembaca & konfirmasi wajib-baca). Jalankan SEBELUM deploy; tanpa ini carousel, halaman Berita, dan halaman kelola News error/kosong. Bergantung pada `schema_announcements_and_audit_photos.sql`. Idempotent.

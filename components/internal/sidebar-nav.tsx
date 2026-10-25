@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, HardHat, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen, Megaphone, Activity, AlertOctagon, Mail, MapPin } from 'lucide-react';
+import { LayoutDashboard, HardHat, CheckCircle, FileSignature, Users, Shield, Building2, Briefcase, ClipboardList, Camera, AlertTriangle, Rocket, Archive, Siren, BookOpen, Newspaper, Megaphone, Activity, AlertOctagon, Mail, MapPin } from 'lucide-react';
 import type { SidebarBadges } from '@/app/dashboard/actions/sidebar-badges';
 
 const menuUtama = [
@@ -17,6 +17,7 @@ const menuUtama = [
   { name: 'Status Lapangan', href: '/dashboard/site-status', icon: Siren, permission: { module: 'siteOps', action: 'view' } },
   { name: 'Arsip Proyek', href: '/dashboard/archive', icon: Archive, permission: { module: 'approval', action: 'view' } },
   { name: 'Dokumen Vendor', href: '/dashboard/vendor-docs', icon: ClipboardList, permission: { module: 'vendorDocs', action: 'view' } },
+  { name: 'Berita K3', href: '/dashboard/news', icon: Newspaper, permission: { module: 'dashboard', action: 'view' } },
   { name: 'Panduan Alur K3', href: '/dashboard/panduan', icon: BookOpen, permission: { module: 'dashboard', action: 'view' } },
 ];
 

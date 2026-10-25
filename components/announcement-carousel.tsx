@@ -2,23 +2,26 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { ModalPortal } from '@/components/ui/modal-portal';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Pin, ShieldAlert } from 'lucide-react';
+import { categoryTone } from '@/lib/news';
 import type { Announcement } from '@/app/dashboard/master-data/announcement/actions';
 
 const AUTOPLAY_MS = 5000;
 
-export function AnnouncementCarousel({ announcements, compact = false }: { announcements: Announcement[]; compact?: boolean }) {
+export function AnnouncementCarousel({ announcements, compact = false, basePath = '/dashboard/news' }: { announcements: Announcement[]; compact?: boolean; basePath?: string }) {
+  const router = useRouter();
   const [index, setIndex] = useState(0);
-  const [detail, setDetail] = useState<Announcement | null>(null);
+  const pendingAck = announcements.filter((a) => a.is_mandatory && !a.is_acknowledged);
 
   useEffect(() => {
-    if (announcements.length <= 1 || detail) return;
+    if (announcements.length <= 1) return;
     const timer = setInterval(() => {
       setIndex((i) => (i + 1) % announcements.length);
     }, AUTOPLAY_MS);
     return () => clearInterval(timer);
-  }, [announcements.length, detail]);
+  }, [announcements.length]);
 
   if (announcements.length === 0) return null;
 
@@ -27,13 +30,20 @@ export function AnnouncementCarousel({ announcements, compact = false }: { annou
 
   return (
     <>
+      {pendingAck.length > 0 && (
+        <Link href={`${basePath}/${pendingAck[0].id}`} className="mb-3 flex items-center gap-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-rose-100 transition-colors">
+          <ShieldAlert className="w-4 h-4 shrink-0" />
+          <span className="flex-1 min-w-0 truncate">{pendingAck.length} pengumuman wajib dibaca: {pendingAck[0].title}</span>
+          <ChevronRight className="w-4 h-4 shrink-0" />
+        </Link>
+      )}
       <div className={`relative overflow-hidden shadow-lg group ${compact ? 'rounded-2xl' : 'rounded-3xl'}`}>
         <div className={`relative w-full bg-slate-900 ${compact ? 'h-40' : 'h-48 sm:h-56 lg:h-64'}`}>
           {announcements.map((a, i) => (
             <button
               key={a.id}
-              onClick={() => setDetail(a)}
-              aria-label={`Lihat detail: ${a.title}`}
+              onClick={() => router.push(`${basePath}/${a.id}`)}
+              aria-label={`Baca: ${a.title}`}
               className={`absolute inset-0 w-full h-full text-left transition-opacity duration-700 ease-in-out ${
                 i === index ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
               }`}
@@ -42,6 +52,12 @@ export function AnnouncementCarousel({ announcements, compact = false }: { annou
               <img src={a.image_url} alt={a.title} className="w-full h-full object-contain" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/10 to-transparent" />
               <div className={`absolute bottom-0 left-0 right-0 text-left ${compact ? 'p-4' : 'p-5 sm:p-6'}`}>
+                <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border uppercase ${categoryTone(a.category)}`}>{a.category}</span>
+                  {a.is_pinned && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1"><Pin className="w-3 h-3" /> Disematkan</span>}
+                  {a.is_mandatory && !a.is_acknowledged && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-600 text-white flex items-center gap-1"><ShieldAlert className="w-3 h-3" /> Wajib baca</span>}
+                  {!a.is_read && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-primary text-white">BARU</span>}
+                </div>
                 <h2 className={`text-white font-bold drop-shadow-sm ${compact ? 'text-base' : 'text-lg sm:text-xl'}`}>{a.title}</h2>
                 {a.description && (
                   <p className={`text-white/85 mt-1 max-w-2xl ${compact ? 'text-xs line-clamp-1' : 'text-sm line-clamp-2'}`}>{a.description}</p>
@@ -83,32 +99,6 @@ export function AnnouncementCarousel({ announcements, compact = false }: { annou
         )}
       </div>
 
-      {detail && (
-        <ModalPortal onClose={() => setDetail(null)} zIndex={100}>
-          <div className="relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5">
-            <button
-              onClick={() => setDetail(null)}
-              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-md transition hover:bg-white"
-              aria-label="Tutup"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <div className="flex max-h-[55dvh] shrink-0 items-center justify-center overflow-hidden bg-slate-900">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={detail.image_url} alt={detail.title} className="max-h-[55dvh] max-w-full object-contain" />
-            </div>
-            <div className="overflow-y-auto p-6 sm:p-7">
-              <h2 className="text-xl font-bold text-slate-900">{detail.title}</h2>
-              <p className="mt-1 text-xs font-medium text-slate-400">
-                {new Date(detail.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
-              {detail.description && (
-                <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{detail.description}</p>
-              )}
-            </div>
-          </div>
-        </ModalPortal>
-      )}
     </>
   );
 }

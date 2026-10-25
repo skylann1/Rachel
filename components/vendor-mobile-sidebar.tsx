@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { Menu, X, LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, BookOpen, UserCog, ShieldCheck } from 'lucide-react';
+import { Menu, X, LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, BookOpen, Newspaper, UserCog, ShieldCheck } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useVendorBadges } from '@/components/vendor/badges-provider';
 import { logout } from '@/app/vendor/login/actions';
@@ -14,6 +14,7 @@ const menuUtama = [
   { name: 'Proyek Saya', href: '/vendor/dashboard/projects', icon: Briefcase, badgeKey: 'projects' as const },
   { name: 'Inbox Temuan K3', href: '/vendor/dashboard/inspection', icon: AlertTriangle },
   { name: 'Laporan Insiden', href: '/vendor/dashboard/incident', icon: AlertTriangle, danger: true },
+  { name: 'Berita K3', href: '/vendor/dashboard/news', icon: Newspaper },
   { name: 'Panduan Alur K3', href: '/vendor/dashboard/panduan', icon: BookOpen },
 ];
 

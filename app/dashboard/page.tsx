@@ -630,7 +630,7 @@ export default async function DashboardOverviewPage({
    return (
       <div className="space-y-6">
          {announcements.length > 0 && (
-           <AnnouncementCarousel announcements={announcements} />
+           <AnnouncementCarousel announcements={announcements} basePath="/dashboard/news" />
          )}
 
          <div className="flex flex-col gap-4">

@@ -239,7 +239,7 @@ export default async function VendorDashboardPage() {
 
         {announcements.length > 0 && (
           <div className="lg:col-start-3 lg:col-span-1">
-            <AnnouncementCarousel announcements={announcements} compact />
+            <AnnouncementCarousel announcements={announcements} compact basePath="/vendor/dashboard/news" />
           </div>
         )}
       </div>

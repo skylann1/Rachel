@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight, BookOpen, UserCog, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, FileSignature, LogOut, Briefcase, Users, Truck, Package, AlertTriangle, ClipboardList, ChevronLeft, ChevronRight, BookOpen, Newspaper, UserCog, ShieldCheck } from "lucide-react";
 import { logout } from "@/app/vendor/login/actions";
 import { useVendorBadges } from "@/components/vendor/badges-provider";
 
@@ -13,6 +13,7 @@ const menuUtama = [
   { name: 'Proyek Saya', href: '/vendor/dashboard/projects', icon: Briefcase, badgeKey: 'projects' as const },
   { name: 'Inbox Temuan K3', href: '/vendor/dashboard/inspection', icon: AlertTriangle },
   { name: 'Laporan Insiden', href: '/vendor/dashboard/incident', icon: AlertTriangle, danger: true },
+  { name: 'Berita K3', href: '/vendor/dashboard/news', icon: Newspaper },
   { name: 'Panduan Alur K3', href: '/vendor/dashboard/panduan', icon: BookOpen },
 ];
 
