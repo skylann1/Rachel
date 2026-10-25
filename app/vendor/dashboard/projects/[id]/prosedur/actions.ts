@@ -5,6 +5,7 @@ import { notifyAssignees } from "@/app/dashboard/inbox/actions";
 import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { resetStageAssignments, getStageAssignments } from "@/lib/stage-assignments";
+import { syncFromProcedure, clearReviewFlag } from "@/lib/doc-sync";
 import { diffProsedurContent, summarizeChanges, readChangeLog, type ChangeLogEntry } from "@/lib/prosedur-diff";
 
 export async function saveProsedur(projectId: string, payload: any) {
@@ -112,6 +113,11 @@ export async function saveProsedur(projectId: string, payload: any) {
   // ronde baru macet permanen tanpa reset ini.
   await resetStageAssignments(supabase, projectId, 'procedure', 'procedure.hse_vendor');
   await resetStageAssignments(supabase, projectId, 'procedure', 'procedure.review_vendor');
+
+  // Pengajuan ulang: penanda "perlu review ulang" dibersihkan, dan perubahan isi
+  // mengalir ke JSA / PTW yang sudah dibuat paralel.
+  if (procedureId) await clearReviewFlag('procedure', procedureId);
+  if (existing) await syncFromProcedure(projectId, existing.content, payload, user?.id ?? null);
 
   if (procedureId) {
     await logDocumentEvent(supabase, {

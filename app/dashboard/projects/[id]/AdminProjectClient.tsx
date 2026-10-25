@@ -20,6 +20,7 @@ import { buildProsedurPdfData } from '@/lib/prosedur-pdf-data';
 import { ChangeLogPanel } from '@/components/prosedur/ChangeLogPanel';
 import { ProsedurReviewerEditor } from '@/components/prosedur/ProsedurReviewerEditor';
 import { readChangeLog } from '@/lib/prosedur-diff';
+import { ReviewFlagBanner, type ReviewFlag } from '@/components/doc/ReviewFlagBanner';
 import { OVERTIME_TONE, overtimeMinutes, formatDuration } from '@/lib/ptw-overtime';
 import { JsaReviewerEditor } from '@/components/prosedur/JsaReviewerEditor';
 import { PtwReviewerEditor } from '@/components/prosedur/PtwReviewerEditor';
@@ -438,7 +439,7 @@ function ApproveModal({ labelKey, warning, requireNumber, onConfirm, onCancel, i
 }
 
 export default function AdminProjectClient({
-  project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, docChanges, ptwOvertimes, permissions,
+  project, currentUserId, jsaSignatories, ptwSignatories, workerExpiry, equipmentExpiry, documentLogs, docChanges, ptwOvertimes, reviewFlags, permissions,
   siteCheckins, toolboxMeetings, stageAssignments,
   ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canVerifyClosure, canVerifyCompletion, canVerifyExtension,
 }: {
@@ -452,6 +453,8 @@ export default function AdminProjectClient({
   docChanges?: any[],
   /** Pengajuan lembur PTW (ptw_overtimes). */
   ptwOvertimes?: any[],
+  /** Penanda "perlu ditinjau ulang" per id dokumen (sinkronisasi dokumen). */
+  reviewFlags?: Record<string, ReviewFlag>,
   /** roles.permissions milik user saat ini — sumber kebenaran VISIBILITY kartu approval (bukan lagi tombolnya), lihat utils/permissions.ts. */
   permissions?: Record<string, string[]> | null,
   /** Riwayat check-in lapangan (site_checkins) lintas semua PTW proyek ini, terbaru dulu. */
@@ -1083,6 +1086,7 @@ export default function AdminProjectClient({
                      </div>
                    ) : undefined}
                  >
+                   <ReviewFlagBanner flag={reviewFlags?.[prosedur?.id]} />
                    <ChangeLogPanel entries={readChangeLog(prosedur?.content)} />
                    <DocPreview label="Pratinjau Prosedur Kerja" defaultOpen={canApproveProsedur}>
                      {prosedur?.content?.prosedur_html ? (
@@ -1205,6 +1209,13 @@ export default function AdminProjectClient({
                         />
                       </div>
                     )}
+                    {prosedurStatus !== 'Approved' && (
+                      <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-xs font-semibold">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        Prosedur Kerja belum disetujui. JSA ini boleh direview lebih awal, tetapi persetujuan akhir JSA baru bisa diberikan setelah Prosedur Kerja disetujui.
+                      </div>
+                    )}
+                    <ReviewFlagBanner flag={reviewFlags?.[jsa?.id]} />
                     <ChangeLogPanel entries={(docChanges || []).filter((c: any) => c.docType === 'jsa' && c.docId === jsa?.id)} />
                     <DocPreview label="Pratinjau JSA" defaultOpen={canApproveJsa}>
                       <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">
@@ -1312,6 +1323,13 @@ export default function AdminProjectClient({
                           </div>
                         </div>
                       </div>
+                      {(prosedurStatus !== 'Approved' || jsaStatus !== 'Approved') && (
+                        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-xs font-semibold mb-4">
+                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                          {prosedurStatus !== 'Approved' ? 'Prosedur Kerja' : 'JSA'} belum disetujui. PTW ini boleh direview lebih awal, tetapi baru bisa diterbitkan (Aktif) setelah Prosedur Kerja dan JSA disetujui.
+                        </div>
+                      )}
+                      <ReviewFlagBanner flag={reviewFlags?.[row.id]} />
                       <ChangeLogPanel entries={(docChanges || []).filter((c: any) => c.docType === 'ptw' && c.docId === row.id)} />
                       <DocPreview label="Pratinjau PTW" defaultOpen={rowCanApprove}>
                         <PDFViewer width="100%" height="700" className="border-none rounded-2xl bg-white shadow-sm">

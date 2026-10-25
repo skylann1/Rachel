@@ -20,6 +20,7 @@ import PtwFieldAssignmentsPanel from '@/components/ptw/PtwFieldAssignmentsPanel'
 import PtwDailyCheckTab from '@/components/ptw/PtwDailyCheckTab';
 import PtwClosureModal from '@/components/ptw/PtwClosureModal';
 import PtwExtensionModal from '@/components/ptw/PtwExtensionModal';
+import { ReviewFlagBanner, type ReviewFlag } from '@/components/doc/ReviewFlagBanner';
 import PtwOvertimeModal from '@/components/ptw/PtwOvertimeModal';
 import { OVERTIME_TONE, overtimeMinutes, formatDuration } from '@/lib/ptw-overtime';
 import { requestProjectCompletion } from '@/app/dashboard/projects/[id]/completion-actions';
@@ -95,7 +96,7 @@ function AccordionItem({ title, icon, defaultOpen, badge, children }: any) {
 }
 
 export function VendorProjectClient({
-  project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, docChanges, ptwOvertimes, myReviews,
+  project, currentUserId, jsaSignatories, ptwSignatories, siteCheckins, toolboxMeetings, canManageAssignments, canEditSafetyChecklist, assignmentSlots, documentLogs, docChanges, ptwOvertimes, reviewFlags, myReviews,
   ptwFieldAssignments, ptwDailyChecks, profileById, fieldCandidates, canAssignHolder, canFillFieldRole,
   canRequestClosure, canRequestCompletion, canRequestExtension,
 }: {
@@ -114,6 +115,8 @@ export function VendorProjectClient({
   docChanges?: any[];
   /** Pengajuan lembur PTW (ptw_overtimes) untuk proyek ini. */
   ptwOvertimes?: any[];
+  /** Penanda "perlu ditinjau ulang" per id dokumen (sinkronisasi dokumen). */
+  reviewFlags?: Record<string, ReviewFlag>;
   /** Dokumen yang sedang menunggu review user ini (HSE/PM Vendor) — tombol langsung ke halaman review. */
   myReviews?: { key: string; label: string; href: string }[];
   ptwFieldAssignments?: any[];
@@ -222,19 +225,19 @@ export function VendorProjectClient({
    */
   const nextStep: { label: string; detail: string; href?: string; waiting: boolean } = (() => {
     if (prosedurStatus === 'Rejected') return { label: 'Revisi Prosedur Kerja', detail: 'Prosedur Kerja dikembalikan dengan catatan revisi. Perbaiki lalu ajukan ulang.', href: `/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`, waiting: false };
-    if (prosedurStatus === 'Draft') return { label: prosedur ? 'Lanjutkan Prosedur Kerja' : 'Buat Prosedur Kerja', detail: 'Prosedur Kerja adalah dokumen pertama yang harus disetujui sebelum JSA bisa diajukan.', href: `/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`, waiting: false };
-    if (prosedurStatus === 'Pending') return { label: 'Menunggu review Prosedur Kerja', detail: 'Dokumen sedang berjalan di rantai persetujuan. Lihat posisinya di tab Dokumen K3.', waiting: true };
+    if (prosedurStatus === 'Draft') return { label: prosedur ? 'Lanjutkan Prosedur Kerja' : 'Buat Prosedur Kerja', detail: 'Prosedur Kerja adalah dokumen pertama. Setelah dibuat, JSA bisa langsung disusun tanpa menunggu persetujuan.', href: `/vendor/dashboard/projects/${encodeURIComponent(project.id)}/prosedur`, waiting: false };
+    // Prosedur sedang direview: vendor tetap bisa menyusun JSA / PTW secara paralel.
 
     if (jsaStatus === 'Rejected') return { label: 'Revisi JSA', detail: 'JSA dikembalikan dengan catatan revisi. Perbaiki lalu ajukan ulang.', href: `/vendor/dashboard/jsa/create/${encodeURIComponent(project.id)}`, waiting: false };
-    if (jsaStatus === 'Draft') return { label: jsa ? 'Lanjutkan JSA' : 'Buat JSA', detail: 'Prosedur Kerja sudah disetujui. Lanjut identifikasi bahaya dan mitigasi lewat JSA.', href: `/vendor/dashboard/jsa/create/${encodeURIComponent(project.id)}`, waiting: false };
-    if (jsaStatus === 'Pending') return { label: 'Menunggu review JSA', detail: 'JSA sedang berjalan di rantai persetujuan. Lihat posisinya di tab Dokumen K3.', waiting: true };
+    if (jsaStatus === 'Draft') return { label: jsa ? 'Lanjutkan JSA' : 'Buat JSA', detail: 'Prosedur Kerja sudah dibuat. Lanjut identifikasi bahaya dan mitigasi lewat JSA — tidak perlu menunggu Prosedur disetujui.', href: `/vendor/dashboard/jsa/create/${encodeURIComponent(project.id)}`, waiting: false };
+    // JSA sedang direview: vendor tetap bisa menyusun PTW secara paralel.
 
     if (projectCompleted) return { label: 'Proyek selesai', detail: 'Proyek telah dinyatakan selesai dan masuk arsip.', waiting: true };
     if (ptws.length > 0 && ptwAllClosed) {
       if (completionRequested) return { label: 'Menunggu verifikasi penyelesaian proyek', detail: 'Pengajuan penyelesaian proyek sedang diverifikasi PM.', waiting: true };
       return { label: 'Ajukan Penyelesaian Proyek', detail: 'Semua PTW sudah ditutup. Ajukan penyelesaian proyek di tab Ringkasan Proyek.', waiting: false };
     }
-    if (ptws.length === 0) return { label: 'Ajukan PTW', detail: 'JSA sudah disetujui. Ajukan izin kerja sesuai jenis pekerjaan di lapangan.', href: `/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}`, waiting: false };
+    if (ptws.length === 0) return { label: 'Ajukan PTW', detail: 'JSA sudah dibuat. Ajukan izin kerja sesuai jenis pekerjaan di lapangan. PTW baru bisa terbit setelah Prosedur dan JSA disetujui.', href: `/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}`, waiting: false };
     if (ptwStatus === 'Rejected') return { label: 'Revisi PTW', detail: 'Ada PTW yang dikembalikan dengan catatan revisi. Cek tab Dokumen K3.', waiting: false };
     if (ptwStatus === 'Stopped') return { label: 'Pekerjaan dihentikan (Stop Work Authority)', detail: 'Hubungi PM/HSSE untuk mengaktifkan kembali izin kerja.', waiting: true };
     if (ptwStatus === 'Expired') return { label: 'PTW sudah kedaluwarsa', detail: 'Ajukan ulang izin kerja kalau pekerjaan masih berjalan.', waiting: false };
@@ -533,6 +536,8 @@ export function VendorProjectClient({
                   />
                 </div>
 
+                <ReviewFlagBanner flag={reviewFlags?.[prosedur?.id]} />
+
                 {prosedurStatus === 'Rejected' && prosedurLastNote && (
                   <div className="p-4 bg-rose-50 rounded-xl text-sm text-rose-700 font-medium border border-rose-100">
                     <AlertTriangle className="w-4 h-4 inline mr-2 -mt-0.5" />
@@ -614,6 +619,8 @@ export function VendorProjectClient({
                   </div>
                 )}
 
+                <ReviewFlagBanner flag={reviewFlags?.[jsa?.id]} />
+
                 <div className="flex gap-4">
                   {(jsaStatus === 'Pending' || jsaStatus === 'Approved' || jsaStatus === 'Rejected') && (
                     <div className="flex-1">
@@ -645,9 +652,9 @@ export function VendorProjectClient({
 
                   {jsaStatus !== 'Approved' && jsaStatus !== 'Pending' && (
                     <div className="flex-1">
-                      {prosedurStatus !== 'Approved' ? (
+                      {!prosedur ? (
                         <div className="p-4 bg-slate-50 rounded-xl text-center text-sm font-medium text-slate-500 border border-slate-200 border-dashed">
-                          Selesaikan dan tunggu Prosedur Kerja disetujui terlebih dahulu.
+                          Buat Prosedur Kerja terlebih dahulu — JSA bisa langsung disusun setelahnya, tanpa menunggu Prosedur disetujui.
                         </div>
                       ) : (
                         <Link href={`/vendor/dashboard/jsa/create/${encodeURIComponent(project.id)}`} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm transition-colors shadow-sm shadow-primary/30">
@@ -673,9 +680,9 @@ export function VendorProjectClient({
                 </p>
 
                 {ptws.length === 0 ? (
-                  jsaStatus !== 'Approved' ? (
+                  !jsa ? (
                     <div className="p-4 bg-slate-50 rounded-xl text-center text-sm font-medium text-slate-500 border border-slate-200 border-dashed">
-                      Selesaikan dan tunggu JSA disetujui terlebih dahulu.
+                      Susun JSA terlebih dahulu — PTW bisa langsung diajukan setelahnya, tanpa menunggu JSA disetujui.
                     </div>
                   ) : (
                     <Link href={`/vendor/dashboard/ptw/create/${encodeURIComponent(project.id)}`} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm transition-colors shadow-sm shadow-primary/30">
@@ -716,6 +723,8 @@ export function VendorProjectClient({
                               <span className="font-bold">Catatan Revisi:</span> {row.rejection_note}
                             </div>
                           )}
+
+                          <ReviewFlagBanner flag={reviewFlags?.[row.id]} />
 
                           {rowStatus === 'Stopped' && (
                             <div className="p-3 bg-red-50 rounded-lg text-sm text-red-800 font-medium border border-red-200 space-y-1">

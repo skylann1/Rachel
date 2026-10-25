@@ -2,10 +2,11 @@
 
 import { createClient, getCallerVendorOrgId } from "@/utils/supabase/server";
 import { notifyAssignees } from "@/app/dashboard/inbox/actions";
-import { APPROVED_JSA } from "@/lib/project-stage";
 import { PTW_STATUS } from "@/lib/ptw-status";
 import { PTW_TYPES, PTW_MAX_VALID_DAYS, type PtwFormDetails, type PtwType } from "@/lib/ptw-types";
 import { logDocumentEvent } from "@/lib/document-logs";
+import { syncFromPtw, clearReviewFlag } from "@/lib/doc-sync";
+import { pickPtwEditable } from "@/lib/ptw-diff";
 import { resetStageAssignments, getStageAssignments } from "@/lib/stage-assignments";
 import {
   aggregateStepNeeds, aggregatePointNeeds, aggregateKebutuhan, isKebutuhanEmpty,
@@ -39,7 +40,6 @@ export async function getJsaPrefillNeeds(projectId: string): Promise<StepKebutuh
     .from('jsa')
     .select('id')
     .eq('project_id', projectId)
-    .eq('status', APPROVED_JSA)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -182,16 +182,17 @@ export async function savePtw(
   }
 
   // limit(1) + maybeSingle: proyek bisa saja punya lebih dari satu baris JSA.
+  // PTW boleh disusun begitu JSA sudah dibuat; PTW baru bisa terbit (Aktif)
+  // setelah JSA & Prosedur disetujui (lihat approvePtw).
   const { data: jsa } = await supabase
     .from('jsa')
     .select('status')
     .eq('project_id', projectId)
-    .eq('status', APPROVED_JSA)
     .limit(1)
     .maybeSingle();
 
   if (!jsa) {
-    throw new Error('JSA untuk proyek ini belum disetujui. PTW tidak dapat diajukan.');
+    throw new Error('Susun JSA untuk proyek ini terlebih dahulu sebelum mengajukan PTW.');
   }
 
   const formDetails = {
@@ -205,7 +206,7 @@ export async function savePtw(
 
   const { data: existing } = await supabase
     .from('ptw')
-    .select('id, status')
+    .select('*')
     .eq('project_id', projectId)
     .eq('ptw_type', ptwType)
     .maybeSingle();
@@ -294,6 +295,11 @@ export async function savePtw(
   await resetStageAssignments(supabase, projectId, 'ptw', 'ptw.review_vendor');
 
   if (ptwId) {
+    await clearReviewFlag('ptw', ptwId);
+    // Penambahan pekerja/alat/bahaya/APD di PTW yang diajukan ulang mengalir ke JSA & Prosedur.
+    if (existing) {
+      await syncFromPtw(projectId, ptwId, pickPtwEditable(existing), pickPtwEditable({ ...existing, workers, equipment, hazards, apd }), user.id);
+    }
     await logDocumentEvent(supabase, {
       docType: 'ptw', docId: ptwId, projectId, actorId: user.id,
       action: existing ? `PTW Diajukan Ulang (${ptwType})` : `PTW Diajukan (${ptwType})`,

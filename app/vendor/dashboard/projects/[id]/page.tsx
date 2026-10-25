@@ -99,6 +99,13 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
   const documentLogs = await getDocumentLogs(projectId);
   const docChanges = await loadProjectDocumentChanges(supabase, projectId);
   const { data: ptwOvertimes } = await supabase.from('ptw_overtimes').select('*').eq('project_id', projectId).order('tanggal', { ascending: true });
+  // Penanda "perlu ditinjau ulang" (sinkronisasi dokumen) — kueri terpisah & fail-soft supaya halaman tetap jalan sebelum migrasi.
+  const flagResults = await Promise.all(['procedures', 'jsa', 'ptw'].map((t) =>
+    supabase.from(t).select('id, needs_review_since, needs_review_reason').eq('project_id', projectId)));
+  const reviewFlags: Record<string, { since: string; reason: string | null }> = {};
+  flagResults.forEach((r: any) => (r.data || []).forEach((x: any) => {
+    if (x.needs_review_since) reviewFlags[x.id] = { since: x.needs_review_since, reason: x.needs_review_reason };
+  }));
 
   const jsa = Array.isArray(project.jsa) ? project.jsa[0] : project.jsa;
 
@@ -191,6 +198,7 @@ export default async function ProjectDetailTrackerPage({ params }: { params: Pro
       documentLogs={documentLogs}
       docChanges={docChanges}
       ptwOvertimes={ptwOvertimes ?? []}
+      reviewFlags={reviewFlags}
       myReviews={myReviews}
       ptwFieldAssignments={ptwFieldAssignments ?? []}
       ptwDailyChecks={ptwDailyChecks ?? []}

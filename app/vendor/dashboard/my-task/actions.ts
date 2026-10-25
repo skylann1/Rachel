@@ -138,7 +138,7 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
         urgency: getUrgency(project.created_at),
         timeInQueue: formatTimeInQueue(project.created_at),
       });
-    } else if (prosedur.status === PROCEDURE_STATUS.approved && !jsa) {
+    } else if (!jsa) {
       const date = prosedur.created_at || project.created_at;
       tasks.push({
         id: `jsa-baru-${project.id}`,
@@ -151,7 +151,7 @@ export async function getVendorMyTasks(): Promise<VendorTaskItem[]> {
         urgency: getUrgency(date),
         timeInQueue: formatTimeInQueue(date),
       });
-    } else if (jsa?.status === JSA_STATUS.approved && ptws.length === 0) {
+    } else if (jsa && ptws.length === 0) {
       const date = jsa.created_at || project.created_at;
       tasks.push({
         id: `ptw-baru-${project.id}`,

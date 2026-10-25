@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 import { PROCEDURE_STAGE_SEQUENCE } from "@/lib/procedure-status";
 import { logDocumentEvent } from "@/lib/document-logs";
+import { syncFromProcedure } from "@/lib/doc-sync";
 import { getStageAssignments } from "@/lib/stage-assignments";
 import {
   applyContentPatch, diffProsedurContent, summarizeChanges, readChangeLog,
@@ -88,6 +89,8 @@ export async function editProsedurAsReviewer(
       link: `/vendor/dashboard/projects/${current.project_id}/prosedur`,
     });
   }
+
+  await syncFromProcedure(current.project_id, oldContent, nextContent, user.id);
 
   revalidatePath('/dashboard/approval');
   revalidatePath(`/dashboard/projects/${current.project_id}`);

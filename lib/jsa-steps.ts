@@ -141,3 +141,19 @@ export function seedApdControl(step: JsaStepData): JsaStepData {
   const items = flatApd(step.kebutuhan);
   return items.length ? { ...step, faktorPositif: { ...step.faktorPositif, apd: items.join(', ') } } : step;
 }
+
+/** Langkah JSA kosong bernama `langkah`, dengan kebutuhan awal (APD ikut mengisi Faktor Positif). */
+export function blankJsaStep(langkah: string, kebutuhan?: StepKebutuhan): JsaStepData {
+  return seedApdControl({
+    id: 0,
+    langkah,
+    kebutuhan: { ...emptyKebutuhan(), ...(kebutuhan || {}) },
+    jenisBahaya: 'Fisika',
+    sebab: '',
+    potensiBahaya: '',
+    faktorPositif: emptyControl(),
+    inherentRisk: { ...DEFAULT_RISK },
+    mitigasi: emptyControl(),
+    residualRisk: { ...DEFAULT_RISK },
+  });
+}

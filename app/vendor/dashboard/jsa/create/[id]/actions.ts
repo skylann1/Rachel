@@ -4,9 +4,10 @@ import { createClient } from "@/utils/supabase/server";
 import { hasPermissionForUser } from "@/utils/permissions";
 import { notifyAssignees } from "@/app/dashboard/inbox/actions";
 import { JSA_STATUS } from "@/lib/jsa-status";
-import { APPROVED_PROCEDURE } from "@/lib/project-stage";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { syncProjectRiskFromJsa } from "@/lib/jsa-project-risk";
+import { syncFromJsa, clearReviewFlag } from "@/lib/doc-sync";
+import { parseJsaStepRow, sanitizeJsaSteps } from "@/lib/jsa-steps";
 import { resetStageAssignments } from "@/lib/stage-assignments";
 import { normalizeTahapanPekerjaan, TahapanSection } from "@/lib/procedure-kebutuhan";
 
@@ -26,8 +27,10 @@ export async function saveJsa(projectId: string, jsaData: any) {
     .eq('project_id', projectId)
     .single();
 
-  if (procedure?.status !== APPROVED_PROCEDURE) {
-    throw new Error('Prosedur Kerja untuk proyek ini belum disetujui. JSA tidak dapat diajukan.');
+  // JSA boleh disusun begitu Prosedur Kerja sudah dibuat — tidak perlu menunggu disetujui.
+  // Persetujuan AKHIR JSA tetap menunggu Prosedur disetujui (lihat approveJsa).
+  if (!procedure) {
+    throw new Error('Buat Prosedur Kerja untuk proyek ini terlebih dahulu sebelum menyusun JSA.');
   }
 
   // check if JSA already exists
@@ -92,6 +95,10 @@ export async function saveJsa(projectId: string, jsaData: any) {
   await resetStageAssignments(supabase, projectId, 'jsa', 'jsa.hse_vendor');
   await resetStageAssignments(supabase, projectId, 'jsa', 'jsa.review_vendor');
 
+  // Langkah lama disimpan dulu: dipakai untuk menyinkronkan perubahan ke Prosedur / PTW.
+  const { data: previousRows } = await supabase.from('jsa_steps').select('*').eq('jsa_id', jsaId).order('step_number', { ascending: true });
+  const previousSteps = (previousRows || []).map((r: any, i: number) => parseJsaStepRow(r, i));
+
   // Delete existing steps
   await supabase.from('jsa_steps').delete().eq('jsa_id', jsaId);
 
@@ -120,6 +127,12 @@ export async function saveJsa(projectId: string, jsaData: any) {
     const { error: stepError } = await supabase.from('jsa_steps').insert(stepsToInsert);
     if (stepError) throw new Error(stepError.message);
   }
+
+  // Pengajuan ulang membersihkan penanda "perlu review ulang"; perubahan kebutuhan
+  // mengalir ke Prosedur & PTW (JSA yang baru pertama kali dibuat tidak disinkron —
+  // kebutuhannya memang disemai dari Prosedur).
+  await clearReviewFlag('jsa', jsaId);
+  if (previousSteps.length > 0) await syncFromJsa(projectId, previousSteps, sanitizeJsaSteps(jsaData.steps ?? []), user?.id ?? null);
 
   // Kategori risiko proyek menyesuaikan Inherent Risk tertinggi di JSA.
   await syncProjectRiskFromJsa(supabase, projectId, jsaData.steps ?? [], user?.id);

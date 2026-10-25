@@ -595,7 +595,7 @@ export default function PTWCreatePage() {
               <div className="flex items-start gap-2 bg-violet-50 border border-violet-200 rounded-xl p-3 mb-4 text-xs text-violet-800">
                 <Sparkles className="w-4 h-4 text-violet-600 shrink-0 mt-px" />
                 <span>
-                  Isian ini disalin otomatis dari kebutuhan langkah JSA yang sudah disetujui (ditandai <b>dari JSA</b>). Kamu tetap bisa menambah atau mengubah sebelum mengajukan.
+                  Isian ini disalin otomatis dari kebutuhan langkah JSA (ditandai <b>dari JSA</b>) dan ikut diperbarui kalau JSA/Prosedur berubah. Kamu tetap bisa menambah atau mengubah sebelum mengajukan.
                 </span>
               </div>
             )}

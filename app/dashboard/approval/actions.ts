@@ -8,6 +8,7 @@ import { PROCEDURE_STATUS, PROCEDURE_STAGE_SEQUENCE, procedureStageIndex } from 
 import { PTW_STATUS, PTW_STAGE_SEQUENCE, ptwStageIndex } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
 import { hasPermissionForUser } from "@/utils/permissions";
+import { clearReviewFlag } from "@/lib/doc-sync";
 import { getStageAssignments, isStageFullyApproved, resetStageAssignments } from '@/lib/stage-assignments';
 import { notifyAssignees } from '@/app/dashboard/inbox/actions';
 
@@ -169,6 +170,26 @@ export async function getDocumentLogs(projectId: string) {
  * dan halaman Role & Permission), bukan role slug yang di-hardcode — admin
  * bisa mengganti siapa yang berhak di tiap tahap tanpa ubah kode.
  */
+/**
+ * Dokumen boleh disusun & direview paralel, tapi persetujuan AKHIR tetap urut:
+ * JSA baru bisa final setelah Prosedur disetujui, PTW baru bisa terbit (Aktif)
+ * setelah JSA dan Prosedur disetujui.
+ */
+async function requireUpstreamApproved(supabase: any, projectId: string, needs: { procedure?: boolean; jsa?: boolean }, docLabel: string) {
+  if (needs.procedure) {
+    const { data } = await supabase.from('procedures').select('status').eq('project_id', projectId).maybeSingle();
+    if (data?.status !== PROCEDURE_STATUS.approved) {
+      throw new Error(`Prosedur Kerja belum disetujui. Persetujuan akhir ${docLabel} baru bisa diberikan setelah Prosedur Kerja disetujui.`);
+    }
+  }
+  if (needs.jsa) {
+    const { data } = await supabase.from('jsa').select('status').eq('project_id', projectId).limit(1).maybeSingle();
+    if (data?.status !== JSA_STATUS.approved) {
+      throw new Error(`JSA belum disetujui. ${docLabel} baru bisa terbit setelah JSA disetujui.`);
+    }
+  }
+}
+
 async function requirePermission(supabase: any, userId: string, permission: { module: string; action: string }, errorMessage: string) {
   const allowed = await hasPermissionForUser(supabase, userId, permission.module, permission.action);
   if (!allowed) {
@@ -223,6 +244,7 @@ export async function approveProcedure(procedureId: string) {
 
   const { error: markError } = await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
   if (markError) throw new Error(markError.message);
+  await clearReviewFlag('procedure', procedureId);
 
   // Re-fetch fresh dari DB (bukan patch lokal dari `rows`) — lihat catatan
   // yang sama di approveJsa/approvePtw: dua approver terakhir yang approve
@@ -435,6 +457,7 @@ export async function approveJsa(jsaId: string) {
     if (current.reviewer_id && current.reviewer_id === user.id) {
       throw new Error("JSA harus disetujui oleh orang yang berbeda dari yang melakukan review HSE PGSOL. Silakan minta Approver PGN lain untuk menyetujui.");
     }
+    await requireUpstreamApproved(supabase, current.project_id, { procedure: true }, 'JSA');
   } else {
     throw new Error("JSA tidak dalam tahap yang bisa disetujui.");
   }
@@ -444,6 +467,7 @@ export async function approveJsa(jsaId: string) {
   if (!myRow) throw new Error("Anda tidak ditugaskan untuk tahap JSA ini pada proyek ini.");
 
   await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
+  await clearReviewFlag('jsa', jsaId);
 
   // Re-fetch (bukan patch lokal dari `rows` yang sudah basi) — dua approver
   // terakhir yang approve nyaris bersamaan sama-sama melihat snapshot awal
@@ -668,6 +692,7 @@ export async function approvePtw(ptwId: string, ptwNumberInput?: string) {
     const manualNumber = (ptwNumberInput ?? '').trim();
     if (!manualNumber) throw new Error("Nomor PTW wajib diisi oleh HSSE.");
     if (manualNumber.length > 60) throw new Error("Nomor PTW terlalu panjang (maksimal 60 karakter).");
+    await requireUpstreamApproved(supabase, current.project_id, { procedure: true, jsa: true }, 'PTW');
     const { data: dupe } = await supabase.from('ptw').select('id').eq('ptw_number', manualNumber).neq('id', ptwId).maybeSingle();
     if (dupe) throw new Error(`Nomor PTW "${manualNumber}" sudah dipakai PTW lain.`);
     ptwNumberToUse = manualNumber;
@@ -680,6 +705,7 @@ export async function approvePtw(ptwId: string, ptwNumberInput?: string) {
   if (!myRow) throw new Error("Anda tidak ditugaskan untuk tahap PTW ini pada proyek ini.");
 
   await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
+  await clearReviewFlag('ptw', ptwId);
 
   // Re-fetch (bukan patch lokal dari `rows` yang sudah basi) — lihat catatan
   // yang sama di Task 5/6: dua approver terakhir yang approve nyaris

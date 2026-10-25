@@ -249,3 +249,5 @@ Jalankan SATU PER SATU di Supabase SQL editor setelah semua langkah di atas
 12. `schema_ptw_extension_numbers.sql` — `ptw.extensions` (riwayat perpanjangan bernomor) + `ptw_decide_extension` menerima `p_number` (wajib saat menyetujui). Harus dijalankan BERSAMAAN dengan deploy kode "perpanjangan PTW bernomor": fungsi lama (3 argumen) dihapus, jadi kode lama tidak bisa menyetujui perpanjangan setelah migrasi ini. Bergantung pada `schema_ptw_extension_multi_sheet.sql`. Idempotent.
 
 13. `schema_ptw_overtime.sql` — tabel `ptw_overtimes` + fungsi `ptw_request_overtime` / `ptw_decide_overtime` (pengajuan lembur PTW, diverifikasi HSSE). Hanya menambah; jalankan sebelum deploy, kalau tidak tombol "Ajukan Lembur" error. Memakai izin `request_extension` (vendor) dan `verify_extension` (HSSE). Idempotent.
+
+14. `schema_doc_sync_flags.sql` — kolom `needs_review_since` / `needs_review_reason` pada `procedures`, `jsa`, `ptw` (penanda "perlu ditinjau ulang" dari sinkronisasi Prosedur/JSA/PTW). Hanya menambah kolom nullable; kode fail-soft sebelum migrasi (banner baru muncul setelahnya). Idempotent.

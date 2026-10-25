@@ -6,6 +6,7 @@ import { PROCEDURE_STATUS } from "@/lib/procedure-status";
 import { JSA_STATUS } from "@/lib/jsa-status";
 import { PTW_STATUS } from "@/lib/ptw-status";
 import { logDocumentEvent } from "@/lib/document-logs";
+import { clearReviewFlag } from "@/lib/doc-sync";
 import { getStageAssignments, isStageFullyApproved, resetStageAssignments } from "@/lib/stage-assignments";
 import { notifyAssignees, notifyOrgMembers } from "@/app/dashboard/inbox/actions";
 
@@ -127,6 +128,7 @@ export async function approveVendorInternalReview(docType: VendorReviewDocType, 
 
   const { error: markError } = await supabase.from('stage_assignments').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', myRow.id);
   if (markError) throw new Error(markError.message);
+  await clearReviewFlag(docType, docId);
 
   // Re-fetch fresh dari DB, bukan patch lokal dari `rows` yang sudah basi —
   // dua reviewer terakhir yang approve nyaris bersamaan bisa sama-sama
