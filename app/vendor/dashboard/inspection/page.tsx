@@ -8,6 +8,7 @@ import { dueState } from '@/lib/inspection-fields';
 import { PhotoGalleryLightbox } from '@/components/photo-gallery-lightbox';
 import { resolveInspectionGallery } from '@/lib/inspection-photos';
 import { ACTIVITY_TYPE_META, normalizeActivityType } from '@/lib/inspection-activity';
+import { DataTable, DataHead, EmptyRow, ROW_CLS, CELL_CLS, ACTION_LINK_CLS } from '@/components/ui/data-table';
 
 const SLA_TONE = {
   ok: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -73,7 +74,7 @@ export default function VendorInspectionPage() {
         </div>
       </div>
 
-      {/* Grid of Finding Cards */}
+      {/* Daftar temuan */}
       {filteredInspections.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 bg-white border-2 border-dashed border-slate-200 rounded-2xl">
           <Inbox className="w-10 h-10 text-slate-300 mb-3" />
@@ -82,86 +83,80 @@ export default function VendorInspectionPage() {
           </p>
         </div>
       ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredInspections.map((item) => (
-          <div key={item.id} className={`bg-white border-2 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group ${item.status === 'Open' ? 'border-rose-200' : 'border-slate-200'}`}>
-            
-            {/* Image Placeholder */}
-            <div
-              className={`h-48 bg-slate-100 relative overflow-hidden ${item.photos.length > 0 ? 'cursor-pointer' : ''}`}
-              onClick={() => { if (item.photos.length > 0) { setGalleryPhotos(item.photos); setGalleryIndex(0); } }}
-            >
-               {/* eslint-disable-next-line @next/next/no-img-element */}
-               <img src={item.image} alt={item.type} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-               {item.photos.length > 1 && (
-                 <span className="absolute bottom-3 right-3 px-2 py-1 text-xs font-bold rounded-lg bg-slate-900/70 text-white backdrop-blur-sm">
-                   +{item.photos.length - 1}
-                 </span>
-               )}
-               <div className="absolute top-3 right-3 flex gap-2">
-                  <span className={`px-2.5 py-1 text-xs font-black uppercase tracking-wider rounded-lg shadow-sm ${
-                     item.priority === 'Critical' ? 'bg-rose-600 text-white' : 
-                     item.priority === 'High' ? 'bg-amber-500 text-white' : 
-                     'bg-blue-500 text-white'
-                  }`}>
-                     {item.priority}
-                  </span>
-               </div>
-               <div className="absolute top-3 left-3 flex gap-2">
-                  <span className={`px-2.5 py-1 text-xs font-bold rounded-lg shadow-sm backdrop-blur-md ${
-                     item.status === 'Open' ? 'bg-rose-100/90 text-rose-700 border border-rose-200' :
-                     item.status === 'In Progress' ? 'bg-amber-100/90 text-amber-700 border border-amber-200' :
-                     'bg-emerald-100/90 text-emerald-700 border border-emerald-200'
-                  }`}>
-                     {item.status}
-                  </span>
-               </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-5 flex-1 flex flex-col bg-white">
-               <div className="flex items-center gap-2 mb-3">
-                 <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{item.id}</span>
-                 <span className="text-xs font-bold text-slate-500">{item.type}</span>
-                 {item.activityType === 'Audit / Kunjungan' && (
-                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${ACTIVITY_TYPE_META[item.activityType as 'Audit / Kunjungan'].badge}`}>Audit / Kunjungan</span>
-                 )}
-               </div>
-               
-               <p className="text-sm font-semibold text-slate-800 leading-relaxed mb-4 line-clamp-3">
-                 "{item.description}"
-               </p>
-
-               <div className="mt-auto space-y-2 text-xs font-medium text-slate-600">
-                 <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {item.location}</div>
-                 <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-slate-400" /> {item.date}</div>
-                 {dueState(item.due_date, item.status).tone !== 'none' && (
-                   <div><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-bold ${SLA_TONE[dueState(item.due_date, item.status).tone]}`}>SLA: {dueState(item.due_date, item.status).label}</span></div>
-                 )}
-               </div>
-            </div>
-            
-            <div className={`p-4 flex gap-2 ${item.status === 'Open' ? 'bg-rose-50' : 'bg-slate-50 border-t border-slate-100'}`}>
-               {item.status === 'Open' ? (
-                  <Link
-                    href={`/vendor/dashboard/inspection/${item.id}`}
-                    className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm shadow-rose-600/30 transition-colors"
+      <DataTable minWidth={960}>
+        <DataHead columns={[
+          { label: 'Foto', className: 'w-16' }, { label: 'Temuan' }, { label: 'Lokasi / Tanggal' }, { label: 'Prioritas' }, { label: 'Status / SLA' }, { label: 'Aksi', className: 'text-right' },
+        ]} />
+        <tbody className="divide-y divide-slate-100">
+          {filteredInspections.map((item) => {
+            const sla = dueState(item.due_date, item.status);
+            return (
+              <tr key={item.id} className={`${ROW_CLS} ${item.status === 'Open' ? 'bg-rose-50/30' : ''}`}>
+                <td className={CELL_CLS}>
+                  <button
+                    type="button"
+                    disabled={item.photos.length === 0}
+                    onClick={() => { setGalleryPhotos(item.photos); setGalleryIndex(0); }}
+                    className="relative block w-12 h-12 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 disabled:cursor-default"
                   >
-                     Tindak Lanjuti <ArrowRight className="w-4 h-4" />
-                  </Link>
-               ) : item.status === 'In Progress' ? (
-                  <Link href={`/vendor/dashboard/inspection/${item.id}`} className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-sm font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded-xl">
-                     <Clock className="w-4 h-4" /> Menunggu Validasi HSE
-                  </Link>
-               ) : (
-                  <Link href={`/vendor/dashboard/inspection/${item.id}`} className="w-full flex items-center justify-center gap-1.5 text-center py-2 text-sm font-bold text-emerald-600 bg-emerald-100 border border-emerald-200 rounded-xl">
-                     <CheckCircle className="w-4 h-4" /> Telah Ditutup · Lihat Detail
-                  </Link>
-               )}
-            </div>
-          </div>
-        ))}
-      </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.image} alt={item.type} className="w-full h-full object-cover" />
+                    {item.photos.length > 1 && (
+                      <span className="absolute bottom-0 right-0 px-1 text-[9px] font-bold bg-slate-900/70 text-white rounded-tl">+{item.photos.length - 1}</span>
+                    )}
+                  </button>
+                </td>
+                <td className={`${CELL_CLS} max-w-sm`}>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{item.id}</span>
+                    <span className="text-xs font-bold text-slate-500">{item.type}</span>
+                    {item.activityType === 'Audit / Kunjungan' && (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${ACTIVITY_TYPE_META[item.activityType as 'Audit / Kunjungan'].badge}`}>Audit / Kunjungan</span>
+                    )}
+                  </div>
+                  <p className="font-semibold text-slate-800 line-clamp-2">{item.description}</p>
+                </td>
+                <td className={`${CELL_CLS} text-xs text-slate-600 space-y-1`}>
+                  <div className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />{item.location}</div>
+                  <div className="flex items-center gap-1.5 whitespace-nowrap"><Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />{item.date}</div>
+                </td>
+                <td className={CELL_CLS}>
+                  <span className={`inline-block px-2 py-0.5 text-[11px] font-black uppercase tracking-wider rounded-md ${
+                    item.priority === 'Critical' ? 'bg-rose-600 text-white' :
+                    item.priority === 'High' ? 'bg-amber-500 text-white' :
+                    item.priority === 'Medium' ? 'bg-sky-100 text-sky-700' : 'bg-blue-500 text-white'
+                  }`}>{item.priority}</span>
+                </td>
+                <td className={`${CELL_CLS} space-y-1.5`}>
+                  <span className={`inline-block px-2 py-0.5 text-xs font-bold rounded-md border ${
+                    item.status === 'Open' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                    item.status === 'In Progress' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                    'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>{item.status}</span>
+                  {sla.tone !== 'none' && (
+                    <div><span className={`inline-flex px-2 py-0.5 rounded-md border text-[11px] font-bold ${SLA_TONE[sla.tone]}`}>SLA: {sla.label}</span></div>
+                  )}
+                </td>
+                <td className={`${CELL_CLS} text-right`}>
+                  {item.status === 'Open' ? (
+                    <Link href={`/vendor/dashboard/inspection/${item.id}`} className={`${ACTION_LINK_CLS} text-white bg-rose-600 border-rose-600 hover:bg-rose-700`}>
+                      Tindak Lanjuti <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  ) : item.status === 'In Progress' ? (
+                    <Link href={`/vendor/dashboard/inspection/${item.id}`} className={`${ACTION_LINK_CLS} text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100`}>
+                      <Clock className="w-3.5 h-3.5" /> Menunggu Validasi
+                    </Link>
+                  ) : (
+                    <Link href={`/vendor/dashboard/inspection/${item.id}`} className={`${ACTION_LINK_CLS} text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100`}>
+                      <CheckCircle className="w-3.5 h-3.5" /> Lihat Detail
+                    </Link>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
       )}
 
       {/* Lightbox Galeri Foto */}

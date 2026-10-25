@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Plus, MapPin, Phone, Mail, Edit2, Trash2, CheckCircle2, AlertTriangle, FileText, Building2, X, Download, Eye, User, Users } from 'lucide-react';
+import { DataTable, DataHead, EmptyRow, ROW_CLS, CELL_CLS } from '@/components/ui/data-table';
 import EditVendorModal from './EditVendorModal';
 import AddVendorModal from './AddVendorModal';
 import VendorStaffModal from './VendorStaffModal';
@@ -90,110 +91,84 @@ export default function VendorPageClient({ initialVendors, canManageVendor, canM
         </div>
       </div>
 
-      {/* Data Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredVendors.map((vendor) => (
-          <div key={vendor.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group">
-            
-            {/* Card Header */}
-            <div className="p-5 border-b border-slate-100 flex justify-between items-start">
-              <div className="flex items-start gap-3">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                  <Building2 className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-800 line-clamp-1" title={vendor.company_name}>{vendor.company_name}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{vendor.id.split('-')[0]}...</span>
+      {/* Daftar vendor */}
+      <div className="text-xs text-slate-500 -mb-3">
+        Menampilkan <b className="text-slate-700">{filteredVendors.length}</b> dari {initialVendors.length} vendor
+      </div>
+      <DataTable minWidth={980}>
+        <DataHead columns={[
+          { label: 'Perusahaan' }, { label: 'PIC / Kontak' }, { label: 'Status K3 / CSMS' }, { label: 'Proyek Aktif', className: 'text-center' }, { label: 'Aksi', className: 'text-right' },
+        ]} />
+        <tbody className="divide-y divide-slate-100">
+          {filteredVendors.length === 0 && (
+            <EmptyRow colSpan={5}>Belum ada data vendor yang cocok dengan kriteria pencarian Anda. Vendor bisa didaftarkan lewat tombol Tambah Vendor.</EmptyRow>
+          )}
+          {filteredVendors.map((vendor) => (
+            <tr key={vendor.id} className={ROW_CLS}>
+              <td className={CELL_CLS}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-800 truncate" title={vendor.company_name}>{vendor.company_name}</p>
+                    <p className="text-[11px] text-slate-400 font-mono">{vendor.id.split('-')[0]}</p>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Card Body - Details */}
-            <div className="p-5 flex-1 space-y-4">
-              {/* Contact Info */}
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <div className="w-6 flex justify-center text-slate-400"><User className="w-4 h-4" /></div>
-                  <span className="font-medium text-slate-700">PIC: {vendor.profiles?.full_name || 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <div className="w-6 flex justify-center text-slate-400"><Phone className="w-4 h-4" /></div>
-                  {vendor.phone || 'N/A'}
-                </div>
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <div className="w-6 flex justify-center text-slate-400"><Mail className="w-4 h-4" /></div>
-                  <span className="truncate" title={vendor.company_email || vendor.profiles?.email}>{vendor.company_email || vendor.profiles?.email || 'N/A'}</span>
-                </div>
-              </div>
-
-              {/* Status and Metrics */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Status K3 / CSMS</span>
-                  {vendor.csms_status === 'Verified' && (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Lulus Verifikasi
-                    </span>
+              </td>
+              <td className={`${CELL_CLS} text-xs text-slate-600 space-y-1`}>
+                <div className="flex items-center gap-1.5 font-semibold text-slate-700"><User className="w-3.5 h-3.5 text-slate-400 shrink-0" />{vendor.profiles?.full_name || 'N/A'}</div>
+                <div className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />{vendor.phone || 'N/A'}</div>
+                <div className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span className="truncate max-w-[14rem]" title={vendor.company_email || vendor.profiles?.email}>{vendor.company_email || vendor.profiles?.email || 'N/A'}</span></div>
+              </td>
+              <td className={CELL_CLS}>
+                {vendor.csms_status === 'Verified' && (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Lulus Verifikasi
+                  </span>
+                )}
+                {(!vendor.csms_status || vendor.csms_status === 'Pending Review') && (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Evaluasi Dokumen
+                  </span>
+                )}
+                {vendor.csms_status === 'Suspended' && (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Suspended
+                  </span>
+                )}
+              </td>
+              <td className={`${CELL_CLS} text-center`}>
+                <span className="inline-block text-sm font-black text-slate-800 bg-slate-100 px-3 py-0.5 rounded-full">{vendor.projects?.[0]?.count || 0}</span>
+              </td>
+              <td className={`${CELL_CLS} text-right`}>
+                <div className="inline-flex gap-1.5">
+                  <button
+                    onClick={() => setSelectedVendorForStaff(vendor)}
+                    className="text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <Users className="w-3.5 h-3.5" /> Staff
+                  </button>
+                  <button
+                    onClick={() => setSelectedVendorForDocs(vendor)}
+                    className="text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> Dokumen
+                  </button>
+                  {canManageVendor && (
+                    <button
+                      onClick={() => setSelectedVendorForEdit(vendor)}
+                      className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Edit
+                    </button>
                   )}
-                  {(!vendor.csms_status || vendor.csms_status === 'Pending Review') && (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Evaluasi Dokumen
-                    </span>
-                  )}
-                  {vendor.csms_status === 'Suspended' && (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Suspended
-                    </span>
-                  )}
                 </div>
-                
-                <div className="flex flex-col items-end">
-                   <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Proyek Aktif</span>
-                   <span className="text-sm font-black text-slate-800 bg-slate-100 px-3 py-0.5 rounded-full">{vendor.projects?.[0]?.count || 0}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card Footer - Actions */}
-            <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-               <button
-                  onClick={() => setSelectedVendorForStaff(vendor)}
-                  className="text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
-               >
-                  <Users className="w-3.5 h-3.5" /> Staff
-               </button>
-               <button
-                  onClick={() => setSelectedVendorForDocs(vendor)}
-                  className="text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
-               >
-                  <FileText className="w-3.5 h-3.5" /> Dokumen
-               </button>
-               {canManageVendor && (
-                 <button
-                    onClick={() => setSelectedVendorForEdit(vendor)}
-                    className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
-                 >
-                    <Edit2 className="w-3.5 h-3.5" /> Edit
-                 </button>
-               )}
-            </div>
-          </div>
-        ))}
-
-        {filteredVendors.length === 0 && (
-          <div className="col-span-full py-16 flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-200 border-dashed shadow-sm">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
-              <Search className="w-10 h-10 text-slate-300" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">Data Vendor Tidak Ditemukan</h3>
-            <p className="text-slate-500 text-sm max-w-md text-center">
-              Belum ada data vendor yang cocok dengan kriteria pencarian Anda. Pastikan vendor telah didaftarkan melalui tombol Tambah Vendor.
-            </p>
-          </div>
-        )}
-      </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </DataTable>
 
       {/* Document Preview Modal */}
       {mounted && selectedVendorForDocs && createPortal(

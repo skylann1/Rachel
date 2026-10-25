@@ -1,11 +1,12 @@
 import { getAllProjectsWithRelations } from '@/app/dashboard/approval/actions';
 import React from 'react';
 import Link from 'next/link';
-import { Archive, Briefcase, MapPin, Calendar, FileText } from 'lucide-react';
+import { Archive, MapPin, Calendar, FileText } from 'lucide-react';
+import { DataTable, DataHead, EmptyRow, ROW_CLS, CELL_CLS, ACTION_LINK_CLS } from '@/components/ui/data-table';
 
 export default async function ArchiveProjectsPage() {
   const projects = await getAllProjectsWithRelations();
-  
+
   // A project is archived if its status is 'Completed'
   const archivedProjects = projects.filter(project => project.status === 'Completed' || project.status === 'Selesai');
 
@@ -16,49 +17,43 @@ export default async function ArchiveProjectsPage() {
           <Archive className="w-8 h-8 text-slate-400" /> Arsip Proyek
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Daftar riwayat proyek yang telah selesai dikerjakan.
+          Daftar riwayat proyek yang telah selesai dikerjakan. <b className="text-slate-700">{archivedProjects.length}</b> proyek.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {archivedProjects.length === 0 ? (
-          <div className="col-span-full p-12 text-center border-2 border-dashed border-slate-200 rounded-2xl text-slate-400">
-            Belum ada proyek yang masuk ke arsip.
-          </div>
-        ) : (
-          archivedProjects.map(project => {
+      <DataTable minWidth={820}>
+        <DataHead columns={[
+          { label: 'Proyek' }, { label: 'Vendor' }, { label: 'Lokasi' }, { label: 'Periode' }, { label: 'Status' }, { label: 'Aksi', className: 'text-right' },
+        ]} />
+        <tbody className="divide-y divide-slate-100">
+          {archivedProjects.length === 0 && <EmptyRow colSpan={6}>Belum ada proyek yang masuk ke arsip.</EmptyRow>}
+          {archivedProjects.map(project => {
+            const vendorName = Array.isArray(project.vendor_profiles) ? (project.vendor_profiles as any)[0]?.company_name : (project.vendor_profiles as any)?.company_name;
             return (
-              <div key={project.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-500 flex items-center justify-center shrink-0">
-                    <Briefcase className="w-5 h-5" />
-                  </div>
-                  <span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider">
-                    Selesai
-                  </span>
-                </div>
-                
-                <h3 className="font-bold text-slate-600 text-lg mb-1 line-clamp-2">{project.name}</h3>
-                <p className="text-sm text-slate-400 font-semibold mb-4">
-                  {Array.isArray(project.vendor_profiles) ? (project.vendor_profiles as any)[0]?.company_name : (project.vendor_profiles as any)?.company_name || 'Vendor Tidak Ditemukan'}
-                </p>
-                
-                <div className="space-y-2 text-xs text-slate-500 mt-auto mb-6">
-                  <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {project.location}</div>
-                  <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-400" /> {project.start_date} s/d {project.end_date}</div>
-                </div>
-
-                <Link 
-                  href={`/dashboard/projects/${project.id}`}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors"
-                >
-                  <FileText className="w-4 h-4" /> Lihat Riwayat Dokumen
-                </Link>
-              </div>
+              <tr key={project.id} className={ROW_CLS}>
+                <td className={`${CELL_CLS} max-w-xs`}>
+                  <p className="font-semibold text-slate-800 line-clamp-2">{project.name}</p>
+                </td>
+                <td className={`${CELL_CLS} text-slate-600`}>{vendorName || 'Vendor Tidak Ditemukan'}</td>
+                <td className={`${CELL_CLS} text-xs text-slate-600`}>
+                  <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />{project.location || '-'}</span>
+                </td>
+                <td className={`${CELL_CLS} text-xs text-slate-600 whitespace-nowrap`}>
+                  <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />{project.start_date} s/d {project.end_date}</span>
+                </td>
+                <td className={CELL_CLS}>
+                  <span className="inline-block bg-slate-100 text-slate-600 border border-slate-200 text-[11px] font-bold px-2 py-0.5 rounded-md uppercase">Selesai</span>
+                </td>
+                <td className={`${CELL_CLS} text-right`}>
+                  <Link href={`/dashboard/projects/${project.id}`} className={`${ACTION_LINK_CLS} text-slate-600 bg-white border-slate-200 hover:bg-slate-100`}>
+                    <FileText className="w-3.5 h-3.5" /> Riwayat Dokumen
+                  </Link>
+                </td>
+              </tr>
             );
-          })
-        )}
-      </div>
+          })}
+        </tbody>
+      </DataTable>
     </div>
   );
 }

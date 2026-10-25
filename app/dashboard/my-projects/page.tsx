@@ -1,13 +1,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Briefcase, MapPin, Calendar, Building2, ArrowRight, Stamp, HardHat } from 'lucide-react';
+import { MapPin, Calendar, Building2, ArrowRight, Stamp, HardHat } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import { hasPermission } from '@/utils/permissions';
 import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
 import { PTW_TYPES } from '@/lib/ptw-types';
 import { getProjectStage, STAGE_TONE_CLASS } from '@/lib/project-stage';
-import { RISK_META, parseRiskLevel, riskCardClasses } from '@/lib/project-risk';
+import { RISK_META, parseRiskLevel } from '@/lib/project-risk';
+import { DataTable, DataHead, EmptyRow, ROW_CLS, CELL_CLS, ACTION_LINK_CLS } from '@/components/ui/data-table';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Proyek Saya - RACHEL K3' };
@@ -92,62 +93,63 @@ export default async function MyProjectsPage() {
           Belum ada proyek yang Anda awasi. Proyek akan muncul di sini setelah Anda ditugaskan sebagai Pengawas PTW.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {rows.map(({ project, vendor, mine, hasActive, stage }) => {
-            const risk = parseRiskLevel(project.risk_level);
-            return (
-              <div key={project.id} className={`border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col ${riskCardClasses(project.risk_level)}`}>
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                    <Briefcase className="w-5 h-5" />
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-1.5">
+        <DataTable minWidth={1000}>
+          <DataHead columns={[
+            { label: 'Proyek' }, { label: 'Vendor' }, { label: 'Tahap' }, { label: 'Lokasi / Periode' }, { label: 'PTW Saya' }, { label: 'Peran' }, { label: 'Aksi', className: 'text-right' },
+          ]} />
+          <tbody className="divide-y divide-slate-100">
+            {rows.map(({ project, vendor, mine, hasActive, stage }) => {
+              const risk = parseRiskLevel(project.risk_level);
+              return (
+                <tr key={project.id} className={ROW_CLS}>
+                  <td className={`${CELL_CLS} max-w-xs`}>
+                    <p className="font-semibold text-slate-800 line-clamp-2">{project.name}</p>
                     {risk && (
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${RISK_META[risk].badge}`}>{RISK_META[risk].label}</span>
+                      <span className={`mt-1 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${RISK_META[risk].badge}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${RISK_META[risk].dot}`} />{RISK_META[risk].label}
+                      </span>
                     )}
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${hasActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                  </td>
+                  <td className={`${CELL_CLS} text-slate-600`}>
+                    <span className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />{vendor?.company_name || 'Tanpa Vendor'}</span>
+                  </td>
+                  <td className={CELL_CLS}>
+                    <span className={`inline-block text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${STAGE_TONE_CLASS[stage.tone]}`}>{stage.label}</span>
+                  </td>
+                  <td className={`${CELL_CLS} text-xs text-slate-600 space-y-1`}>
+                    <div className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />{project.location || '-'}</div>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap"><Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />{project.start_date || '-'} s/d {project.end_date || '-'}</div>
+                  </td>
+                  <td className={CELL_CLS}>
+                    <div className="space-y-1">
+                      {mine.length === 0 && <span className="text-xs text-slate-400">—</span>}
+                      {mine.map((p: any) => {
+                        const title = PTW_TYPES.find(t => t.id === p.ptw_type)?.title.split('(')[0].trim() || p.ptw_type;
+                        const effective = getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date);
+                        return (
+                          <div key={p.id} className="flex items-center justify-between gap-3 text-xs">
+                            <span className="flex items-center gap-1.5 font-semibold text-slate-700 min-w-0"><Stamp className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span className="truncate">{title}{p.ptw_number ? ` · ${p.ptw_number}` : ''}</span></span>
+                            <span className={`shrink-0 font-bold ${effective === PTW_STATUS.aktif ? 'text-emerald-600' : 'text-slate-500'}`}>{effective}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </td>
+                  <td className={CELL_CLS}>
+                    <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border whitespace-nowrap ${hasActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                       {hasActive ? 'Sedang Mengawasi' : 'Riwayat'}
                     </span>
-                  </div>
-                </div>
-
-                <h3 className="font-bold text-slate-800 text-lg mb-1 line-clamp-2">{project.name}</h3>
-                <div className="flex items-center gap-1.5 text-sm text-primary font-semibold mb-3">
-                  <Building2 className="w-4 h-4" /> {vendor?.company_name || 'Tanpa Vendor'}
-                </div>
-
-                <span className={`self-start text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border mb-4 ${STAGE_TONE_CLASS[stage.tone]}`}>{stage.label}</span>
-
-                <div className="space-y-2 text-sm text-slate-600 mb-4">
-                  <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-slate-400 shrink-0" /> {project.location || '-'}</div>
-                  <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400 shrink-0" /> {project.start_date || '-'} s/d {project.end_date || '-'}</div>
-                </div>
-
-                {mine.length > 0 && (
-                  <div className="space-y-1.5 mb-4">
-                    {mine.map((p: any) => {
-                      const title = PTW_TYPES.find(t => t.id === p.ptw_type)?.title.split('(')[0].trim() || p.ptw_type;
-                      const effective = getEffectivePtwStatus(p.status, p.valid_to ?? project.end_date);
-                      return (
-                        <div key={p.id} className="flex items-center justify-between gap-2 text-xs bg-white/70 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                          <span className="flex items-center gap-1.5 font-semibold text-slate-700 min-w-0"><Stamp className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span className="truncate">{title}{p.ptw_number ? ` · ${p.ptw_number}` : ''}</span></span>
-                          <span className={`shrink-0 font-bold ${effective === PTW_STATUS.aktif ? 'text-emerald-600' : 'text-slate-500'}`}>{effective}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <Link
-                  href={`/dashboard/projects/${encodeURIComponent(project.id)}`}
-                  className="mt-auto flex items-center justify-center gap-2 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 py-2.5 rounded-xl transition-colors"
-                >
-                  Buka Proyek <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-            );
-          })}
-        </div>
+                  </td>
+                  <td className={`${CELL_CLS} text-right`}>
+                    <Link href={`/dashboard/projects/${encodeURIComponent(project.id)}`} className={`${ACTION_LINK_CLS} text-primary bg-primary/10 border-primary/20 hover:bg-primary/20`}>
+                      Buka <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </DataTable>
       )}
     </div>
   );

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Megaphone, Plus, Edit2, Trash2, Eye, EyeOff } from 'lucide-react';
+import { DataTable, DataHead, ROW_CLS, CELL_CLS } from '@/components/ui/data-table';
 import { getAnnouncementsForManagement, deleteAnnouncement, toggleAnnouncementActive, type Announcement } from './actions';
 import AnnouncementFormModal from './AnnouncementFormModal';
 
@@ -72,47 +73,58 @@ export default function AnnouncementPage() {
           <p className="text-sm font-medium text-slate-500">Belum ada pengumuman.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {announcements.map((item) => (
-            <div key={item.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-              <div className="h-40 bg-slate-100 relative overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
-                <span className={`absolute top-3 left-3 px-2.5 py-1 text-xs font-bold rounded-lg shadow-sm ${item.is_active ? 'bg-emerald-100/90 text-emerald-700 border border-emerald-200' : 'bg-slate-100/90 text-slate-500 border border-slate-200'}`}>
-                  {item.is_active ? 'Aktif' : 'Nonaktif'}
-                </span>
-              </div>
-              <div className="p-4 flex-1 flex flex-col">
-                <h3 className="text-sm font-bold text-slate-800 mb-1">{item.title}</h3>
-                {item.description && <p className="text-xs text-slate-500 line-clamp-2 mb-3">{item.description}</p>}
-                <div className="mt-auto flex gap-2 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={() => handleToggle(item.id, item.is_active)}
-                    className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                    title={item.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                  >
-                    {item.is_active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={() => { setEditing(item); setIsFormOpen(true); }}
-                    className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                    title="Edit"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    disabled={isDeleting === item.id}
-                    onClick={() => handleDelete(item.id, item.title)}
-                    className={`p-2 rounded-lg transition-colors ${isDeleting === item.id ? 'text-slate-300' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'}`}
-                    title="Hapus"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <DataTable minWidth={760}>
+          <DataHead columns={[
+            { label: 'Gambar', className: 'w-28' }, { label: 'Pengumuman' }, { label: 'Status' }, { label: 'Aksi', className: 'text-right' },
+          ]} />
+          <tbody className="divide-y divide-slate-100">
+            {announcements.map((item) => (
+              <tr key={item.id} className={ROW_CLS}>
+                <td className={CELL_CLS}>
+                  <div className="w-24 h-14 rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                  </div>
+                </td>
+                <td className={`${CELL_CLS} max-w-md`}>
+                  <p className="font-semibold text-slate-800">{item.title}</p>
+                  {item.description && <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{item.description}</p>}
+                </td>
+                <td className={CELL_CLS}>
+                  <span className={`inline-block px-2 py-0.5 text-xs font-bold rounded-md border ${item.is_active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                    {item.is_active ? 'Aktif' : 'Nonaktif'}
+                  </span>
+                </td>
+                <td className={`${CELL_CLS} text-right`}>
+                  <div className="inline-flex gap-1">
+                    <button
+                      onClick={() => handleToggle(item.id, item.is_active)}
+                      className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      title={item.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                    >
+                      {item.is_active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => { setEditing(item); setIsFormOpen(true); }}
+                      className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      disabled={isDeleting === item.id}
+                      onClick={() => handleDelete(item.id, item.title)}
+                      className={`p-2 rounded-lg transition-colors ${isDeleting === item.id ? 'text-slate-300' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'}`}
+                      title="Hapus"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       )}
 
       <AnnouncementFormModal

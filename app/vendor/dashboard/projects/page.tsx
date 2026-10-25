@@ -9,6 +9,7 @@ import { getEffectivePtwStatus, PTW_STATUS } from '@/lib/ptw-status';
 import { PROCEDURE_STATUS, isProcedurePending } from '@/lib/procedure-status';
 import { JSA_STATUS } from '@/lib/jsa-status';
 import { getExpiry } from '@/lib/document-expiry';
+import { DataTable, DataHead, EmptyRow, ROW_CLS, CELL_CLS, ACTION_LINK_CLS } from '@/components/ui/data-table';
 
 type ProsedurDocRow = { status: string };
 type PtwRow = { status: string; valid_to: string | null };
@@ -289,77 +290,59 @@ export default function VendorProjectsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filteredProjects.map((project) => {
-            const ptwExpiry = getPtwExpiry(project);
-            return (
-            <div key={project.id} className={`border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex flex-col relative overflow-hidden ${riskCardClasses(project.risk_level)}`}>
-
-              {ptwExpiry?.status === 'expiring' && (
-                <div className="flex items-center gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-                  <CalendarClock className="w-4 h-4 shrink-0" />
-                  <span>PTW aktif berakhir {ptwExpiry.daysLeft} hari lagi — ajukan ulang/perpanjang sebelum jatuh tempo.</span>
-                </div>
-              )}
-
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                    <Briefcase className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800 line-clamp-1">{project.name}</h3>
-                    <p className="text-xs text-slate-400 mt-0.5 uppercase">No. {project.contract_number}</p>
-                    {parseRiskLevel(project.risk_level) && (
-                      <span className={`mt-1.5 inline-flex items-center gap-1.5 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${RISK_META[parseRiskLevel(project.risk_level)!].badge}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${RISK_META[parseRiskLevel(project.risk_level)!].dot}`} />
-                        {RISK_META[parseRiskLevel(project.risk_level)!].label}
+        <DataTable minWidth={1000}>
+          <DataHead columns={[
+            { label: 'Proyek' }, { label: 'Lokasi / Periode' }, { label: 'Progres', className: 'w-44' }, { label: 'Status' }, { label: 'Aksi', className: 'text-right' },
+          ]} />
+          <tbody className="divide-y divide-slate-100">
+            {filteredProjects.map((project) => {
+              const ptwExpiry = getPtwExpiry(project);
+              const risk = parseRiskLevel(project.risk_level);
+              const progress = project.progress || 0;
+              return (
+                <tr key={project.id} className={ROW_CLS}>
+                  <td className={`${CELL_CLS} max-w-xs`}>
+                    <p className="font-semibold text-slate-800 line-clamp-2">{project.name}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 uppercase">No. {project.contract_number || '-'}</p>
+                    {risk && (
+                      <span className={`mt-1 inline-flex items-center gap-1.5 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${RISK_META[risk].badge}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${RISK_META[risk].dot}`} />
+                        {RISK_META[risk].label}
                       </span>
                     )}
-                  </div>
-                </div>
-                <StatusBadge status={getComputedStatus(project)} />
-              </div>
-
-             <div className="mb-5 text-sm text-slate-600 leading-relaxed line-clamp-2">
-                {project.description || 'Pekerjaan sesuai dengan kontrak dan Prosedur K3 PGN.'}
-             </div>
-
-             <div className="space-y-3 mb-6">
-               <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="font-medium">{project.location}</span>
-               </div>
-               <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="font-medium">{project.start_date} s/d {project.end_date}</span>
-               </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="mt-auto pt-4 border-t border-slate-100 space-y-2 mb-4">
-               <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-500 uppercase">Progres Pekerjaan</span>
-                  <span className="text-xs font-black text-primary">{project.progress || 0}%</span>
-               </div>
-               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-1000 ease-in-out ${(project.progress || 0) === 100 ? 'bg-emerald-500' : 'bg-primary'}`}
-                    style={{ width: `${project.progress || 0}%` }}
-                  />
-               </div>
-            </div>
-
-            {/* Action Button */}
-            <div className="mt-auto">
-              {getActionButton(project)}
-            </div>
-
-          </div>
-        );
-          })}
-      </div>
-    )}
+                  </td>
+                  <td className={`${CELL_CLS} text-xs text-slate-600 space-y-1`}>
+                    <div className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />{project.location || '-'}</div>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap"><Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />{project.start_date} s/d {project.end_date}</div>
+                  </td>
+                  <td className={CELL_CLS}>
+                    <div className="flex justify-between text-[11px] font-bold mb-1">
+                      <span className="text-slate-400 uppercase">Progres</span>
+                      <span className="text-primary">{progress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                      <div className={`h-full rounded-full ${progress === 100 ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${progress}%` }} />
+                    </div>
+                  </td>
+                  <td className={`${CELL_CLS} space-y-1.5`}>
+                    <StatusBadge status={getComputedStatus(project)} />
+                    {ptwExpiry?.status === 'expiring' && (
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-amber-700">
+                        <CalendarClock className="w-3.5 h-3.5 shrink-0" /> PTW berakhir {ptwExpiry.daysLeft} hari lagi
+                      </div>
+                    )}
+                  </td>
+                  <td className={`${CELL_CLS} text-right`}>
+                    <div className="inline-block text-left [&>a]:w-full [&>a]:py-1.5 [&>a]:px-3 [&>a]:text-xs [&>a]:rounded-lg [&>a]:whitespace-nowrap [&>a]:shadow-none">
+                      {getActionButton(project)}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </DataTable>
+      )}
     </div>
   );
 }
