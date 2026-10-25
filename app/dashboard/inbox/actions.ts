@@ -335,7 +335,10 @@ export async function notifyUsersByPermission({
 
 /**
  * Send notification to all users assigned to a specific stage of a document in a project.
- * Only notifies assignees with status 'pending' (not yet decided).
+ * Default: only assignees with status 'pending' (not yet decided). Pass
+ * `includeDecided` for post-activation events (penutupan/perpanjangan/lembur
+ * PTW, penyelesaian proyek) where the stage row is already 'approved' but the
+ * assignee is still the one who must act.
  */
 export async function notifyAssignees({
   projectId,
@@ -345,6 +348,7 @@ export async function notifyAssignees({
   title,
   message,
   link,
+  includeDecided = false,
 }: {
   projectId: string;
   docType: string;
@@ -353,16 +357,18 @@ export async function notifyAssignees({
   title: string;
   message: string;
   link?: string;
+  includeDecided?: boolean;
 }) {
   const supabase = await createClient();
 
-  const { data: assignees } = await supabase
+  let assigneeQuery = supabase
     .from('stage_assignments')
     .select('assignee_id')
     .eq('project_id', projectId)
     .eq('doc_type', docType)
-    .eq('stage_key', stageKey)
-    .eq('status', 'pending');
+    .eq('stage_key', stageKey);
+  if (!includeDecided) assigneeQuery = assigneeQuery.eq('status', 'pending');
+  const { data: assignees } = await assigneeQuery;
 
   if (!assignees || assignees.length === 0) {
     // Tahap tanpa penugas sama sekali (bukan sekadar semuanya sudah memutuskan):
