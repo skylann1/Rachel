@@ -48,8 +48,11 @@ export function AnnouncementCarousel({ announcements, compact = false, basePath 
                 i === index ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
               }`}
             >
+              {/* Latar: gambar yang sama diburamkan, supaya tidak ada pita hitam di sisi gambar. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={a.image_url} alt={a.title} className="w-full h-full object-contain" />
+              <img src={a.image_url} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-70" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={a.image_url} alt={a.title} className="relative w-full h-full object-contain" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/10 to-transparent" />
               <div className={`absolute bottom-0 left-0 right-0 text-left ${compact ? 'p-4' : 'p-5 sm:p-6'}`}>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
